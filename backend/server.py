@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, D
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
@@ -703,24 +704,24 @@ async def start_shared_discord_bot(token: str):
         async def on_message(message):
             if message.author.bot:
                 return
-            # Dedup: if we've already handled this exact Discord message ID in the
-            # last 60 seconds, drop it. Protects against duplicate event delivery
-            # during deploy overlaps, double-subscribed handlers, or replay attacks.
+            # Cluster-wide dedup via MongoDB. Even if multiple backend pods receive
+            # the same Discord event (e.g. HA replicas, deploy overlap), only the
+            # first pod to insert wins. Subsequent pods get DuplicateKeyError and skip.
             try:
                 msg_key = str(message.id)
-                now_ts = datetime.now(timezone.utc).timestamp()
-                if msg_key in _recent_message_ids:
-                    if now_ts - _recent_message_ids[msg_key] < 60:
-                        logger.info(f"[DEDUP] skipped duplicate Discord message id={msg_key}")
-                        return
-                _recent_message_ids[msg_key] = now_ts
-                # Trim cache when too big (cheap pruning)
-                if len(_recent_message_ids) > 2000:
-                    cutoff = now_ts - 120
-                    for k in [k for k, t in _recent_message_ids.items() if t < cutoff]:
-                        _recent_message_ids.pop(k, None)
-            except Exception:
-                pass
+                now_dt = datetime.now(timezone.utc)
+                try:
+                    await db.processed_discord_messages.insert_one({
+                        "_id": msg_key,
+                        "processed_at": now_dt,  # datetime so TTL index can expire it
+                        "channel_id": str(message.channel.id),
+                    })
+                except DuplicateKeyError:
+                    logger.info(f"[DEDUP] cluster-wide: skipped duplicate Discord message id={msg_key}")
+                    return
+            except Exception as _e:
+                # Don't fail open silently; if Mongo is sick, log but continue (better to risk a dup than miss replies)
+                logger.warning(f"[DEDUP] mongo dedup error (will process anyway): {_e}")
             is_dm = isinstance(message.channel, discord.DMChannel)
             if is_dm:
                 first_cfg = await db.discord_config.find_one({"is_active": True}, {"_id": 0})
@@ -963,6 +964,10 @@ async def startup_event():
         await db.llm_usage.create_index([("timestamp", -1)])
         await db.users.create_index([("email", 1)], unique=True)
         await db.users.create_index([("id", 1)])
+        # TTL index: dedup records expire 5 minutes after creation (well past any sane Discord retry window)
+        await db.processed_discord_messages.create_index(
+            [("processed_at", 1)], expireAfterSeconds=300
+        )
     except Exception as e:
         logger.warning(f"Index creation: {e}")
 
