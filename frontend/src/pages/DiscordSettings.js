@@ -386,6 +386,7 @@ export default function DiscordSettings() {
   });
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [existing, setExisting] = useState(null);
   const [status, setStatus] = useState({ status: "offline", bot_name: null });
   const [saving, setSaving] = useState(false);
@@ -457,6 +458,23 @@ export default function DiscordSettings() {
   };
 
   const toggleChannel = (id) => setMonitoredChannelIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+
+
+  const disconnectGuild = async () => {
+    if (!window.confirm("Disconnect this Discord server from BridgeBot? This only clears the link in BridgeBot — if the bot is still in the server, you must also remove it via Discord's Integrations page.")) {
+      return;
+    }
+    setDisconnecting(true);
+    try {
+      const r = await api.post(`/discord/disconnect`);
+      toast.success(r.data?.cleared_guild_id ? "Disconnected — UI is now in sync with Discord" : "No active connection to clear");
+      loadStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   const resumeHandoff = async () => {
     setResumingHandoff(true);
@@ -564,7 +582,7 @@ export default function DiscordSettings() {
                 borderRadius: "10px", marginBottom: "16px",
               }}>
                 <CheckCircle size={15} color={colors.brand.success} />
-                <div>
+                <div style={{ flex: 1 }}>
                   <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "500", color: colors.brand.success, margin: 0 }}>
                     Connected to "{existing.guild_name}"
                   </p>
@@ -572,6 +590,25 @@ export default function DiscordSettings() {
                     Guild ID: {existing.guild_id}
                   </p>
                 </div>
+                <button
+                  onClick={disconnectGuild}
+                  disabled={disconnecting}
+                  data-testid="disconnect-guild-btn"
+                  title="Clear this connection (use if the bot was removed from Discord externally)"
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "rgba(244,63,94,0.08)",
+                    border: `1px solid rgba(244,63,94,0.25)`,
+                    borderRadius: "8px",
+                    color: colors.brand.error,
+                    fontFamily: fonts.body, fontSize: "11px", fontWeight: "600",
+                    cursor: disconnecting ? "not-allowed" : "pointer",
+                    opacity: disconnecting ? 0.6 : 1,
+                    display: "flex", alignItems: "center", gap: "4px",
+                  }}
+                >
+                  <Trash2 size={11} /> {disconnecting ? "Disconnecting…" : "Disconnect"}
+                </button>
               </div>
             )}
 

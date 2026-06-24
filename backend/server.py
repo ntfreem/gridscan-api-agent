@@ -2005,6 +2005,23 @@ async def discord_oauth_callback(
         return RedirectResponse(url=f"{frontend_base}/discord/invited?error=1")
 
 
+@api_router.post("/discord/disconnect")
+async def disconnect_discord_guild(instance_id: str = Depends(get_instance_access)):
+    """Clear the guild mapping for this instance. Use when the bot was removed from
+    a Discord server externally (e.g., via Discord's Integrations page) and the UI
+    still shows the stale connection."""
+    config = await db.discord_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    guild_id = config.get("guild_id")
+    await db.discord_config.update_one(
+        {"instance_id": instance_id},
+        {"$unset": {"guild_id": "", "guild_name": ""}},
+    )
+    # Also flush the in-memory routing map for that guild
+    if guild_id and guild_id in guild_instance_map:
+        del guild_instance_map[guild_id]
+    return {"success": True, "cleared_guild_id": guild_id}
+
+
 @api_router.post("/discord/sync-name")
 async def sync_discord_name(instance_id: str = Depends(get_instance_access)):
     """Push the bot_config name to Discord as the bot's nickname in connected guilds."""
