@@ -84,6 +84,24 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Clicking "Add to Knowledge Base" calls `POST /api/knowledge/sources/faq` and instantly adds it to the active instance's KB
 - Closes the loop: missed-question → FAQ entry without leaving the analytics page
 
+### Scripted Mode (DONE — 2026-06-24)
+- New per-instance Discord setting for incident/maintenance communications: bot ignores the KB and replies with configured messages instead
+- Primary message → exact verbatim on first contact per user/channel
+- Follow-ups → rephrased (AI / manual variants / hybrid) so it doesn't feel robotic
+- Configurable: primary message, list of manual variants, fallback message, max attempts per user, counter-reset hours, rephrase mode
+- Per-user per-channel counter stored in new `scripted_counters` MongoDB collection
+- Respects Passive Mode: if both are on, bot still uses Claude to gate small-talk
+- @mentions/DMs also get scripted replies (incident mode = silent override)
+- UI: new "Scripted Mode" card on `/admin/discord` between Passive Mode and Human Takeover
+
+### Share Invite Link (DONE — 2026-06-24)
+- New "Share invite link" block on the Discord Channel page (under the "Invite Bot to Server" button)
+- Displays the live Discord OAuth invite URL (read-only, click to select)
+- **Copy** button — copies link to clipboard
+- **Email** button — opens default mail client with subject + pre-filled body including the link and a brief explanation for the recipient
+- Anyone with the link who has "Manage Server" permission on a Discord server can add the bot
+- After they invite, the bot connects to BridgeBot, and the host admin assigns the new guild to a bot instance
+
 ## Backlog
 
 ### P1 — Multi-Server per Instance (PARKED — revisit later)

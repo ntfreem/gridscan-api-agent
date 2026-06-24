@@ -189,6 +189,20 @@ class ChatMessage(BaseModel):
 class ApproveBody(BaseModel):
     approved: bool = True
 
+class ScriptedVariant(BaseModel):
+    text: str
+
+
+class ScriptedModeConfig(BaseModel):
+    enabled: Optional[bool] = None
+    primary_message: Optional[str] = None
+    variants: Optional[List[str]] = None
+    fallback_message: Optional[str] = None
+    max_attempts: Optional[int] = None
+    reset_hours: Optional[int] = None
+    rephrase_mode: Optional[str] = None   # ai | manual | hybrid
+
+
 class DiscordConfigUpdate(BaseModel):
     bot_token: Optional[str] = None
     is_active: Optional[bool] = None
@@ -199,6 +213,7 @@ class DiscordConfigUpdate(BaseModel):
     handoff_cooldown_minutes: Optional[int] = None  # minutes before bot re-engages after staff reply
     handoff_followup_message: Optional[str] = None  # message bot sends when re-engaging
     passive_mode: Optional[bool] = None        # if True, only reply when bot can answer from KB (skip small-talk)
+    scripted_mode: Optional[ScriptedModeConfig] = None
 
 
 # ==================== JWT AUTH HELPERS ====================
@@ -390,6 +405,97 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         )
 
     return "\n\n".join(parts)
+
+
+async def build_scripted_response(
+    instance_id: str,
+    channel_id: str,
+    user_id: str,
+    scripted_cfg: dict,
+    session_id: str,
+) -> str:
+    """Scripted Mode reply builder.
+    First reply to a user (in a channel) = exact primary_message.
+    Reply N (1..max_attempts-1) = AI-rephrased variant of primary, manual variant, or hybrid (per rephrase_mode).
+    Reply >= max_attempts = fallback_message.
+    Per-user, per-channel counter, with optional reset_hours.
+    """
+    primary = (scripted_cfg.get("primary_message") or "").strip()
+    if not primary:
+        return ""
+    variants = [v.strip() for v in (scripted_cfg.get("variants") or []) if isinstance(v, str) and v.strip()]
+    fallback = (scripted_cfg.get("fallback_message") or "").strip()
+    max_attempts = int(scripted_cfg.get("max_attempts") or 5)
+    reset_hours = int(scripted_cfg.get("reset_hours") or 24)
+    mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()  # ai | manual | hybrid
+
+    # Counter: per instance, channel, user
+    key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
+    now = datetime.now(timezone.utc)
+    doc = await db.scripted_counters.find_one(key) or {}
+    last_iso = doc.get("last_at")
+    count = int(doc.get("count") or 0)
+    if last_iso:
+        try:
+            last_dt = datetime.fromisoformat(last_iso)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
+                count = 0
+        except Exception:
+            count = 0
+
+    new_count = count + 1
+    if new_count > max_attempts and fallback:
+        response = fallback
+    elif count == 0:
+        # First attempt — primary verbatim (Q4=d hybrid: exact primary on first contact)
+        response = primary
+    else:
+        # Subsequent attempts — rephrase based on mode
+        response = ""
+        if mode in ("manual",) and variants:
+            response = variants[(count - 1) % len(variants)]
+        elif mode in ("ai",):
+            response = await _ai_rephrase(primary, session_id, instance_id) or primary
+        else:  # hybrid: try AI first, fall back to manual variants, then primary
+            response = await _ai_rephrase(primary, session_id, instance_id)
+            if not response and variants:
+                response = variants[(count - 1) % len(variants)]
+            if not response:
+                response = primary
+
+    await db.scripted_counters.update_one(
+        key,
+        {"$set": {**key, "count": new_count, "last_at": now.isoformat()}},
+        upsert=True,
+    )
+    return response
+
+
+async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> str:
+    """Ask Claude to rephrase the primary message slightly while keeping every key fact."""
+    system = (
+        "You rephrase a maintenance/incident message slightly so the user doesn't see the exact same text twice. "
+        "Strict rules:\n"
+        "1. Keep EVERY fact, number, status, instruction, and product name identical.\n"
+        "2. Do not add new information that isn't in the original.\n"
+        "3. Do not apologize beyond what's in the original.\n"
+        "4. Keep length within ±20% of the original.\n"
+        "5. Output ONLY the rephrased message — no preamble, no quotes, no commentary."
+    )
+    try:
+        out = await call_claude(
+            f"{session_id}_rephrase_{datetime.now(timezone.utc).timestamp()}",
+            f"Original message:\n{primary_text}",
+            system,
+            instance_id=instance_id,
+            platform="discord",
+        )
+        return (out or "").strip()
+    except Exception as e:
+        logger.warning(f"AI rephrase failed: {e}")
+        return ""
 
 
 async def call_claude(session_id: str, user_message: str, system_prompt: str,
@@ -723,6 +829,44 @@ async def start_shared_discord_bot(token: str):
                 return
             session_id = f"discord_{message.author.id}"
             try:
+                # ─── SCRIPTED MODE check (runs BEFORE LLM, BEFORE KB lookup) ───
+                scripted_cfg = (live_cfg.get("scripted_mode") or {}) if isinstance(live_cfg.get("scripted_mode"), dict) else {}
+                if scripted_cfg.get("enabled") and scripted_cfg.get("primary_message"):
+                    # Passive Mode still gates Scripted Mode (Q3=b): if passive is on, run [SKIP] gate first via Claude
+                    passive_mode = bool(live_cfg.get("passive_mode", False))
+                    if passive_mode and not is_mentioned and not is_dm:
+                        skip_prompt = (
+                            "Look at the user message below. If it is a real question or a request for help, output exactly: KEEP\n"
+                            "If it is small talk, greeting, statement, joke, or off-topic chatter, output exactly: SKIP\n"
+                            "Do not output anything else."
+                        )
+                        try:
+                            verdict = await call_claude(f"{session_id}_skipcheck", user_text, skip_prompt, instance_id=instance_id, platform="discord")
+                            if verdict and verdict.strip().upper().startswith("SKIP"):
+                                logger.info(f"[SCRIPTED+PASSIVE] instance={instance_id[:12]} skipped non-question")
+                                return
+                        except Exception:
+                            pass  # if gate check fails, fall through and send scripted reply
+
+                    response = await build_scripted_response(
+                        instance_id=instance_id,
+                        channel_id=channel_id,
+                        user_id=str(message.author.id),
+                        scripted_cfg=scripted_cfg,
+                        session_id=session_id,
+                    )
+                    if response:
+                        # Apply reply style (mention vs natural)
+                        if reply_style == "with_mention" and not is_dm:
+                            response = f"{message.author.mention} {response}"
+                        if len(response) > 1990:
+                            for i in range(0, len(response), 1990):
+                                await message.channel.send(response[i:i+1990])
+                        else:
+                            await message.channel.send(response)
+                        await save_conversation(session_id=session_id, user_message=user_text, bot_response=response, platform="discord", instance_id=instance_id, metadata={"username": str(message.author.name), "user_id": str(message.author.id), "scripted": True})
+                        return
+
                 bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
                 knowledge = await search_knowledge(user_text, instance_id)
                 if knowledge == "__NO_KB__":

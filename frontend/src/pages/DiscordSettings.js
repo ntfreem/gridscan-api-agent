@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck } from "lucide-react";
+import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 const LISTEN_MODES = [
@@ -176,6 +176,121 @@ function AppCredentialsPanel() {
   );
 }
 
+
+function ShareInviteLink() {
+  const [link, setLink] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [mailtoOpen, setMailtoOpen] = useState(false);
+
+  const fetchLink = async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/discord/oauth-url`);
+      setLink(r.data?.url || "");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to generate link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLink(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success("Invite link copied — share with anyone who admins a Discord server");
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      toast.error("Couldn't copy. Long-press to copy manually.");
+    }
+  };
+
+  const emailIt = () => {
+    const subject = encodeURIComponent("Invite the BridgeBot Discord Bot to your server");
+    const body = encodeURIComponent(
+      `Hi,\n\nYou can add the BridgeBot Discord bot to your server with this one-click link:\n\n${link}\n\n` +
+      `You'll need Manage Server permission on the target Discord server. After authorizing, let me know so I can wire it up to the right knowledge base.\n\n` +
+      `Thanks!`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setMailtoOpen(true);
+  };
+
+  if (!link && !loading) return null;
+
+  return (
+    <div data-testid="share-invite-link" style={{
+      marginTop: "10px", padding: "12px 14px",
+      backgroundColor: colors.bg.base,
+      border: `1px solid ${colors.border.default}`, borderRadius: "10px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+        <Link2 size={13} color={colors.brand.light} />
+        <p style={{ margin: 0, fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: colors.text.primary }}>
+          Share invite link
+        </p>
+        <span style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, marginLeft: "auto" }}>
+          For another server admin
+        </span>
+      </div>
+      <p style={{ margin: "0 0 10px", fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5" }}>
+        Send this link to anyone with Manage Server permission on a Discord server. They click it, authorize the bot,
+        and it appears in their server. You{`'`}ll then assign it to a bot instance from this page.
+      </p>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+        <input
+          type="text" readOnly value={link || (loading ? "Loading…" : "")}
+          data-testid="share-invite-input"
+          onClick={(e) => e.target.select()}
+          style={{
+            flex: 1, padding: "8px 10px",
+            backgroundColor: colors.bg.surface, color: colors.text.primary,
+            border: `1px solid ${colors.border.subtle}`, borderRadius: "8px",
+            fontFamily: fonts.mono, fontSize: "11px", outline: "none",
+          }}
+        />
+        <button
+          onClick={copy} disabled={!link} data-testid="share-invite-copy"
+          style={{
+            padding: "8px 12px",
+            backgroundColor: copied ? "rgba(52,211,153,0.1)" : "rgba(96,165,250,0.08)",
+            border: `1px solid ${copied ? "rgba(52,211,153,0.3)" : "rgba(96,165,250,0.25)"}`,
+            borderRadius: "8px",
+            color: copied ? colors.brand.success : colors.brand.light,
+            fontFamily: fonts.body, fontSize: "11px", fontWeight: "600",
+            cursor: link ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "5px",
+          }}
+        >
+          {copied ? <><CheckCircle size={11} /> Copied</> : <><Settings size={11} /> Copy</>}
+        </button>
+        <button
+          onClick={emailIt} disabled={!link} data-testid="share-invite-email"
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "rgba(96,165,250,0.08)",
+            border: `1px solid rgba(96,165,250,0.25)`,
+            borderRadius: "8px",
+            color: colors.brand.light,
+            fontFamily: fonts.body, fontSize: "11px", fontWeight: "600",
+            cursor: link ? "pointer" : "not-allowed",
+          }}
+        >
+          Email
+        </button>
+      </div>
+      <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, lineHeight: "1.5" }}>
+        Note: this link is generic for the app — anyone who has it can invite the bot. Treat it like a moderately
+        sensitive URL and revoke by rotating the Discord App in <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a> if needed.
+      </p>
+    </div>
+  );
+}
+
+
 export default function DiscordSettings() {
   const { user, selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
@@ -189,6 +304,15 @@ export default function DiscordSettings() {
   const [handoffCooldown, setHandoffCooldown] = useState(15);
   const [handoffFollowup, setHandoffFollowup] = useState("Is there anything else I can help with?");
   const [passiveMode, setPassiveMode] = useState(false);
+  const [scripted, setScripted] = useState({
+    enabled: false,
+    primary_message: "",
+    variants: [],
+    fallback_message: "",
+    max_attempts: 5,
+    reset_hours: 24,
+    rephrase_mode: "hybrid",
+  });
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
   const [existing, setExisting] = useState(null);
@@ -226,6 +350,16 @@ export default function DiscordSettings() {
       setHandoffCooldown(r.data?.handoff_cooldown_minutes || 15);
       setHandoffFollowup(r.data?.handoff_followup_message || "Is there anything else I can help with?");
       setPassiveMode(r.data?.passive_mode || false);
+      const sc = r.data?.scripted_mode || {};
+      setScripted({
+        enabled: !!sc.enabled,
+        primary_message: sc.primary_message || "",
+        variants: Array.isArray(sc.variants) ? sc.variants : [],
+        fallback_message: sc.fallback_message || "",
+        max_attempts: sc.max_attempts || 5,
+        reset_hours: sc.reset_hours || 24,
+        rephrase_mode: sc.rephrase_mode || "hybrid",
+      });
     }).catch(() => {});
   }, [instanceId]);
 
@@ -267,7 +401,7 @@ export default function DiscordSettings() {
   };
 
   const save = async () => {
-    const update = { is_active: isActive, listen_mode: listenMode, reply_style: replyStyle, monitored_channel_ids: monitoredChannelIds, staff_role_name: staffRoleName, handoff_cooldown_minutes: handoffCooldown, handoff_followup_message: handoffFollowup, passive_mode: passiveMode };
+    const update = { is_active: isActive, listen_mode: listenMode, reply_style: replyStyle, monitored_channel_ids: monitoredChannelIds, staff_role_name: staffRoleName, handoff_cooldown_minutes: handoffCooldown, handoff_followup_message: handoffFollowup, passive_mode: passiveMode, scripted_mode: scripted };
     if (token.trim()) update.bot_token = token.trim();
     setSaving(true);
     try { await api.put(`/discord/config`, update); toast.success("Discord settings saved"); setToken(""); loadConfig(); } catch { toast.error("Failed to save"); }
@@ -371,20 +505,23 @@ export default function DiscordSettings() {
             )}
 
             {oauthEnabled ? (
-              <button
-                onClick={inviteBot} disabled={inviting} data-testid="invite-bot-btn"
-                style={{
-                  width: "100%", padding: "13px 20px", backgroundColor: colors.brand.discord,
-                  color: "#FFFFFF", border: "none", borderRadius: "10px",
-                  fontSize: "14px", fontFamily: fonts.body, fontWeight: "600",
-                  cursor: inviting ? "not-allowed" : "pointer", opacity: inviting ? 0.7 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                  transition: "all 0.2s",
-                }}
-              >
-                <Link2 size={16} />
-                {inviting ? "Redirecting to Discord..." : oauthConnected ? "Invite to Another Server" : "Invite Bot to Server"}
-              </button>
+              <>
+                <button
+                  onClick={inviteBot} disabled={inviting} data-testid="invite-bot-btn"
+                  style={{
+                    width: "100%", padding: "13px 20px", backgroundColor: colors.brand.discord,
+                    color: "#FFFFFF", border: "none", borderRadius: "10px",
+                    fontSize: "14px", fontFamily: fonts.body, fontWeight: "600",
+                    cursor: inviting ? "not-allowed" : "pointer", opacity: inviting ? 0.7 : 1,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <Link2 size={16} />
+                  {inviting ? "Redirecting to Discord..." : oauthConnected ? "Invite to Another Server" : "Invite Bot to Server"}
+                </button>
+                <ShareInviteLink />
+              </>
             ) : (
               <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
                 <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0 }}>
@@ -591,6 +728,165 @@ export default function DiscordSettings() {
               <p style={{ ...T.hint, marginTop: "12px", marginBottom: 0, padding: "8px 12px", backgroundColor: "rgba(96,165,250,0.04)", border: `1px solid rgba(96,165,250,0.15)`, borderRadius: "8px" }}>
                 <strong style={{ color: colors.text.primary }}>Tip:</strong> Best paired with <em>All Channels</em> listen mode in busy servers — the bot will quietly monitor every channel and only chime in when it has a useful answer.
               </p>
+            )}
+          </div>
+
+          {/* Scripted Mode (Maintenance / Incident replies) */}
+          <div style={{ ...T.card, marginBottom: "20px", borderColor: scripted.enabled ? "rgba(251,191,36,0.35)" : colors.border.default, backgroundColor: scripted.enabled ? "rgba(251,191,36,0.03)" : colors.bg.surface }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <Megaphone size={15} color={scripted.enabled ? colors.brand.warning : colors.text.muted} />
+                  <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Scripted Mode</p>
+                  {scripted.enabled && (
+                    <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.warning, backgroundColor: "rgba(251,191,36,0.12)", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Active
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
+                  Bypass the knowledge base and reply with a fixed maintenance/incident message. Useful for service outages, bridge pauses, or scheduled downtime.
+                  First reply to a user is verbatim; follow-ups get rephrased so it doesn{`'`}t feel robotic.
+                </p>
+              </div>
+              <button
+                onClick={() => setScripted(p => ({ ...p, enabled: !p.enabled }))}
+                data-testid="scripted-mode-toggle"
+                role="switch"
+                aria-checked={scripted.enabled}
+                style={{
+                  flexShrink: 0, width: "42px", height: "24px",
+                  backgroundColor: scripted.enabled ? colors.brand.warning : colors.bg.panel,
+                  border: `1px solid ${scripted.enabled ? colors.brand.warning : colors.border.default}`,
+                  borderRadius: "12px", cursor: "pointer", position: "relative", transition: "all 0.2s", padding: 0,
+                }}
+              >
+                <span style={{ position: "absolute", top: "2px", left: scripted.enabled ? "20px" : "2px", width: "18px", height: "18px", backgroundColor: "#FFFFFF", borderRadius: "50%", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+              </button>
+            </div>
+
+            {scripted.enabled && (
+              <div style={{ marginTop: "8px" }}>
+                {/* Primary message */}
+                <label style={T.label}>Primary Message <span style={{ color: colors.brand.warning }}>*</span></label>
+                <textarea
+                  value={scripted.primary_message}
+                  onChange={e => setScripted(p => ({ ...p, primary_message: e.target.value }))}
+                  placeholder="USDCx bridge operations are currently paused, so minting and conversions are not processing at this time…"
+                  data-testid="scripted-primary"
+                  rows={5}
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
+                />
+                <p style={T.hint}>The first reply to a user is sent verbatim.</p>
+
+                {/* Rephrase mode */}
+                <label style={{ ...T.label, marginTop: "16px" }}>Rephrase Mode</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {[
+                    { v: "hybrid", l: "Hybrid (recommended)", d: "AI rephrase, fallback to manual" },
+                    { v: "ai", l: "AI only", d: "Uses Claude tokens" },
+                    { v: "manual", l: "Manual variants only", d: "Zero AI cost" },
+                  ].map(({ v, l, d }) => (
+                    <button
+                      key={v}
+                      onClick={() => setScripted(p => ({ ...p, rephrase_mode: v }))}
+                      data-testid={`scripted-mode-${v}`}
+                      style={{
+                        flex: 1, padding: "10px 12px", textAlign: "left",
+                        backgroundColor: scripted.rephrase_mode === v ? "rgba(251,191,36,0.08)" : colors.bg.base,
+                        border: `1px solid ${scripted.rephrase_mode === v ? colors.brand.warning : colors.border.default}`,
+                        borderRadius: "8px",
+                        color: scripted.rephrase_mode === v ? colors.text.primary : colors.text.secondary,
+                        fontFamily: fonts.body, fontSize: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: scripted.rephrase_mode === v ? "600" : "500" }}>{l}</div>
+                      <div style={{ fontSize: "10px", color: colors.text.muted, marginTop: "3px" }}>{d}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Manual variants */}
+                {(scripted.rephrase_mode === "manual" || scripted.rephrase_mode === "hybrid") && (
+                  <div style={{ marginTop: "16px" }}>
+                    <label style={T.label}>
+                      Manual Variants <span style={{ color: colors.text.muted, fontWeight: "400" }}>(optional)</span>
+                    </label>
+                    {scripted.variants.map((v, i) => (
+                      <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                        <textarea
+                          value={v}
+                          onChange={e => setScripted(p => ({ ...p, variants: p.variants.map((x, j) => j === i ? e.target.value : x) }))}
+                          placeholder={`Variant ${i + 1}…`}
+                          data-testid={`scripted-variant-${i}`}
+                          rows={2}
+                          onFocus={onFocus} onBlur={onBlur}
+                          style={{ ...T.input, flex: 1, resize: "vertical", fontFamily: fonts.body, padding: "8px 10px" }}
+                        />
+                        <button
+                          onClick={() => setScripted(p => ({ ...p, variants: p.variants.filter((_, j) => j !== i) }))}
+                          data-testid={`scripted-variant-del-${i}`}
+                          style={{ padding: "8px 10px", backgroundColor: "rgba(244,63,94,0.06)", border: `1px solid rgba(244,63,94,0.2)`, borderRadius: "8px", color: colors.brand.error, cursor: "pointer" }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setScripted(p => ({ ...p, variants: [...p.variants, ""] }))}
+                      data-testid="scripted-add-variant"
+                      style={{ padding: "8px 12px", backgroundColor: "rgba(96,165,250,0.06)", border: `1px solid rgba(96,165,250,0.2)`, borderRadius: "8px", color: colors.brand.light, cursor: "pointer", fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}
+                    >
+                      <Plus size={12} /> Add variant
+                    </button>
+                  </div>
+                )}
+
+                {/* Max attempts + Reset hours */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "16px" }}>
+                  <div>
+                    <label style={T.label}>Max Attempts per User</label>
+                    <input type="number" min="1" max="100"
+                      value={scripted.max_attempts}
+                      onChange={e => setScripted(p => ({ ...p, max_attempts: parseInt(e.target.value) || 1 }))}
+                      data-testid="scripted-max-attempts"
+                      onFocus={onFocus} onBlur={onBlur} style={T.input}
+                    />
+                    <p style={T.hint}>After this many replies to a user, send fallback.</p>
+                  </div>
+                  <div>
+                    <label style={T.label}>Counter Reset (hours)</label>
+                    <input type="number" min="1" max="168"
+                      value={scripted.reset_hours}
+                      onChange={e => setScripted(p => ({ ...p, reset_hours: parseInt(e.target.value) || 1 }))}
+                      data-testid="scripted-reset-hours"
+                      onFocus={onFocus} onBlur={onBlur} style={T.input}
+                    />
+                    <p style={T.hint}>Counter resets per user after this many idle hours.</p>
+                  </div>
+                </div>
+
+                {/* Fallback */}
+                <label style={{ ...T.label, marginTop: "16px" }}>Fallback Message</label>
+                <textarea
+                  value={scripted.fallback_message}
+                  onChange={e => setScripted(p => ({ ...p, fallback_message: e.target.value }))}
+                  placeholder="For urgent issues please open a ticket or email support@…"
+                  data-testid="scripted-fallback"
+                  rows={3}
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
+                />
+                <p style={T.hint}>Sent after Max Attempts is reached, instead of another rephrase.</p>
+
+                <div style={{ marginTop: "16px", padding: "10px 12px", backgroundColor: "rgba(251,191,36,0.06)", border: `1px solid rgba(251,191,36,0.18)`, borderRadius: "8px" }}>
+                  <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5" }}>
+                    <strong style={{ color: colors.brand.warning }}>Heads up:</strong> while Scripted Mode is ON, the bot ignores the Knowledge Base completely and replies only with the configured messages. Disable it once your incident is resolved.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
 
