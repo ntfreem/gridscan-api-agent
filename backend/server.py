@@ -2007,19 +2007,38 @@ async def discord_oauth_callback(
 
 @api_router.post("/discord/disconnect")
 async def disconnect_discord_guild(instance_id: str = Depends(get_instance_access)):
-    """Clear the guild mapping for this instance. Use when the bot was removed from
-    a Discord server externally (e.g., via Discord's Integrations page) and the UI
-    still shows the stale connection."""
+    """Clear the guild mapping for this instance. Idempotent — never 404s even if
+    no connection exists. Use when the bot was removed from a Discord server
+    externally (e.g., via Discord's Integrations page) and the UI still shows
+    the stale connection."""
     config = await db.discord_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
     guild_id = config.get("guild_id")
     await db.discord_config.update_one(
         {"instance_id": instance_id},
         {"$unset": {"guild_id": "", "guild_name": ""}},
+        upsert=True,
     )
-    # Also flush the in-memory routing map for that guild
     if guild_id and guild_id in guild_instance_map:
         del guild_instance_map[guild_id]
     return {"success": True, "cleared_guild_id": guild_id}
+
+
+@api_router.post("/discord/purge-all-connections")
+async def purge_all_discord_connections(current_user: dict = Depends(require_admin)):
+    """ADMIN-ONLY: Wipe every guild mapping across every instance. Useful after
+    revoking/rotating a Discord App, removing the bot from many servers at once,
+    or cleaning up after testing. Does NOT touch knowledge bases, users, or other
+    bot settings — only the `guild_id` / `guild_name` fields on `discord_config`."""
+    result = await db.discord_config.update_many(
+        {"guild_id": {"$exists": True, "$ne": ""}},
+        {"$unset": {"guild_id": "", "guild_name": ""}},
+    )
+    # Flush the entire in-memory routing map
+    guild_instance_map.clear()
+    return {
+        "success": True,
+        "connections_cleared": result.modified_count,
+    }
 
 
 @api_router.post("/discord/sync-name")
