@@ -94,13 +94,16 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - @mentions/DMs also get scripted replies (incident mode = silent override)
 - UI: new "Scripted Mode" card on `/admin/discord` between Passive Mode and Human Takeover
 
-### Share Invite Link (DONE — 2026-06-24)
+### Share Invite Link (UPGRADED — 2026-06-24)
 - New "Share invite link" block on the Discord Channel page (under the "Invite Bot to Server" button)
-- Displays the live Discord OAuth invite URL (read-only, click to select)
+- Generates a Discord OAuth URL with `state=share:<instance_id>` so the callback knows it's a third-party invite
 - **Copy** button — copies link to clipboard
-- **Email** button — opens default mail client with subject + pre-filled body including the link and a brief explanation for the recipient
-- Anyone with the link who has "Manage Server" permission on a Discord server can add the bot
-- After they invite, the bot connects to BridgeBot, and the host admin assigns the new guild to a bot instance
+- **Email** button — opens an inline form with recipient email/name/note fields; backend sends a fully-branded HTML email via Resend (no more mailto, no email client dependency)
+- Backend endpoints:
+  - `GET /api/discord/share-oauth-url` — generates the share OAuth URL
+  - `POST /api/discord/send-invite-email` — sends Resend-powered HTML email with the invite link
+- New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
+- The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
 ## Backlog
 

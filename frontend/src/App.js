@@ -10,6 +10,7 @@ import BotSettings from "@/pages/BotSettings";
 import Analytics from "@/pages/Analytics";
 import DiscordSettings from "@/pages/DiscordSettings";
 import DiscordAppSetup from "@/pages/DiscordAppSetup";
+import DiscordInvited from "@/pages/DiscordInvited";
 import EmbedCode from "@/pages/EmbedCode";
 import ChatPage from "@/pages/ChatPage";
 import ChatWidget from "@/pages/ChatWidget";
@@ -57,6 +58,9 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicOnlyRoute><ForgotPassword /></PublicOnlyRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/select-instance" element={<ProtectedRoute><InstanceSelect /></ProtectedRoute>} />
+
+      {/* Public landing after a shared Discord invite link is used */}
+      <Route path="/discord/invited" element={<DiscordInvited />} />
 
       {/* Admin area */}
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>

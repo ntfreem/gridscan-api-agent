@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2 } from "lucide-react";
+import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2, Mail } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 const LISTEN_MODES = [
@@ -181,12 +181,16 @@ function ShareInviteLink() {
   const [link, setLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [mailtoOpen, setMailtoOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailName, setEmailName] = useState("");
+  const [emailNote, setEmailNote] = useState("");
+  const [sending, setSending] = useState(false);
 
   const fetchLink = async () => {
     setLoading(true);
     try {
-      const r = await api.get(`/discord/oauth-url`);
+      const r = await api.get(`/discord/share-oauth-url`);
       setLink(r.data?.url || "");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to generate link");
@@ -202,22 +206,34 @@ function ShareInviteLink() {
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
-      toast.success("Invite link copied — share with anyone who admins a Discord server");
+      toast.success("Invite link copied");
       setTimeout(() => setCopied(false), 2500);
     } catch {
       toast.error("Couldn't copy. Long-press to copy manually.");
     }
   };
 
-  const emailIt = () => {
-    const subject = encodeURIComponent("Invite the BridgeBot Discord Bot to your server");
-    const body = encodeURIComponent(
-      `Hi,\n\nYou can add the BridgeBot Discord bot to your server with this one-click link:\n\n${link}\n\n` +
-      `You'll need Manage Server permission on the target Discord server. After authorizing, let me know so I can wire it up to the right knowledge base.\n\n` +
-      `Thanks!`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-    setMailtoOpen(true);
+  const sendEmail = async () => {
+    if (!emailTo.trim() || !emailTo.includes("@")) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setSending(true);
+    try {
+      await api.post(`/discord/send-invite-email`, {
+        to_email: emailTo.trim(),
+        recipient_name: emailName.trim() || null,
+        invite_url: link,
+        custom_note: emailNote.trim() || null,
+      });
+      toast.success(`Invite sent to ${emailTo}`);
+      setEmailOpen(false);
+      setEmailTo(""); setEmailName(""); setEmailNote("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to send email");
+    } finally {
+      setSending(false);
+    }
   };
 
   if (!link && !loading) return null;
@@ -239,7 +255,7 @@ function ShareInviteLink() {
       </div>
       <p style={{ margin: "0 0 10px", fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5" }}>
         Send this link to anyone with Manage Server permission on a Discord server. They click it, authorize the bot,
-        and it appears in their server. You{`'`}ll then assign it to a bot instance from this page.
+        and it lands in your admin panel ready to configure. They never need to log into BridgeBot.
       </p>
       <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
         <input
@@ -268,23 +284,78 @@ function ShareInviteLink() {
           {copied ? <><CheckCircle size={11} /> Copied</> : <><Settings size={11} /> Copy</>}
         </button>
         <button
-          onClick={emailIt} disabled={!link} data-testid="share-invite-email"
+          onClick={() => setEmailOpen(!emailOpen)} disabled={!link} data-testid="share-invite-email-toggle"
           style={{
             padding: "8px 12px",
-            backgroundColor: "rgba(96,165,250,0.08)",
+            backgroundColor: emailOpen ? "rgba(96,165,250,0.12)" : "rgba(96,165,250,0.08)",
             border: `1px solid rgba(96,165,250,0.25)`,
             borderRadius: "8px",
             color: colors.brand.light,
             fontFamily: fonts.body, fontSize: "11px", fontWeight: "600",
             cursor: link ? "pointer" : "not-allowed",
+            display: "flex", alignItems: "center", gap: "5px",
           }}
         >
-          Email
+          <Mail size={11} /> {emailOpen ? "Cancel" : "Email"}
         </button>
       </div>
-      <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, lineHeight: "1.5" }}>
-        Note: this link is generic for the app — anyone who has it can invite the bot. Treat it like a moderately
-        sensitive URL and revoke by rotating the Discord App in <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a> if needed.
+
+      {emailOpen && (
+        <div data-testid="share-email-form" style={{
+          marginTop: "10px",
+          padding: "12px",
+          backgroundColor: colors.bg.surface,
+          border: `1px solid ${colors.border.default}`,
+          borderRadius: "8px",
+        }}>
+          <p style={{ margin: "0 0 10px", fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: colors.text.primary }}>
+            Send invite via email
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+            <input
+              type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)}
+              placeholder="recipient@example.com" data-testid="share-email-to"
+              onFocus={onFocus} onBlur={onBlur}
+              style={{ ...T.input, padding: "8px 10px", fontSize: "12px" }}
+            />
+            <input
+              type="text" value={emailName} onChange={(e) => setEmailName(e.target.value)}
+              placeholder="Recipient name (optional)" data-testid="share-email-name"
+              onFocus={onFocus} onBlur={onBlur}
+              style={{ ...T.input, padding: "8px 10px", fontSize: "12px" }}
+            />
+          </div>
+          <textarea
+            value={emailNote} onChange={(e) => setEmailNote(e.target.value)}
+            placeholder="Optional personal note (e.g., 'Hi! This will help us reply to support tickets faster.')"
+            data-testid="share-email-note"
+            rows={2}
+            onFocus={onFocus} onBlur={onBlur}
+            style={{ ...T.input, width: "100%", padding: "8px 10px", fontSize: "12px", resize: "vertical", marginBottom: "8px" }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={sendEmail} disabled={sending || !emailTo}
+              data-testid="share-email-send"
+              style={{
+                padding: "8px 16px",
+                backgroundColor: colors.brand.light,
+                color: "#0B1120", border: "none", borderRadius: "8px",
+                fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                cursor: (sending || !emailTo) ? "not-allowed" : "pointer",
+                opacity: (sending || !emailTo) ? 0.6 : 1,
+                display: "flex", alignItems: "center", gap: "6px",
+              }}
+            >
+              <Mail size={12} /> {sending ? "Sending…" : "Send Invite"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p style={{ margin: "8px 0 0", fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, lineHeight: "1.5" }}>
+        Anyone with this link can invite the bot. The new server auto-links to <strong>this</strong> instance, and the
+        invited admin lands on a friendly thank-you page (no BridgeBot login needed). To rotate, visit <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a>.
       </p>
     </div>
   );

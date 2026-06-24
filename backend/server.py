@@ -1809,6 +1809,77 @@ async def get_discord_oauth_url(instance_id: str = Depends(get_instance_access))
     return {"url": url}
 
 
+@api_router.get("/discord/share-oauth-url")
+async def get_discord_share_oauth_url(instance_id: str = Depends(get_instance_access)):
+    """Generate a shareable Discord OAuth2 URL for a third-party admin to invite the bot
+    to their server. The bot becomes assigned to the inviting admin's instance, but the
+    third-party user lands on a public friendly success page instead of the admin login wall."""
+    creds = await get_discord_credentials()
+    if not creds["client_id"]:
+        raise HTTPException(status_code=400, detail="Discord Client ID not configured")
+    if not creds["redirect_uri"]:
+        raise HTTPException(status_code=400, detail="Discord Redirect URI not configured")
+    from urllib.parse import urlencode
+    params = {
+        "client_id": creds["client_id"],
+        "permissions": str(DISCORD_BOT_PERMISSIONS),
+        "scope": "bot",
+        "redirect_uri": creds["redirect_uri"],
+        "response_type": "code",
+        "state": f"share:{instance_id}",
+    }
+    url = f"https://discord.com/oauth2/authorize?{urlencode(params)}"
+    return {"url": url}
+
+
+class SendInviteEmailBody(BaseModel):
+    to_email: str
+    recipient_name: Optional[str] = None
+    invite_url: str
+    custom_note: Optional[str] = None
+
+
+@api_router.post("/discord/send-invite-email")
+async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str = Depends(get_instance_access)):
+    """Send a Discord bot invite link to a third-party server admin via Resend."""
+    if not resend.api_key:
+        raise HTTPException(status_code=503, detail="Email service not configured (Resend API key missing)")
+    if not body.to_email or "@" not in body.to_email:
+        raise HTTPException(status_code=400, detail="Valid recipient email is required")
+    if not body.invite_url:
+        raise HTTPException(status_code=400, detail="Invite URL is required")
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0}) or {}
+    bot_cfg = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_name = bot_cfg.get("name") or inst.get("name") or "BridgeBot"
+    recipient = (body.recipient_name or "there").strip()
+    note_html = ""
+    if body.custom_note and body.custom_note.strip():
+        safe_note = body.custom_note.strip().replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        note_html = f'<div style="margin:16px 0;padding:14px 16px;background:#F3F4F6;border-left:3px solid #3B82F6;border-radius:6px;color:#334155;"><em>"{safe_note}"</em></div>'
+    html = f"""<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F8FAFC;margin:0;padding:24px;color:#0F172A;">
+<div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:32px;">
+<h1 style="margin:0 0 8px;font-size:22px;color:#0F172A;">You{"'"}re invited to add {bot_name} to your Discord server</h1>
+<p style="margin:0 0 20px;color:#475569;line-height:1.6;">Hi {recipient}, the BridgeBot admin has invited you to install our Discord bot on a server you manage.</p>
+{note_html}
+<a href="{body.invite_url}" style="display:inline-block;padding:14px 28px;background:#5865F2;color:#FFFFFF;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Invite Bot to Your Server</a>
+<p style="margin:24px 0 8px;color:#64748B;font-size:12px;line-height:1.6;">You{"'"}ll need <strong>Manage Server</strong> permission on the Discord server you want to add the bot to. After clicking the button, Discord will ask you to authorize the bot. No BridgeBot account needed — the admin will configure the bot{"'"}s knowledge base and behavior on their end.</p>
+<p style="margin:16px 0 0;color:#94A3B8;font-size:11px;">If the button doesn{"'"}t work, copy this link into your browser:<br><code style="word-break:break-all;color:#475569;">{body.invite_url}</code></p>
+<div style="margin-top:28px;padding-top:16px;border-top:1px solid #E2E8F0;color:#94A3B8;font-size:11px;">Sent via BridgeBot · This invite was prepared by your contact.</div>
+</div></body></html>"""
+    try:
+        result = resend.Emails.send({
+            "from": "BridgeBot <noreply@bridgebot.tech>",
+            "to": [body.to_email.strip()],
+            "subject": f"Invite {bot_name} to your Discord server",
+            "html": html,
+        })
+        logger.info(f"Discord invite email sent to {body.to_email} for instance {instance_id[:12]}")
+        return {"success": True, "message_id": result.get("id") if isinstance(result, dict) else None}
+    except Exception as e:
+        logger.error(f"Resend send failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}")
+
+
 @api_router.get("/discord/callback")
 async def discord_oauth_callback(
     request: Request,
@@ -1831,6 +1902,10 @@ async def discord_oauth_callback(
         return RedirectResponse(url=f"{frontend_base}/admin/discord?oauth=error&reason=no_code")
 
     instance_id = state or "default"
+    is_share = False
+    if instance_id.startswith("share:"):
+        is_share = True
+        instance_id = instance_id[len("share:"):]
 
     try:
         async with httpx.AsyncClient() as client:
