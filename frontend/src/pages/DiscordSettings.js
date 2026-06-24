@@ -378,11 +378,13 @@ export default function DiscordSettings() {
   const [scripted, setScripted] = useState({
     enabled: false,
     primary_message: "",
+    update_message: "",
     variants: [],
     fallback_message: "",
-    max_attempts: 5,
+    max_attempts: 2,
     reset_hours: 24,
     rephrase_mode: "hybrid",
+    classify_intent: true,
   });
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
@@ -426,11 +428,13 @@ export default function DiscordSettings() {
       setScripted({
         enabled: !!sc.enabled,
         primary_message: sc.primary_message || "",
+        update_message: sc.update_message || "",
         variants: Array.isArray(sc.variants) ? sc.variants : [],
         fallback_message: sc.fallback_message || "",
-        max_attempts: sc.max_attempts || 5,
+        max_attempts: sc.max_attempts || 2,
         reset_hours: sc.reset_hours || 24,
         rephrase_mode: sc.rephrase_mode || "hybrid",
+        classify_intent: sc.classify_intent !== false,
       });
     }).catch(() => {});
   }, [instanceId]);
@@ -876,7 +880,7 @@ export default function DiscordSettings() {
             {scripted.enabled && (
               <div style={{ marginTop: "8px" }}>
                 {/* Primary message */}
-                <label style={T.label}>Primary Message <span style={{ color: colors.brand.warning }}>*</span></label>
+                <label style={T.label}>Primary Message <span style={{ color: colors.brand.warning }}>*</span> <span style={{ color: colors.text.muted, fontWeight: "400" }}>· 1st reply</span></label>
                 <textarea
                   value={scripted.primary_message}
                   onChange={e => setScripted(p => ({ ...p, primary_message: e.target.value }))}
@@ -886,7 +890,51 @@ export default function DiscordSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
-                <p style={T.hint}>The first reply to a user is sent verbatim.</p>
+                <p style={T.hint}>Sent the FIRST time a user asks during an incident window. Verbatim.</p>
+
+                <label style={{ ...T.label, marginTop: "16px" }}>Update Message <span style={{ color: colors.text.muted, fontWeight: "400" }}>· 2nd reply</span></label>
+                <textarea
+                  value={scripted.update_message}
+                  onChange={e => setScripted(p => ({ ...p, update_message: e.target.value }))}
+                  placeholder="No new update yet — we're still working on it and will post here when there's news. Thanks for your patience."
+                  data-testid="scripted-update"
+                  rows={4}
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
+                />
+                <p style={T.hint}>Sent the SECOND time the same user asks (e.g., &quot;any update?&quot;). After this, bot stays silent until the cooldown resets.</p>
+
+                <div style={{
+                  marginTop: "14px",
+                  display: "flex", alignItems: "flex-start", gap: "12px",
+                  padding: "10px 12px",
+                  backgroundColor: scripted.classify_intent ? "rgba(96,165,250,0.05)" : colors.bg.base,
+                  border: `1px solid ${scripted.classify_intent ? "rgba(96,165,250,0.2)" : colors.border.default}`,
+                  borderRadius: "8px",
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
+                      Auto-detect intent (recommended)
+                    </p>
+                    <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
+                      Uses Claude to classify each message. Stays silent on speculation, commentary, jokes, complaints, or off-topic chatter — replies only to real questions or update requests. Adds a tiny LLM call per message (~$0.0005).
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setScripted(p => ({ ...p, classify_intent: !p.classify_intent }))}
+                    data-testid="scripted-classify-toggle"
+                    role="switch"
+                    aria-checked={scripted.classify_intent}
+                    style={{
+                      flexShrink: 0, width: "38px", height: "22px",
+                      backgroundColor: scripted.classify_intent ? colors.brand.light : colors.bg.panel,
+                      border: `1px solid ${scripted.classify_intent ? colors.brand.light : colors.border.default}`,
+                      borderRadius: "11px", cursor: "pointer", position: "relative", padding: 0, transition: "all 0.2s",
+                    }}
+                  >
+                    <span style={{ position: "absolute", top: "2px", left: scripted.classify_intent ? "17px" : "2px", width: "16px", height: "16px", backgroundColor: "#FFFFFF", borderRadius: "50%", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                  </button>
+                </div>
 
                 {/* Rephrase mode */}
                 <label style={{ ...T.label, marginTop: "16px" }}>Rephrase Mode</label>

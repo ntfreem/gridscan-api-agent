@@ -197,11 +197,13 @@ class ScriptedVariant(BaseModel):
 class ScriptedModeConfig(BaseModel):
     enabled: Optional[bool] = None
     primary_message: Optional[str] = None
+    update_message: Optional[str] = None       # 2nd response when same user comes back
     variants: Optional[List[str]] = None
     fallback_message: Optional[str] = None
     max_attempts: Optional[int] = None
     reset_hours: Optional[int] = None
     rephrase_mode: Optional[str] = None   # ai | manual | hybrid
+    classify_intent: Optional[bool] = None  # if True, Claude classifies user intent (question/update vs speculation)
 
 
 class DiscordConfigUpdate(BaseModel):
@@ -408,32 +410,88 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
     return "\n\n".join(parts)
 
 
+async def _classify_user_intent(user_text: str, session_id: str, instance_id: str) -> str:
+    """Quick Claude classification: returns one of `question`, `update`, `speculation`, `other`.
+    Used by Scripted Mode v2 to decide whether to respond or stay silent."""
+    system = (
+        "You classify a single user message in a support/incident channel. Output EXACTLY one word from this list:\n"
+        "  question     — genuine question or request for information (e.g., \"is the bridge down?\")\n"
+        "  update       — asking for an update on a known incident (e.g., \"any update?\", \"still paused?\", \"is it back?\")\n"
+        "  speculation  — opinion, commentary, joke, complaint, or off-topic chatter (e.g., \"this is a disaster\", \"lol\", \"team sleeping\")\n"
+        "  other        — anything else (greetings, thanks, etc.)\n"
+        "Output ONLY the single word, lowercase. No punctuation, no preamble."
+    )
+    try:
+        out = await call_claude(
+            f"{session_id}_intent_{datetime.now(timezone.utc).timestamp()}",
+            user_text,
+            system,
+            instance_id=instance_id,
+            platform="discord",
+        )
+        cleaned = (out or "").strip().lower().split()[0] if out else ""
+        if cleaned in ("question", "update", "speculation", "other"):
+            return cleaned
+    except Exception as e:
+        logger.warning(f"Intent classify failed: {e}")
+    return "other"
+
+
 async def build_scripted_response(
     instance_id: str,
     channel_id: str,
     user_id: str,
     scripted_cfg: dict,
     session_id: str,
+    user_text: str = "",
 ) -> str:
-    """Scripted Mode reply builder.
-    First reply to a user (in a channel) = exact primary_message.
-    Reply N (1..max_attempts-1) = AI-rephrased variant of primary, manual variant, or hybrid (per rephrase_mode).
-    Reply >= max_attempts = fallback_message.
-    Per-user, per-channel counter, with optional reset_hours.
+    """Scripted Mode v2 reply builder.
+
+    Flow:
+      1. If `classify_intent` is on, ask Claude to classify the message.
+         - speculation / commentary → silent (return ""), counter NOT incremented
+         - question / update / other → proceed to step 2
+      2. Look up per-user-per-channel counter (resets after `reset_hours` of idle):
+         - count == 0 → reply with `primary_message` (verbatim)
+         - count == 1 → reply with `update_message` if set (else rephrased primary)
+         - count >= 2 → silent (return "") until cooldown resets
+      3. Counter atomically incremented after the reply is chosen.
+
+    `variants`, `rephrase_mode`, `max_attempts`, `fallback_message` are kept for back-compat
+    when `update_message` is empty.
     """
     primary = (scripted_cfg.get("primary_message") or "").strip()
     if not primary:
         return ""
+    update_msg = (scripted_cfg.get("update_message") or "").strip()
     variants = [v.strip() for v in (scripted_cfg.get("variants") or []) if isinstance(v, str) and v.strip()]
     fallback = (scripted_cfg.get("fallback_message") or "").strip()
-    max_attempts = int(scripted_cfg.get("max_attempts") or 5)
+    max_attempts = int(scripted_cfg.get("max_attempts") or 2)
     reset_hours = int(scripted_cfg.get("reset_hours") or 24)
-    mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()  # ai | manual | hybrid
+    mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()
+    classify_on = bool(scripted_cfg.get("classify_intent"))
 
-    # Counter: per instance, channel, user — atomic find-and-modify to avoid race conditions
+    # Intent classification (v2 feature) — silent on speculation/commentary
+    if classify_on and user_text:
+        intent = await _classify_user_intent(user_text, session_id, instance_id)
+        if intent == "speculation":
+            logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
+            try:
+                await db.scripted_skips.insert_one({
+                    "instance_id": instance_id,
+                    "channel_id": channel_id,
+                    "user_id": user_id,
+                    "reason": "speculation",
+                    "preview": user_text[:200],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            except Exception:
+                pass
+            return ""
+
+    # Per-instance / channel / user counter — reset if idle > reset_hours
     key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
     now = datetime.now(timezone.utc)
-    # First read existing state to detect reset window
     existing = await db.scripted_counters.find_one(key) or {}
     last_iso = existing.get("last_at")
     if last_iso:
@@ -442,12 +500,11 @@ async def build_scripted_response(
             if last_dt.tzinfo is None:
                 last_dt = last_dt.replace(tzinfo=timezone.utc)
             if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
-                # Reset window expired — zero the counter atomically
                 await db.scripted_counters.update_one(key, {"$set": {"count": 0}})
         except Exception:
             pass
 
-    # Atomic increment + return the NEW value (this is the attempt number 1..N)
+    # Atomic increment so concurrent messages can't double-reply
     from pymongo import ReturnDocument
     updated = await db.scripted_counters.find_one_and_update(
         key,
@@ -456,28 +513,32 @@ async def build_scripted_response(
         return_document=ReturnDocument.AFTER,
     )
     new_count = int((updated or {}).get("count") or 1)
-    count = new_count - 1  # number of PRIOR attempts (0 = first contact)
+    count = new_count - 1  # 0 = first contact, 1 = second, …
 
-    if new_count > max_attempts and fallback:
-        response = fallback
-    elif count == 0:
-        # First attempt — primary verbatim (Q4=d hybrid: exact primary on first contact)
-        response = primary
-    else:
-        # Subsequent attempts — rephrase based on mode
+    # V2 sequence: primary → update → silent (until reset)
+    if count == 0:
+        return primary
+    if count == 1 and update_msg:
+        return update_msg
+    # If user set update_message blank, fall back to v1 rephrase behavior up to max_attempts
+    if not update_msg and new_count <= max_attempts:
         response = ""
-        if mode in ("manual",) and variants:
+        if mode == "manual" and variants:
             response = variants[(count - 1) % len(variants)]
-        elif mode in ("ai",):
+        elif mode == "ai":
             response = await _ai_rephrase(primary, session_id, instance_id) or primary
-        else:  # hybrid: try AI first, fall back to manual variants, then primary
+        else:
             response = await _ai_rephrase(primary, session_id, instance_id)
             if not response and variants:
                 response = variants[(count - 1) % len(variants)]
             if not response:
                 response = primary
+        return response
 
-    return response
+    # Past max attempts / past 2nd message — silent (or send fallback if configured)
+    if fallback and count == 2:
+        return fallback
+    return ""
 
 
 async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> str:
@@ -879,7 +940,11 @@ async def start_shared_discord_bot(token: str):
                         user_id=str(message.author.id),
                         scripted_cfg=scripted_cfg,
                         session_id=session_id,
+                        user_text=user_text,
                     )
+                    if not response:
+                        # Scripted mode opted to stay silent (speculation, past 2nd message, etc.)
+                        return
                     if response:
                         # Apply reply style (mention vs natural)
                         if reply_style == "with_mention" and not is_dm:
