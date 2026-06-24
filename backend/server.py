@@ -473,7 +473,12 @@ async def build_scripted_response(
 
     # Intent classification (v2 feature) — silent on speculation/commentary
     if classify_on and user_text:
-        intent = await _classify_user_intent(user_text, session_id, instance_id)
+        try:
+            intent = await _classify_user_intent(user_text, session_id, instance_id)
+        except Exception as _e:
+            logger.warning(f"[SCRIPTED] intent classify exception, treating as 'other': {_e}")
+            intent = "other"
+        logger.info(f"[SCRIPTED] intent={intent} user_text={user_text[:80]!r}")
         if intent == "speculation":
             logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
             try:
