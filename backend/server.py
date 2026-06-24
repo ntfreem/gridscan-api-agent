@@ -1926,9 +1926,10 @@ async def discord_oauth_callback(
         return RedirectResponse(url=f"{frontend_base}/admin/discord?oauth=error&reason=no_code")
 
     instance_id = state or "default"
-    is_share = False
+    is_share = True  # Treat ALL invite callbacks as share-style so the user always lands on the
+                     # public success page — never the login wall. Admins can still open /admin/discord
+                     # afterwards from their own session.
     if instance_id.startswith("share:"):
-        is_share = True
         instance_id = instance_id[len("share:"):]
 
     try:
@@ -1989,13 +1990,14 @@ async def discord_oauth_callback(
                     _shared_discord_task.cancel()
                 _shared_discord_task = asyncio.create_task(start_shared_discord_bot(bot_token))
 
+            bot_name = (await db.bot_config.find_one({'instance_id': instance_id}, {'_id': 0}) or {}).get('name', 'BridgeBot')
             return RedirectResponse(
-                url=f"{frontend_base}/admin/discord?oauth=success&guild={guild.get('name', '')}"
+                url=f"{frontend_base}/discord/invited?guild={guild.get('name', '')}&bot={bot_name}"
             )
 
     except Exception as e:
         logger.error(f"Discord OAuth callback error: {e}")
-        return RedirectResponse(url=f"{frontend_base}/admin/discord?oauth=error&reason=server_error")
+        return RedirectResponse(url=f"{frontend_base}/discord/invited?error=1")
 
 
 @api_router.post("/discord/sync-name")
