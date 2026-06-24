@@ -429,23 +429,34 @@ async def build_scripted_response(
     reset_hours = int(scripted_cfg.get("reset_hours") or 24)
     mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()  # ai | manual | hybrid
 
-    # Counter: per instance, channel, user
+    # Counter: per instance, channel, user — atomic find-and-modify to avoid race conditions
     key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
     now = datetime.now(timezone.utc)
-    doc = await db.scripted_counters.find_one(key) or {}
-    last_iso = doc.get("last_at")
-    count = int(doc.get("count") or 0)
+    # First read existing state to detect reset window
+    existing = await db.scripted_counters.find_one(key) or {}
+    last_iso = existing.get("last_at")
     if last_iso:
         try:
             last_dt = datetime.fromisoformat(last_iso)
             if last_dt.tzinfo is None:
                 last_dt = last_dt.replace(tzinfo=timezone.utc)
             if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
-                count = 0
+                # Reset window expired — zero the counter atomically
+                await db.scripted_counters.update_one(key, {"$set": {"count": 0}})
         except Exception:
-            count = 0
+            pass
 
-    new_count = count + 1
+    # Atomic increment + return the NEW value (this is the attempt number 1..N)
+    from pymongo import ReturnDocument
+    updated = await db.scripted_counters.find_one_and_update(
+        key,
+        {"$inc": {"count": 1}, "$set": {**key, "last_at": now.isoformat()}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    new_count = int((updated or {}).get("count") or 1)
+    count = new_count - 1  # number of PRIOR attempts (0 = first contact)
+
     if new_count > max_attempts and fallback:
         response = fallback
     elif count == 0:
@@ -465,11 +476,6 @@ async def build_scripted_response(
             if not response:
                 response = primary
 
-    await db.scripted_counters.update_one(
-        key,
-        {"$set": {**key, "count": new_count, "last_at": now.isoformat()}},
-        upsert=True,
-    )
     return response
 
 
@@ -697,6 +703,24 @@ async def start_shared_discord_bot(token: str):
         async def on_message(message):
             if message.author.bot:
                 return
+            # Dedup: if we've already handled this exact Discord message ID in the
+            # last 60 seconds, drop it. Protects against duplicate event delivery
+            # during deploy overlaps, double-subscribed handlers, or replay attacks.
+            try:
+                msg_key = str(message.id)
+                now_ts = datetime.now(timezone.utc).timestamp()
+                if msg_key in _recent_message_ids:
+                    if now_ts - _recent_message_ids[msg_key] < 60:
+                        logger.info(f"[DEDUP] skipped duplicate Discord message id={msg_key}")
+                        return
+                _recent_message_ids[msg_key] = now_ts
+                # Trim cache when too big (cheap pruning)
+                if len(_recent_message_ids) > 2000:
+                    cutoff = now_ts - 120
+                    for k in [k for k, t in _recent_message_ids.items() if t < cutoff]:
+                        _recent_message_ids.pop(k, None)
+            except Exception:
+                pass
             is_dm = isinstance(message.channel, discord.DMChannel)
             if is_dm:
                 first_cfg = await db.discord_config.find_one({"is_active": True}, {"_id": 0})
