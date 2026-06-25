@@ -105,6 +105,18 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Active Counter Accuracy + Reply Sandbox (DONE 2026-02-XX)
+- **Smarter Active Counters**: `GET /api/discord/scripted-counters/count` now filters by `last_at` within the cooldown window. Returns `{active_counters, total_counters, stale_counters, skips_last_24h, reset_hours}`. UI surfaces stale rows as "+ N idle (will auto-reset)" hint and enables Reset whenever total > 0.
+- **Reply Sandbox** on `/admin/discord`:
+  - New collapsible card on the Scripted Mode panel (`data-testid="sandbox-card"`)
+  - Textarea accepts up to 25 user messages, one per line
+  - "Run Sandbox" → calls `POST /api/discord/scripted-mode/sandbox` with the UNSAVED form values
+  - Per-turn cards show: pool name badge (primary/update/variant/ack/fallback/silent), classified intent, user message, bot reply (or "Silent — {reason}"), `count_after`, and a collapsible "Pool considered" list
+  - Sandbox does NOT touch the real `scripted_counters` collection (verified via `count_documents` invariant) — pure dry-run
+  - ~2 small Claude calls per message; costs noted in the UI
+- **Refactor**: extracted pure `_decide_scripted_reply` helper (no DB I/O). `build_scripted_response` now wraps it with idle-reset, counter persistence, and speculation-skip logging. All 20 v5 test cases pass unchanged.
+- Tests: extended `test_scripted_ai_router.py` (+10 cases for the pure helper) + new `test_scripted_sandbox_http.py` (13 HTTP cases). 30/30 backend pytest, 13/13 HTTP, 8/8 frontend.
+
 ### Bugfix — Scripted Mode toggle reverting on click (DONE 2026-02-XX)
 - User report: "When I create a new instance and try to enable script mode, it keeps disabling it."
 - Root cause: React deps cycle in `DiscordSettings.js`. `loadStatus` useCallback had `scripted.enabled` in its deps (added in iteration 11 as a "don't poll when disabled" optimization). The main useEffect had `loadStatus` in its deps. So when the user toggled the switch, `loadStatus`'s identity changed → useEffect re-fired → `loadConfig()` re-ran → server state (still `false` for the unsaved toggle) overwrote the user's click.
