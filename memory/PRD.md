@@ -105,6 +105,12 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Bugfix — Scripted Mode toggle reverting on click (DONE 2026-02-XX)
+- User report: "When I create a new instance and try to enable script mode, it keeps disabling it."
+- Root cause: React deps cycle in `DiscordSettings.js`. `loadStatus` useCallback had `scripted.enabled` in its deps (added in iteration 11 as a "don't poll when disabled" optimization). The main useEffect had `loadStatus` in its deps. So when the user toggled the switch, `loadStatus`'s identity changed → useEffect re-fired → `loadConfig()` re-ran → server state (still `false` for the unsaved toggle) overwrote the user's click.
+- Fix: removed `scripted.enabled` from `loadStatus` deps. Counter endpoint is now polled unconditionally (cheap — returns 0/0 when off).
+- Tests: testing_agent_v3_fork — toggle persistence across 11.5s+ (2 full poll cycles), save+reload persistence, OFF-stays-OFF regression, counters card still renders, all 22 backend tests still green.
+
 ### Scripted Mode v5 — Fixed Reply 1+2 Start, Then No-Repeat AI Router (DONE 2026-02-XX)
 - Per user request: **Reply 1 and Reply 2 are always sent first, verbatim** (no AI, no LLM cost). The AI router only engages from msg3+ (or msg2 when Reply 2 is left blank).
 - msg3+ AI router pool composition:
