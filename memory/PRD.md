@@ -105,6 +105,23 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Per-Instance Cost Dashboard (DONE 2026-02-XX)
+- Captures real input/output tokens per LLM call:
+  - **Anthropic SDK**: `resp.usage.input_tokens` / `output_tokens` (exact)
+  - **Ollama**: `prompt_eval_count` / `eval_count` (exact)
+  - **Emergent** path: heuristic estimate via `_estimate_tokens` (~4 chars/token) since the library doesn't expose usage
+- New `LLM_PRICING` table covering Anthropic 4-series (Haiku $1/$5, Sonnet $3/$15, Opus $15/$75 per 1M tokens) + legacy 3.5 + Ollama=$0 + Sonnet-fallback for unknown.
+- `_cost_for(model, in_tok, out_tok)` — handles provider-prefixed and bare model ids.
+- New endpoint `GET /api/analytics/llm-cost`: returns `{month_to_date: {cost_usd, input_tokens, output_tokens, calls, day_of_month, days_in_month}, by_model: [...], daily: [30 days], forecast_month_end_usd, last_30d_cost_usd}`.
+- Forecast = `(mtd_cost / day_of_month) * days_in_month` (simple linear projection).
+- UI: new Cost Dashboard card on Bot Settings page **directly below the LLM Provider card**:
+  - 3 stat tiles: MTD cost / forecast / calls + token count
+  - Custom SVG sparkline of 30 daily bars (no chart library dependency)
+  - Per-model breakdown rows with provider badge, model name, calls, cost
+  - Empty-state when zero calls this month
+- Refactor: all `_call_*` helpers now return `(text, in_tok, out_tok)` tuple; `call_claude` dispatcher unpacks and forwards to `_log_llm_usage`.
+- Tests: 12 new cost-helper unit tests in `test_llm_provider.py` (now 24 cases), new `test_llm_cost.py` (4 HTTP cases including seeded aggregation + legacy `$ifNull` fallback). 31/31 LLM tests + 51/51 scripted regression all green.
+
 ### Per-Instance LLM Provider (Emergent / Anthropic Direct / Ollama) (DONE 2026-02-XX)
 - Ported v3.0.0's BYO-Anthropic-key feature **plus** kept Emergent and added Ollama as options.
 - New per-instance `llm_config` on `bot_instances`: `{provider, model, anthropic_api_key, ollama_base_url}`.
