@@ -105,6 +105,16 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Saved Scenarios — Regression Suite for Scripted Mode (DONE 2026-02-XX)
+- Snapshot-test your Scripted Mode copy: save a sandbox conversation as a named scenario, run it later, system compares per-turn `(pool_name, intent)` against the golden baseline.
+- First run auto-captures the golden; subsequent runs return pass / fail / captured_golden.
+- Match strategy: `(pool_name, intent)` only — `bot_reply` text is non-deterministic when AI picks from a pool, so we don't compare it.
+- New backend helpers: `_run_sandbox_simulation`, `_compare_against_golden`, `_run_scenario_doc`, `_load_scripted_cfg`.
+- New endpoints: GET / POST `/discord/scripted-mode/scenarios`, DELETE `/scenarios/{id}`, POST `/scenarios/{id}/run`, POST `/scenarios/{id}/save-golden`, POST `/scenarios/run-all`.
+- New collection: `scripted_scenarios` with `{id, instance_id, name, messages, golden_turns, last_run, created_at, updated_at}`.
+- UI: Saved Scenarios collapsible card under the Reply Sandbox; per-row status badge (NOT RUN / GOLDEN CAPTURED / PASS / FAIL with count); name input + Save in the sandbox row; Run-all button; Re-bless button visible only on FAIL rows (promotes the latest run to be the new golden after intentional copy changes).
+- Tests: `/app/backend/tests/test_scripted_scenarios.py` (18 new tests: 8 unit + 10 HTTP), plus regression sweep of `test_scripted_ai_router.py` (30) + `test_scripted_sandbox_http.py` (15) = **63/63 backend pass**. Frontend building blocks all verified.
+
 ### Active Counter Accuracy + Reply Sandbox (DONE 2026-02-XX)
 - **Smarter Active Counters**: `GET /api/discord/scripted-counters/count` now filters by `last_at` within the cooldown window. Returns `{active_counters, total_counters, stale_counters, skips_last_24h, reset_hours}`. UI surfaces stale rows as "+ N idle (will auto-reset)" hint and enables Reset whenever total > 0.
 - **Reply Sandbox** on `/admin/discord`:
