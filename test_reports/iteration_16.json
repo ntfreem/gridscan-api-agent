@@ -1,0 +1,31 @@
+{
+  "summary": "Verified the Scripted Mode toggle persistence fix in DiscordSettings.js. The PRIMARY bug (toggle reverting to OFF immediately due to loadStatus deps cycle) is FIXED. Toggle now stays ON through multiple 5s poll cycles (verified at T+6.5s and T+11.5s — both PASS), saves successfully ('Discord settings saved' toast shown), and persists after page reload. REGRESSION1 (toggle OFF stays OFF through 2 poll cycles) PASS. REGRESSION2 (scripted-counters-card visible with active_counters=0 displayed) PASS. Backend regression: 22/22 tests in test_scripted_ai_router.py still pass; GET /api/discord/scripted-counters/count returns {active_counters:0, skips_last_24h:0} cheaply; POST /api/discord/scripted-counters/reset returns {success:true, cleared:0}.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scripted_ai_router.py",
+    "/app/test_reports/pytest/iter16_scripted_ai_router.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix at /app/frontend/src/pages/DiscordSettings.js:449-456 is correct and surgical. `loadStatus` useCallback now depends only on [instanceId], so its identity is stable across toggle changes. The main useEffect at line 472-476 (deps=[loadConfig, loadStatus, instanceId]) no longer re-fires on toggle, so loadConfig() doesn't overwrite the unsaved local state.",
+    "The endpoint /discord/scripted-counters/count is polled unconditionally every 5s now, but the backend returns 0/0 cheaply when no counters exist (verified: <100ms response). This is a fair trade for correctness.",
+    "Consider migrating loadStatus polling to a useRef-stable function or a custom hook to avoid any future useEffect dependency pitfalls (low priority — current fix is correct).",
+    "Note: The Save Configuration button works correctly and persists scripted_mode.enabled through POST /api/discord/config — confirmed by reload-and-check-persisted-state in the e2e test."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (22/22 unit + 2/2 curl regression)", "frontend": "100% on critical bug fix tests (toggle persistence + save + reload + regression OFF-stays-OFF + counters card visible). v5 labels not re-checked in this run — they're already verified in iteration_15 and source unchanged."},
+  "test_credentials": "Admin: administrator / Admin@123. Instance used: 'Scripted Test' (8292460c-de40-4a28-a711-640c0ecb8447).",
+  "seed_data_creation": "Test toggled Scripted Mode ON via UI and saved (final state ON on Scripted Test instance). All test_scripted_ai_router.py fixtures self-clean (TEST_inst_*/TEST_ch_*/TEST_usr_* prefix).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix verified end-to-end. The deps-cycle fix in DiscordSettings.js loadStatus useCallback (removed `scripted.enabled` from deps; always poll counters endpoint) resolves the reported user issue. No further work needed. If retesting, ensure an instance is selected via the workspace switcher ([data-testid=\"instance-switcher\"] then [data-testid=\"switch-instance-{id}\"]) BEFORE interacting with the scripted-mode-toggle — otherwise loadConfig 400s and gives a false-positive (toggle appears persistent only because no server overwrite occurs). Always assert state via aria-checked attribute on [data-testid=\"scripted-mode-toggle\"]. The v5 hint labels (Reply 1 — Primary, Reply 2 — Update, Max Replies per User) are at DiscordSettings.js lines 908, 920, 1085 and only render when scripted_mode.enabled === true (panel collapses when OFF).",
+  "rca of the issue": "Root cause: loadStatus useCallback had `scripted.enabled` in deps, causing its identity to change whenever the user clicked the toggle. The main useEffect at line 472 depends on loadStatus, so it re-fired on every toggle change, triggering loadConfig() which fetched server state (still false for unsaved toggle) and called setScripted({enabled: !!sc.enabled, ...}), flipping the toggle back. Fix: removed scripted.enabled from deps (now [instanceId] only) and always poll the /discord/scripted-counters/count endpoint regardless of local toggle state. Backend was untouched. Reproduction (pre-fix): click toggle → reverts within ~milliseconds (next render). Post-fix verified: toggle stays ON through 11.5s+ (2 poll cycles)."
+}

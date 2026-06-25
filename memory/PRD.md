@@ -105,6 +105,18 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Scripted Mode v5 — Fixed Reply 1+2 Start, Then No-Repeat AI Router (DONE 2026-02-XX)
+- Per user request: **Reply 1 and Reply 2 are always sent first, verbatim** (no AI, no LLM cost). The AI router only engages from msg3+ (or msg2 when Reply 2 is left blank).
+- msg3+ AI router pool composition:
+  - `intent=ack` → pick from **Acknowledgments** (acks cycle, allowed to repeat once exhausted)
+  - `intent=question/update/other` → pick from **Variants** minus `used_replies`
+  - no match → **Fallback** (once per conversation)
+  - `intent=speculation` → silent, no count bump
+- Reply 1 and Reply 2 are NOT in the msg3+ AI pool (only Variants/Acks/Fallback).
+- Carries over from v4: `used_replies` no-repeat tracking, `max_attempts` cap (default 10), idle-reset wipes both `count` and `used_replies`, early cap check skips LLM calls.
+- UI hint refresh on `DiscordSettings.js`: Reply 1 subtitle "always sent first" with "no AI involved here", Reply 2 subtitle "always sent second" with "AI router takes over" message; Ack block hint references "After Reply 1 and Reply 2 are sent".
+- Tests: `/app/backend/tests/test_scripted_ai_router.py` fully rewritten for v5 (22/22 cases pass).
+
 ### Scripted Mode v4 — Unified AI Router Pool (DONE 2026-02-XX)
 - AI/Hybrid mode: **every** user message now goes through the AI router from msg1 onwards. No more fixed Reply 1 → Reply 2 → variants sequence.
 - Unified question pool = `[primary, update, *variants]`. AI picks the most suitable line per user message.

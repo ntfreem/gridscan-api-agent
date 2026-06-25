@@ -449,10 +449,11 @@ export default function DiscordSettings() {
   const loadStatus = useCallback(() => {
     api.get(`/discord/status`).then(r => setStatus(r.data)).catch(() => {});
     api.get(`/discord/handoff-status`).then(r => setHandoffChannels(r.data?.channels || [])).catch(() => {});
-    if (scripted.enabled) {
-      api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
-    }
-  }, [instanceId, scripted.enabled]);
+    // Always poll scripted counters — the backend returns 0/0 cheaply when Scripted Mode is off.
+    // (Previously gated on `scripted.enabled`, which caused the toggle to revert: deps changed
+    //  → useEffect re-fired loadConfig() → server state overwrote the unsaved toggle.)
+    api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
+  }, [instanceId]);
 
   const handleResetScriptedCounters = async () => {
     if (!window.confirm("Reset all Scripted Mode counters for this instance?\n\nEvery user's per-channel counter goes back to zero, so the next message from anyone will receive the Primary Message again. Analytics history (scripted_skips) is preserved.\n\nContinue?")) return;
