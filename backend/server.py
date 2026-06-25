@@ -200,6 +200,7 @@ class ScriptedModeConfig(BaseModel):
     primary_message: Optional[str] = None
     update_message: Optional[str] = None       # 2nd response when same user comes back
     variants: Optional[List[str]] = None
+    acknowledgment_replies: Optional[List[str]] = None  # short replies for "thanks/ok/got it" (AI-router pool)
     fallback_message: Optional[str] = None
     max_attempts: Optional[int] = None
     reset_hours: Optional[int] = None
@@ -412,14 +413,15 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
 
 
 async def _classify_user_intent(user_text: str, session_id: str, instance_id: str) -> str:
-    """Quick Claude classification: returns one of `question`, `update`, `speculation`, `other`.
+    """Quick Claude classification: returns one of `question`, `update`, `ack`, `speculation`, `other`.
     Used by Scripted Mode v2 to decide whether to respond or stay silent."""
     system = (
         "You classify a single user message in a support/incident channel. Output EXACTLY one word from this list:\n"
         "  question     — genuine question or request for information (e.g., \"is the bridge down?\")\n"
         "  update       — asking for an update on a known incident (e.g., \"any update?\", \"still paused?\", \"is it back?\")\n"
+        "  ack          — short acknowledgment, thanks, greeting, or closing (e.g., \"thanks\", \"ok\", \"got it\", \"hi\", \"thank you\", \"appreciate it\", \"np\")\n"
         "  speculation  — opinion, commentary, joke, complaint, or off-topic chatter (e.g., \"this is a disaster\", \"lol\", \"team sleeping\")\n"
-        "  other        — anything else (greetings, thanks, etc.)\n"
+        "  other        — anything else\n"
         "Output ONLY the single word, lowercase. No punctuation, no preamble."
     )
     try:
@@ -431,11 +433,57 @@ async def _classify_user_intent(user_text: str, session_id: str, instance_id: st
             platform="discord",
         )
         cleaned = (out or "").strip().lower().split()[0] if out else ""
-        if cleaned in ("question", "update", "speculation", "other"):
+        if cleaned in ("question", "update", "ack", "speculation", "other"):
             return cleaned
     except Exception as e:
         logger.warning(f"Intent classify failed: {e}")
     return "other"
+
+
+async def _ai_pick_variant(user_text: str, options: List[str], session_id: str, instance_id: str) -> int:
+    """Ask Claude to pick the index (1-based) of the best pre-written reply from `options`
+    for the given user message. Returns the 1-based index, or 0 if nothing fits.
+    AI NEVER generates text — it only selects from the admin-defined pool."""
+    if not options:
+        return 0
+    numbered = "\n".join(f"{i+1}. {o}" for i, o in enumerate(options))
+    system = (
+        "You are a router. Given a USER MESSAGE and a numbered list of pre-written REPLIES, "
+        "pick the number of the reply that best fits the user's message. "
+        "You MUST NOT write new text — only return a number.\n"
+        "Rules:\n"
+        "1. Output ONLY the integer (e.g. '1', '2', '3').\n"
+        "2. Output '0' if no reply in the list is appropriate for the user message.\n"
+        "3. Do not include any other words, punctuation, or explanation."
+    )
+    prompt = f"USER MESSAGE:\n{user_text}\n\nREPLIES:\n{numbered}\n\nBest reply number:"
+    try:
+        out = await call_claude(
+            f"{session_id}_pick_{datetime.now(timezone.utc).timestamp()}",
+            prompt,
+            system,
+            instance_id=instance_id,
+            platform="discord",
+        )
+        token = (out or "").strip().split()[0] if out else ""
+        token = "".join(ch for ch in token if ch.isdigit())
+        if not token:
+            return 0
+        idx = int(token)
+        if 1 <= idx <= len(options):
+            return idx
+        return 0
+    except Exception as e:
+        logger.warning(f"AI pick variant failed: {e}")
+        return 0
+
+
+DEFAULT_ACK_REPLIES = [
+    "You're welcome!",
+    "Anytime — happy to help!",
+    "No problem!",
+    "Glad I could help.",
+]
 
 
 async def build_scripted_response(
@@ -451,36 +499,46 @@ async def build_scripted_response(
     Flow:
       1. If `classify_intent` is on, ask Claude to classify the message.
          - speculation / commentary → silent (return ""), counter NOT incremented
-         - question / update / other → proceed to step 2
-      2. Look up per-user-per-channel counter (resets after `reset_hours` of idle):
+         - question / update / ack / other → proceed
+      2. Per-user-per-channel counter (resets after `reset_hours` of idle):
          - count == 0 → reply with `primary_message` (verbatim)
          - count == 1 → reply with `update_message` if set (else rephrased primary)
-         - count >= 2 → silent (return "") until cooldown resets
+         - count >= 2 → **AI Router** (only when rephrase_mode in {ai, hybrid}):
+             * intent=ack → pick best acknowledgment_replies via AI
+             * intent=question/update/other → pick best `variants` via AI
+             * AI returns 0 / no match → `fallback_message` (else silent)
+         - count >= 2 in manual mode → silent
       3. Counter atomically incremented after the reply is chosen.
 
-    `variants`, `rephrase_mode`, `max_attempts`, `fallback_message` are kept for back-compat
-    when `update_message` is empty.
+    AI never generates text — it only classifies intent and picks an index from admin-defined pools.
     """
     primary = (scripted_cfg.get("primary_message") or "").strip()
     if not primary:
         return ""
     update_msg = (scripted_cfg.get("update_message") or "").strip()
     variants = [v.strip() for v in (scripted_cfg.get("variants") or []) if isinstance(v, str) and v.strip()]
+    ack_replies_raw = scripted_cfg.get("acknowledgment_replies")
+    if not isinstance(ack_replies_raw, list) or not any(isinstance(x, str) and x.strip() for x in ack_replies_raw):
+        ack_replies_raw = DEFAULT_ACK_REPLIES
+    ack_replies = [a.strip() for a in ack_replies_raw if isinstance(a, str) and a.strip()]
     fallback = (scripted_cfg.get("fallback_message") or "").strip()
     max_attempts = int(scripted_cfg.get("max_attempts") or 2)
     reset_hours = int(scripted_cfg.get("reset_hours") or 24)
     mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()
     classify_on = bool(scripted_cfg.get("classify_intent"))
+    ai_router_on = mode in ("ai", "hybrid")  # AI router is gated on AI/hybrid rephrase modes
 
-    # Intent classification (v2 feature) — silent on speculation/commentary
-    if classify_on and user_text:
+    # Intent classification (v2 feature) — silent on speculation/commentary.
+    # We capture `intent` here so the AI router below can reuse it without a second classify call.
+    intent = None
+    if (classify_on or ai_router_on) and user_text:
         try:
             intent = await _classify_user_intent(user_text, session_id, instance_id)
         except Exception as _e:
             logger.warning(f"[SCRIPTED] intent classify exception, treating as 'other': {_e}")
             intent = "other"
         logger.info(f"[SCRIPTED] intent={intent} user_text={user_text[:80]!r}")
-        if intent == "speculation":
+        if classify_on and intent == "speculation":
             logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
             try:
                 await db.scripted_skips.insert_one({
@@ -521,7 +579,7 @@ async def build_scripted_response(
     new_count = int((updated or {}).get("count") or 1)
     count = new_count - 1  # 0 = first contact, 1 = second, …
 
-    # V2 sequence: primary → update → silent (until reset)
+    # V2 sequence: primary → update → AI router (or silent in manual mode)
     if count == 0:
         return primary
     if count == 1 and update_msg:
@@ -541,7 +599,42 @@ async def build_scripted_response(
                 response = primary
         return response
 
-    # Past max attempts / past 2nd message — silent (or send fallback if configured)
+    # ── Msg 3+ — AI Conversation Router ───────────────────────────────────────
+    # Only when rephrase_mode involves AI (ai/hybrid). In `manual` mode we stay silent
+    # so the admin keeps strict zero-LLM cost.
+    if ai_router_on and user_text:
+        # Classify on demand if we didn't already (classify_intent toggle was off)
+        if intent is None:
+            try:
+                intent = await _classify_user_intent(user_text, session_id, instance_id)
+            except Exception:
+                intent = "other"
+            logger.info(f"[SCRIPTED-ROUTER] intent={intent} user_text={user_text[:80]!r}")
+
+        # Speculation/commentary in router mode → silent (don't waste a fallback message)
+        if intent == "speculation":
+            return ""
+
+        # Acknowledgment ("thanks", "ok", "got it") → pick from ack pool
+        if intent == "ack" and ack_replies:
+            idx = await _ai_pick_variant(user_text, ack_replies, session_id, instance_id)
+            if idx > 0:
+                return ack_replies[idx - 1]
+            # AI couldn't pick → first ack as safe default (these are short and benign)
+            return ack_replies[0]
+
+        # Question / update / other → pick from variant pool
+        if variants:
+            idx = await _ai_pick_variant(user_text, variants, session_id, instance_id)
+            if idx > 0:
+                return variants[idx - 1]
+
+        # Nothing fits → fallback (or silent if no fallback configured)
+        if fallback:
+            return fallback
+        return ""
+
+    # Past max attempts / past 2nd message in manual mode — silent (or send fallback once)
     if fallback and count == 2:
         return fallback
     return ""
@@ -2214,6 +2307,13 @@ async def get_discord_config(instance_id: str = Depends(get_instance_access)):
     else:
         config = {"is_active": False, "has_bot_token": bool(app_creds["bot_token"]), "oauth_connected": False}
     config["oauth_enabled"] = bool(app_creds["client_id"])
+    # Auto-seed acknowledgment_replies with defaults so admins see them pre-populated
+    sm = config.get("scripted_mode") or {}
+    if isinstance(sm, dict):
+        acks = sm.get("acknowledgment_replies")
+        if not isinstance(acks, list) or not any(isinstance(x, str) and x.strip() for x in acks):
+            sm["acknowledgment_replies"] = list(DEFAULT_ACK_REPLIES)
+            config["scripted_mode"] = sm
     return config
 
 
