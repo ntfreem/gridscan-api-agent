@@ -105,6 +105,23 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Scripted Mode v3 — AI Conversation Router (DONE 2026-02-XX)
+- Replaces the "silent after msg2" behavior. Msg3+ now uses AI as a router (never a generator) to pick from admin-defined message pools
+- New `acknowledgment_replies` field in `ScriptedModeConfig` — short replies for "thanks/ok/got it"
+  - Auto-seeded with 4 defaults: "You're welcome!", "Anytime — happy to help!", "No problem!", "Glad I could help."
+- New helpers in `server.py`:
+  - `_classify_user_intent()` extended with `ack` label (was: question/update/speculation/other)
+  - `_ai_pick_variant(user_text, options, ...)` — returns 1-based int index or 0. Robust regex parser handles "option 2", "Pick: 1", "-1", "5.", garbage → 0. **Never** returns text.
+- Flow at msg3+:
+  - Manual rephrase mode → fully silent (cost-zero contract, no LLM calls)
+  - AI / Hybrid rephrase mode → classify intent →
+    - `ack` → pick from `acknowledgment_replies` (first ack as safe default if AI returns 0)
+    - `question`/`update`/`other` → pick from `variants`
+    - `speculation` → silent (don't waste a fallback)
+    - No match → `fallback_message` (else silent)
+- UI: new "Acknowledgment Replies" section on Discord Settings page, gated on rephrase_mode in {ai, hybrid}, with editable rows and 4 pre-filled defaults
+- Tests: `/app/backend/tests/test_scripted_ai_router.py` (31/31 runnable pass — covers parser robustness, intent routing, manual-mode silence, ack pool selection, default seeding)
+
 ### Reset Scripted Counters (DONE 2026-02-XX)
 - New `POST /api/discord/scripted-counters/reset` endpoint wipes per-user `scripted_counters` for the current instance (admin only, scoped via `get_instance_access`)
 - New `GET /api/discord/scripted-counters/count` returns `{active_counters, skips_last_24h}` so the UI can show how many users are mid-sequence
