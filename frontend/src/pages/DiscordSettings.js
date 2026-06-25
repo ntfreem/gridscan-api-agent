@@ -386,6 +386,8 @@ export default function DiscordSettings() {
     rephrase_mode: "hybrid",
     classify_intent: true,
   });
+  const [scriptedCounters, setScriptedCounters] = useState({ active_counters: 0, skips_last_24h: 0 });
+  const [resettingCounters, setResettingCounters] = useState(false);
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -442,7 +444,22 @@ export default function DiscordSettings() {
   const loadStatus = useCallback(() => {
     api.get(`/discord/status`).then(r => setStatus(r.data)).catch(() => {});
     api.get(`/discord/handoff-status`).then(r => setHandoffChannels(r.data?.channels || [])).catch(() => {});
+    api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
   }, [instanceId]);
+
+  const handleResetScriptedCounters = async () => {
+    if (!window.confirm("Reset all Scripted Mode counters for this instance?\n\nEvery user's per-channel counter goes back to zero, so the next message from anyone will receive the Primary Message again. Analytics history (scripted_skips) is preserved.\n\nContinue?")) return;
+    setResettingCounters(true);
+    try {
+      const r = await api.post(`/discord/scripted-counters/reset`);
+      toast.success(`Reset ${r.data?.cleared || 0} user counter(s). The next message will get the Primary reply.`);
+      setScriptedCounters((p) => ({ ...p, active_counters: 0 }));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to reset counters");
+    } finally {
+      setResettingCounters(false);
+    }
+  };
 
   useEffect(() => {
     loadConfig(); loadStatus();
@@ -1036,6 +1053,55 @@ export default function DiscordSettings() {
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
                 <p style={T.hint}>Sent after Max Attempts is reached, instead of another rephrase.</p>
+
+                {/* Reset Counters — admin debug helper */}
+                <div
+                  data-testid="scripted-counters-card"
+                  style={{
+                    marginTop: "16px",
+                    padding: "12px 14px",
+                    backgroundColor: scriptedCounters.active_counters > 0 ? "rgba(96,165,250,0.05)" : colors.bg.base,
+                    border: `1px solid ${scriptedCounters.active_counters > 0 ? "rgba(96,165,250,0.22)" : colors.border.default}`,
+                    borderRadius: "10px",
+                    display: "flex", alignItems: "center", gap: "12px",
+                  }}
+                >
+                  <RefreshCw size={15} color={colors.brand.light} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.text.primary, margin: "0 0 2px" }}>
+                      Active user counters
+                      {" "}
+                      <span data-testid="scripted-counters-count" style={{ fontFamily: fonts.mono, color: colors.brand.light, marginLeft: "4px" }}>
+                        {scriptedCounters.active_counters}
+                      </span>
+                    </p>
+                    <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
+                      {scriptedCounters.active_counters > 0
+                        ? `${scriptedCounters.active_counters} user(s) are currently mid-sequence. Reset to send everyone the Primary Message again on their next ask — without waiting ${scripted.reset_hours}h.`
+                        : `No active counters. The next message from any user will receive the Primary reply.`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleResetScriptedCounters}
+                    disabled={resettingCounters || scriptedCounters.active_counters === 0}
+                    data-testid="scripted-reset-counters-btn"
+                    style={{
+                      flexShrink: 0,
+                      padding: "8px 14px",
+                      backgroundColor: "rgba(96,165,250,0.08)",
+                      color: colors.brand.light,
+                      border: `1px solid rgba(96,165,250,0.3)`,
+                      borderRadius: "8px",
+                      fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                      cursor: (resettingCounters || scriptedCounters.active_counters === 0) ? "not-allowed" : "pointer",
+                      opacity: (resettingCounters || scriptedCounters.active_counters === 0) ? 0.5 : 1,
+                      display: "flex", alignItems: "center", gap: "6px",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <RefreshCw size={12} /> {resettingCounters ? "Resetting…" : "Reset Counters"}
+                  </button>
+                </div>
 
                 <div style={{ marginTop: "16px", padding: "10px 12px", backgroundColor: "rgba(251,191,36,0.06)", border: `1px solid rgba(251,191,36,0.18)`, borderRadius: "8px" }}>
                   <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5" }}>

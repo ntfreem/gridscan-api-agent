@@ -2226,6 +2226,34 @@ async def update_discord_config(body: DiscordConfigUpdate, instance_id: str = De
     return {"success": True}
 
 
+@api_router.get("/discord/scripted-counters/count")
+async def get_scripted_counters_count(instance_id: str = Depends(get_instance_access)):
+    """Return how many per-user counters and skips are currently held for this instance.
+    Used by Scripted Mode UI so admins can see who's currently throttled."""
+    active = await db.scripted_counters.count_documents({"instance_id": instance_id})
+    skips_24h = 0
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        skips_24h = await db.scripted_skips.count_documents({
+            "instance_id": instance_id,
+            "timestamp": {"$gte": cutoff},
+        })
+    except Exception:
+        pass
+    return {"active_counters": active, "skips_last_24h": skips_24h}
+
+
+@api_router.post("/discord/scripted-counters/reset")
+async def reset_scripted_counters(instance_id: str = Depends(get_instance_access)):
+    """Wipe all Scripted Mode per-user counters for this instance.
+    Lets admins re-test the Primary → Update → Silent sequence without waiting for `reset_hours`.
+    Does NOT touch the scripted_skips analytics history."""
+    result = await db.scripted_counters.delete_many({"instance_id": instance_id})
+    logger.info(f"[SCRIPTED] reset_counters instance={instance_id} cleared={result.deleted_count}")
+    return {"success": True, "cleared": result.deleted_count}
+
+
 @api_router.post("/discord/restart")
 async def restart_discord_bot_endpoint(instance_id: str = Depends(get_instance_access)):
     global _shared_discord_client, _shared_discord_task

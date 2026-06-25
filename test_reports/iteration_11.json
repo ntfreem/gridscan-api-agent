@@ -1,0 +1,31 @@
+{
+  "summary": "Verified BridgeBot 'Reset Scripted Counters' feature end-to-end. Backend: 11/11 pytest cases pass for GET/POST /api/discord/scripted-counters/{count,reset} — auth gating, X-Instance-ID requirement, per-instance scoping, idempotent reset, scripted_skips analytics preserved on reset, other-instance counters untouched. Frontend (route is actually /admin/discord, NOT /admin/discord-bot as in the request): logged in as administrator, selected 'Scripted Test' workspace, enabled Scripted Mode, verified the 'Active user counters' card shows 0 with Reset button disabled, seeded 2 counters in DB, the 5s setInterval poll picked up the change within ~2s, badge showed 2 with button enabled, clicked Reset (window.confirm auto-accepted), toast 'Reset 2 user counter(s). The next message will get the Primary reply.' appeared, badge returned to 0, button disabled again, DB collection verified empty.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scripted_counters.py",
+    "/app/test_reports/pytest/scripted_counters.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The frontend route is /admin/discord (App.js line 72: `<Route path=\"discord\" />`) — the review_request referenced /admin/discord-bot which does not exist. If main agent intends to rename, also update sidebar 'Discord Channel' link target. Non-blocking — page works fine at the real path.",
+    "DiscordSettings.js is 1227 lines (above the 700-line soft cap noted in iteration_10). Strongly recommend splitting Scripted Mode block, Human Takeover block, and ChannelGroup into separate files for maintainability.",
+    "loadStatus() in DiscordSettings.js fires 3 unconditional GETs every 5s (/discord/status, /discord/handoff-status, /discord/scripted-counters/count) regardless of whether Scripted Mode is enabled. Consider gating the scripted-counters poll on `scripted.enabled` to save bandwidth/server cycles when feature is off.",
+    "The backend `get_scripted_counters_count` swallows ALL exceptions on scripted_skips lookup with bare `except Exception: pass` (server.py ~L2242). This is fine for resilience but masks misconfig — consider logger.debug there."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scripted_counters.py (new)",
+    "/tmp/seed_counters.py (test helper for direct DB seeding used by Playwright run)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "administrator / Admin@123 — workspace 'Scripted Test' (id 8292460c-de40-4a28-a711-640c0ecb8447)",
+  "seed_data_creation": "11 pytest cases seed TEST_ prefixed scripted_counters docs and clean them up via fixture teardown. UI test seeded 2 TEST_uitest_* docs in scripted_counters for instance 8292460c…, which were cleared both by the UI's Reset Counters button and by post-test cleanup. No residual TEST_ data left in DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests at /app/backend/tests/test_scripted_counters.py — run with `REACT_APP_BACKEND_URL=https://futurism-chat-ui.preview.emergentagent.com MONGO_URL='…' DB_NAME=bridgebot_preview python -m pytest backend/tests/test_scripted_counters.py -v`. Three instances exist in preview env: 'Scripted Test', 'test instance', 'Preview - Cardano USDCx'. Workspace switcher writes bf_instance_id+bf_instance to localStorage; the api wrapper auto-injects X-Instance-ID. Real route for Discord settings is /admin/discord. Frontend poll interval is 5s (setInterval at DiscordSettings.js:466).",
+  "rca of the issue": "N/A — feature works as designed. Both new endpoints respect per-instance scoping via Depends(get_instance_access), only delete from scripted_counters (not scripted_skips), and the frontend polls every 5s so manual DB inserts surface in the UI within one poll cycle. window.confirm flow + toast + state update + button disable all chain correctly."
+}
