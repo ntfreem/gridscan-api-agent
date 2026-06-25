@@ -444,8 +444,10 @@ export default function DiscordSettings() {
   const loadStatus = useCallback(() => {
     api.get(`/discord/status`).then(r => setStatus(r.data)).catch(() => {});
     api.get(`/discord/handoff-status`).then(r => setHandoffChannels(r.data?.channels || [])).catch(() => {});
-    api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
-  }, [instanceId]);
+    if (scripted.enabled) {
+      api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
+    }
+  }, [instanceId, scripted.enabled]);
 
   const handleResetScriptedCounters = async () => {
     if (!window.confirm("Reset all Scripted Mode counters for this instance?\n\nEvery user's per-channel counter goes back to zero, so the next message from anyone will receive the Primary Message again. Analytics history (scripted_skips) is preserved.\n\nContinue?")) return;

@@ -105,6 +105,13 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Reset Scripted Counters (DONE 2026-02-XX)
+- New `POST /api/discord/scripted-counters/reset` endpoint wipes per-user `scripted_counters` for the current instance (admin only, scoped via `get_instance_access`)
+- New `GET /api/discord/scripted-counters/count` returns `{active_counters, skips_last_24h}` so the UI can show how many users are mid-sequence
+- New UI card inside the Scripted Mode block: live counter badge + "Reset Counters" button (auto-disabled when count=0). Polls every 5s, but only while Scripted Mode is enabled
+- Does NOT touch `scripted_skips` analytics history — only the per-user counter table
+- Tests: `/app/backend/tests/test_scripted_counters.py` (11/11 pass) covering auth gating, per-instance scoping, idempotency, analytics preservation
+
 ### Discord App Setup — DB Single Source of Truth (DONE 2026-02-XX)
 - Fixed bug where "Clear All Discord App Settings" left the Current Configuration card showing green "All credentials configured" with stale masked values
 - Root cause: `get_discord_credentials()` was OR-ing each DB field with the corresponding `.env` value (DISCORD_CLIENT_ID/SECRET/REDIRECT_URI/BOT_TOKEN) — so clearing the DB silently re-populated from env
