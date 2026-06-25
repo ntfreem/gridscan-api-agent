@@ -40,13 +40,14 @@ DISCORD_BOT_PERMISSIONS = 68608 | 67108864  # View Channels + Send Messages + Re
 
 
 async def get_discord_credentials():
-    """Read Discord app credentials from DB first, fall back to .env"""
+    """Read Discord app credentials from DB. DB is the single source of truth —
+    no .env fallback (so clearing in the UI actually clears)."""
     creds = await db.discord_app_config.find_one({"_id": "discord_app"}) or {}
     return {
-        "client_id": creds.get("client_id") or DISCORD_CLIENT_ID,
-        "client_secret": creds.get("client_secret") or DISCORD_CLIENT_SECRET,
-        "redirect_uri": creds.get("redirect_uri") or DISCORD_REDIRECT_URI,
-        "bot_token": creds.get("bot_token") or DISCORD_BOT_TOKEN,
+        "client_id": creds.get("client_id") or "",
+        "client_secret": creds.get("client_secret") or "",
+        "redirect_uri": creds.get("redirect_uri") or "",
+        "bot_token": creds.get("bot_token") or "",
     }
 
 mongo_client = AsyncIOMotorClient(MONGO_URL)
@@ -2369,16 +2370,14 @@ async def debug_discord_roles(instance_id: str = Depends(get_instance_access)):
     guild_id = config.get("guild_id")
     staff_role_name = (config.get("staff_role_name") or "").strip().lower()
     app_creds = await get_discord_credentials()
-    # Try both token sources
-    env_token = DISCORD_BOT_TOKEN
+    # DB is the single source of truth — env vars are not used as a fallback.
     db_token = app_creds.get("bot_token", "")
-    # Use whichever is available
-    bot_token = db_token or env_token
+    bot_token = db_token
     result = {
         "guild_id": guild_id,
         "staff_role_name_config": config.get("staff_role_name"),
         "staff_role_name_lowered": staff_role_name,
-        "token_source": "db" if db_token else ("env" if env_token else "none"),
+        "token_source": "db" if db_token else "none",
         "token_length": len(bot_token),
         "shared_client_ready": _shared_discord_client is not None and _shared_discord_client.is_ready() if _shared_discord_client else False,
     }

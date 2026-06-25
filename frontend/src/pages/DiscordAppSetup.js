@@ -19,6 +19,8 @@ function CredentialField({ label, value, onChange, placeholder, isSecret, testId
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           data-testid={testId}
+          autoComplete={isSecret ? "new-password" : "off"}
+          name={`dc-${testId}`}
           style={{ ...T.input, paddingRight: isSecret ? "40px" : undefined }}
           onFocus={onFocus}
           onBlur={onBlur}

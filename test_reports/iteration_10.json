@@ -1,0 +1,33 @@
+{
+  "summary": "Verified bug fix for Discord App Setup 'Clear All' showing stale 'All credentials configured' badge. Confirmed get_discord_credentials() no longer falls back to .env values when DB is empty. Backend: 8/8 pytest cases pass. Frontend: full clear -> save -> verify -> clear cycle passes via Playwright UI test on /admin/discord-app-setup. Subtitle correctly toggles between 'All credentials configured' and 'Some credentials are missing' based on DB state only, regardless of DISCORD_* vars still present in .env.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_discord_app_config.py",
+    "/app/test_reports/pytest/discord_app_config.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DiscordAppSetup.js (675 lines) is approaching the 700-line soft cap; consider splitting StatusBadge/StepCard/CredentialField/ClearConfirmDialog into separate files for future maintainability.",
+    "PUT /api/discord/app-config silently ignores fields that are None or empty-string-after-strip. That means a user typing ' ' (only whitespace) in the form gets a 400 with detail='No fields to update'. Behavior is fine but the 400 may be confusing if all four fields are non-empty whitespace. Low priority.",
+    "The .env still has DISCORD_CLIENT_ID/SECRET/REDIRECT_URI/BOT_TOKEN set. They are now harmless for the app-config flow (DB is the only source), but they are dead config — recommend removing them from .env to avoid future regressions where a developer adds env fallback back in.",
+    "Module-level constants DISCORD_CLIENT_ID/SECRET/REDIRECT_URI/BOT_TOKEN (server.py lines 35-38) are now unused. They should be deleted to make the code's intent clear (DB-only credentials)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_discord_app_config.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "administrator / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "During tests, TEST_CLIENT_ID_999 etc were inserted via PUT and removed via DELETE. UI test left DB cleared via the 'Clear All Discord App Settings' button — preview env is back to empty Discord app config (matches stated post-wipe state).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_discord_app_config.py covers the full lifecycle. To run: REACT_APP_BACKEND_URL=https://futurism-chat-ui.preview.emergentagent.com python -m pytest backend/tests/test_discord_app_config.py -v . Pytest doesn't auto-load /app/frontend/.env so REACT_APP_BACKEND_URL must be exported. The bug fix removed the .env fallback in get_discord_credentials() — DB is the single source of truth.",
+  "rca of the issue": "Root cause: get_discord_credentials() in /app/backend/server.py used to OR each field with the corresponding os.environ value, e.g. `creds.get('client_id') or DISCORD_CLIENT_ID`. When the admin clicked 'Clear All Discord App Settings', the DELETE /api/discord/app-config endpoint correctly wiped the DB row, but the next GET still returned has_*=true because the .env fallback fired. Fix: removed the .env fallback — get_discord_credentials() now only reads from db.discord_app_config. Verified by 8 pytest cases (clear, get-after-clear, idempotent re-clear, put-then-get masking, clear-with-connections flag, auth gating) and full UI cycle (empty -> Some credentials are missing -> save -> All credentials configured -> clear -> Some credentials are missing). Reproduction is impossible after the fix."
+}
