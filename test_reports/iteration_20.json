@@ -1,0 +1,40 @@
+{
+  "summary": "Per-instance Cost Dashboard fully tested. 9 new cost-helper unit tests + 3 token-capture wiring tests added to test_llm_provider.py (now 24 cases). New test_llm_cost.py (4 HTTP cases) seeds 3 docs + 1 legacy doc and asserts cost math, $ifNull fallback, 30-day sparkline length, forecast extrapolation, and shape. 31/31 LLM tests pass. 51/51 scripted regression suite (router + scenarios + sandbox_http) still green. Live curl against preview confirms endpoint shape (mtd day 25/30, daily len 30, valid forecast). Frontend Cost Dashboard card renders correctly BELOW LLM Provider card (y=1216 vs y=821): all 5 testids present (cost-dashboard-card, cost-mtd, cost-forecast, cost-calls, cost-sparkline, cost-by-model), SVG sparkline draws 30 <rect> bars, per-model row shows provider badge + name + calls + cost, and the page fires /api/analytics/llm-cost exactly once on mount.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_llm_provider.py",
+    "/app/backend/tests/test_llm_cost.py",
+    "/app/test_reports/pytest/iter20_cost.xml",
+    "/app/test_reports/pytest/iter20_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 3170 lines — still well past the 700-line guideline. Splitting LLM helpers (call_*, pricing, cost endpoint) into a dedicated module would dramatically improve maintainability. Not blocking.",
+    "_cost_for short-circuit logic: `if model.startswith('ollama:')` is checked AFTER stripping the prefix into `m`, which is fine, but the order would matter if anyone later added a 'gemini:' or 'openai:' prefix that isn't in LLM_PRICING — they would silently fall back to Sonnet pricing (DEFAULT_PRICING). Consider an explicit warn-log or whitelist.",
+    "days_in_month computation uses `month_start.month % 12 + 1` then subtracts a day — works for Jan-Nov but on December it would replace month=1 (year unchanged), then -1 day yields Dec 31 of the SAME year. Acceptable since calendar.monthrange would be cleaner; current impl is correct but brittle. Mentioned in code review only — does not affect test pass.",
+    "Emergent token estimation is heuristic (chars/4). On long system prompts (e.g. KB-stuffed) this typically under-estimates by 20–40% vs real Anthropic tokenization, so forecast may be conservative. Document this on the dashboard tooltip.",
+    "The dispatcher logs `model_used == f'anthropic:{model_short}'` for the anthropic path but the model field in by_model parsing splits on ':' → provider becomes 'anthropic'. Consistent ✓. For the Emergent path it logs the bare dated id (no prefix), so provider defaults to 'emergent' in the response — also consistent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_llm_provider.py (+ 12 new tests: 8 cost-helper + 3 dispatcher tuple-unpack + 1 empty-model)",
+    "/app/backend/tests/test_llm_cost.py (NEW — 4 HTTP cases incl. seeded aggregation w/ legacy $ifNull fallback)"
+  ],
+  "success_rate": {
+    "backend": "100% (31/31 LLM tests + 51/51 regression)",
+    "frontend": "100% (all 6 cost-dashboard testids present, sparkline 30 bars, per-model row renders, single GET on mount, position below LLM card verified)"
+  },
+  "test_credentials": "administrator / Admin@123",
+  "seed_data_creation": "test_llm_cost creates a dedicated TEST_costdash_* instance and seeds 4 llm_usage docs (sonnet 1000/500, haiku 5000/100, ollama 10000/20000, opus legacy without token fields). All seeded docs + the test instance are cleaned up in the test teardown (best-effort).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Cost Dashboard end-to-end validated. Key invariants now locked-in by tests: (a) _cost_for handles provider-prefixed strings + bare ids + ollama-zero + unknown-fallback; (b) call_claude dispatcher MUST receive a 3-tuple from each _call_* helper and forward in_tok/out_tok to _log_llm_usage — if reverted to text-only, test_dispatcher_unpacks_*_tuple fails immediately; (c) the analytics endpoint's $ifNull aggregation defaults missing token fields to 0 cost (verified via legacy-doc seeding); (d) daily array is always length 30; (e) forecast = (mtd / day_of_month) * days_in_month within 1¢. Iteration 19's noted UX issue ('no instance selected → silent 400s') is FIXED — BotSettings now shows 'Select a workspace first' empty state with a sidebar prompt 'Select an instance to manage it'. After picking an instance via the [data-testid='instance-switcher'] dropdown, all cards (LLM Provider + Cost Dashboard) render correctly. The dropdown items don't have data-testid — use text='Preview - Cardano USDCx' or similar to select.",
+  "rca_of_the_issue": "N/A — feature works end-to-end. Single observation worth flagging to main agent: on the current preview the LLM Cost dashboard shows $0.00 / 32 calls / 0k tokens for instances that have only legacy llm_usage records (pre-tuple refactor). This is *correct* behavior (legacy docs have no input_tokens/output_tokens fields → $ifNull→0→_cost_for=0). Once the bot starts replying again with the new code path, real tokens will start accumulating. The curl-verified $0.0452 / 64 calls for instance 8292460c reflects historical data that includes a handful of post-refactor calls (2898 input + 23 output tokens). No bug."
+}

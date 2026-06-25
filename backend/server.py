@@ -700,8 +700,9 @@ async def _resolve_llm_config(instance_id: str) -> dict:
 
 
 async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
-                          instance_id: str, model: str) -> str:
-    """LLM call via emergentintegrations + Emergent Universal Key (existing behavior)."""
+                          instance_id: str, model: str) -> tuple:
+    """LLM call via emergentintegrations + Emergent Universal Key. Returns (text, in_tok, out_tok).
+    Tokens are estimated heuristically since the library does not expose Anthropic usage."""
     api_key = os.environ.get("CLAUDE_API_KEY") or os.environ.get("EMERGENT_LLM_KEY", "")
     if not api_key:
         raise HTTPException(status_code=500, detail="Emergent LLM key not configured")
@@ -709,7 +710,6 @@ async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
     if key not in llm_sessions:
         llm_sessions[key] = LlmChat(api_key=api_key, session_id=key, system_message=system_prompt).with_model("anthropic", model)
     else:
-        # Refresh the system prompt on cached sessions
         try:
             session = llm_sessions[key]
             messages = getattr(session, "messages", None)
@@ -720,12 +720,15 @@ async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
                     messages.insert(0, {"role": "system", "content": system_prompt})
         except Exception as _e:
             logger.warning(f"[session-refresh] non-fatal: {_e}")
-    return await llm_sessions[key].send_message(UserMessage(text=user_message))
+    text = await llm_sessions[key].send_message(UserMessage(text=user_message))
+    in_tok = _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
+    out_tok = _estimate_tokens(text)
+    return text, in_tok, out_tok
 
 
 async def _call_anthropic(session_id: str, user_message: str, system_prompt: str,
-                          instance_id: str, model_short: str, api_key: str) -> str:
-    """LLM call via direct Anthropic SDK using a per-instance BYO API key."""
+                          instance_id: str, model_short: str, api_key: str) -> tuple:
+    """LLM call via direct Anthropic SDK. Returns (text, in_tok, out_tok) using real usage."""
     if not api_key:
         raise HTTPException(status_code=500, detail="Anthropic API key not configured for this instance")
     api_model = ALLOWED_ANTHROPIC_MODELS.get(model_short)
@@ -751,13 +754,16 @@ async def _call_anthropic(session_id: str, user_message: str, system_prompt: str
         raise HTTPException(status_code=502, detail=f"Anthropic API error: {e}")
     text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
     history.append({"role": "assistant", "content": text})
-    llm_history[key] = history[-40:]  # keep last 20 turns
-    return text
+    llm_history[key] = history[-40:]
+    usage = getattr(resp, "usage", None)
+    in_tok = int(getattr(usage, "input_tokens", 0) or 0) if usage else _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
+    out_tok = int(getattr(usage, "output_tokens", 0) or 0) if usage else _estimate_tokens(text)
+    return text, in_tok, out_tok
 
 
 async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
-                       instance_id: str, model: str, base_url: str) -> str:
-    """LLM call via Ollama (self-hosted). POST /api/chat with the conversation history."""
+                       instance_id: str, model: str, base_url: str) -> tuple:
+    """LLM call via Ollama. Returns (text, in_tok, out_tok). Ollama returns eval counts directly."""
     base_url = (base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
     key = f"{session_id}_{instance_id}_ollama_{model}"
     history = llm_history.get(key) or []
@@ -776,7 +782,9 @@ async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
     text = (data.get("message") or {}).get("content") or ""
     history.append({"role": "assistant", "content": text})
     llm_history[key] = history[-40:]
-    return text
+    in_tok = int(data.get("prompt_eval_count") or 0) or _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
+    out_tok = int(data.get("eval_count") or 0) or _estimate_tokens(text)
+    return text, in_tok, out_tok
 
 
 async def call_claude(session_id: str, user_message: str, system_prompt: str,
@@ -792,9 +800,9 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
         model_short = cfg.get("model") or DEFAULT_ANTHROPIC_MODEL
         api_key = cfg.get("anthropic_api_key") or ""
         try:
-            result = await _call_anthropic(session_id, user_message, system_prompt, instance_id, model_short, api_key)
-            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", True, 0, False, None)
-            return result
+            text, in_tok, out_tok = await _call_anthropic(session_id, user_message, system_prompt, instance_id, model_short, api_key)
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", True, 0, False, None, in_tok, out_tok)
+            return text
         except HTTPException:
             await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "anthropic_error")
             raise
@@ -807,9 +815,9 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
         model = cfg.get("model") or DEFAULT_OLLAMA_MODEL
         base_url = cfg.get("ollama_base_url") or ""
         try:
-            result = await _call_ollama(session_id, user_message, system_prompt, instance_id, model, base_url)
-            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", True, 0, False, None)
-            return result
+            text, in_tok, out_tok = await _call_ollama(session_id, user_message, system_prompt, instance_id, model, base_url)
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", True, 0, False, None, in_tok, out_tok)
+            return text
         except HTTPException:
             await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", False, 0, False, "ollama_error")
             raise
@@ -826,17 +834,17 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     last_error = None  # noqa: F841
     error_type = None
 
-    async def _attempt(model: str) -> str:
+    async def _attempt(model: str) -> tuple:
         nonlocal retry_count
         return await _call_emergent(session_id, user_message, system_prompt, instance_id, model)
 
     # Try primary model with retries
     for attempt in range(max_retries + 1):
         try:
-            result = await _attempt(primary_model)
+            text, in_tok, out_tok = await _attempt(primary_model)
             await _log_llm_usage(instance_id, session_id, platform, primary_model,
-                                 primary_model, True, retry_count, False, None)
-            return result
+                                 primary_model, True, retry_count, False, None, in_tok, out_tok)
+            return text
         except Exception as e:
             last_error = e  # noqa: F841
             err_str = str(e).lower()
@@ -854,11 +862,11 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     # Fallback to Sonnet
     try:
         used_fallback = True  # noqa: F841
-        result = await _attempt(fallback_model)
+        text, in_tok, out_tok = await _attempt(fallback_model)
         logger.info(f"Fallback to {fallback_model} succeeded for session {session_id}")
         await _log_llm_usage(instance_id, session_id, platform, fallback_model,
-                             primary_model, True, retry_count, True, error_type)
-        return result
+                             primary_model, True, retry_count, True, error_type, in_tok, out_tok)
+        return text
     except Exception as e:
         logger.error(f"Fallback model also failed: {e}")
         await _log_llm_usage(instance_id, session_id, platform, fallback_model,
@@ -868,7 +876,8 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
 
 async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
                           model_used: str, model_attempted: str, success: bool,
-                          retry_count: int, used_fallback: bool, error_type: str):
+                          retry_count: int, used_fallback: bool, error_type: str,
+                          input_tokens: int = 0, output_tokens: int = 0):
     try:
         await db.llm_usage.insert_one({
             "id": str(uuid.uuid4()),
@@ -882,9 +891,49 @@ async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
             "retry_count": retry_count,
             "used_fallback": used_fallback,
             "error_type": error_type,
+            "input_tokens": int(input_tokens or 0),
+            "output_tokens": int(output_tokens or 0),
         })
     except Exception as e:
         logger.warning(f"Failed to log LLM usage: {e}")
+
+
+# Anthropic published pricing per 1M tokens (Feb 2026). Used to estimate cost on the
+# admin dashboard. Ollama (self-hosted) is treated as $0. For unknown models we
+# fall back to Sonnet pricing as a conservative estimate.
+LLM_PRICING = {
+    # Anthropic 4-series
+    "claude-haiku-4-5":            {"in": 1.00,  "out": 5.00},
+    "claude-haiku-4-5-20251101":   {"in": 1.00,  "out": 5.00},
+    "claude-sonnet-4-5":           {"in": 3.00,  "out": 15.00},
+    "claude-sonnet-4-5-20251101":  {"in": 3.00,  "out": 15.00},
+    "claude-opus-4-5":             {"in": 15.00, "out": 75.00},
+    "claude-opus-4-5-20251101":    {"in": 15.00, "out": 75.00},
+    # Legacy 3.5
+    "claude-3-5-haiku-20241022":   {"in": 0.80,  "out": 4.00},
+    "claude-3-5-sonnet-20241022":  {"in": 3.00,  "out": 15.00},
+}
+DEFAULT_PRICING = {"in": 3.00, "out": 15.00}  # Sonnet-equivalent
+
+
+def _estimate_tokens(text: str) -> int:
+    """Cheap heuristic for tokens when the provider doesn't return real usage.
+    Anthropic averages ~3.6 chars per token in English; we use 4 to be conservative."""
+    return max(1, len(text or "") // 4)
+
+
+def _cost_for(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Compute USD cost from token counts. Provider-prefixed model strings
+    (e.g. 'anthropic:claude-sonnet-4-5', 'ollama:llama3.1') are stripped before lookup.
+    Ollama is always $0."""
+    if not model:
+        return 0.0
+    m = model.split(":", 1)[1] if ":" in model else model
+    if model.startswith("ollama:"):
+        return 0.0
+    price = LLM_PRICING.get(m, DEFAULT_PRICING)
+    return round(((input_tokens or 0) / 1_000_000) * price["in"] +
+                 ((output_tokens or 0) / 1_000_000) * price["out"], 6)
 
 
 async def save_conversation(session_id: str, user_message: str, bot_response: str,
@@ -2083,6 +2132,106 @@ async def analytics_llm_usage(instance_id: str = Depends(get_instance_access)):
         "success_rate": round((successful / total * 100), 1) if total else 100.0,
         "error_breakdown": error_breakdown,
         "daily": daily,
+    }
+
+
+@api_router.get("/analytics/llm-cost")
+async def analytics_llm_cost(instance_id: str = Depends(get_instance_access)):
+    """Per-instance LLM cost dashboard.
+    Returns:
+      - month_to_date: total cost (USD), total tokens, calls
+      - by_model: list of {model, calls, input_tokens, output_tokens, cost_usd}
+      - daily: 30-day sparkline of cost
+      - forecast_month_end: projected total based on current daily run-rate
+    """
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    q_month = {
+        "instance_id": instance_id,
+        "success": True,
+        "timestamp": {"$gte": month_start.isoformat()},
+    }
+
+    # Per-model breakdown (month to date)
+    pipeline = [
+        {"$match": q_month},
+        {"$group": {
+            "_id": "$model_used",
+            "calls": {"$sum": 1},
+            "input_tokens": {"$sum": {"$ifNull": ["$input_tokens", 0]}},
+            "output_tokens": {"$sum": {"$ifNull": ["$output_tokens", 0]}},
+        }},
+        {"$sort": {"calls": -1}},
+    ]
+    by_model_raw = await db.llm_usage.aggregate(pipeline).to_list(50)
+    by_model = []
+    total_cost = 0.0
+    total_in = 0
+    total_out = 0
+    total_calls = 0
+    for row in by_model_raw:
+        model = row["_id"] or "unknown"
+        in_tok = int(row.get("input_tokens") or 0)
+        out_tok = int(row.get("output_tokens") or 0)
+        calls = int(row.get("calls") or 0)
+        cost = _cost_for(model, in_tok, out_tok)
+        provider = model.split(":", 1)[0] if ":" in model else "emergent"
+        by_model.append({
+            "model": model, "provider": provider,
+            "calls": calls,
+            "input_tokens": in_tok, "output_tokens": out_tok,
+            "cost_usd": cost,
+        })
+        total_cost += cost
+        total_in += in_tok
+        total_out += out_tok
+        total_calls += calls
+
+    # Daily sparkline — last 30 days
+    daily = []
+    series_total_30d = 0.0
+    for i in range(29, -1, -1):
+        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        day_q = {
+            "instance_id": instance_id,
+            "success": True,
+            "timestamp": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()},
+        }
+        day_pipeline = [
+            {"$match": day_q},
+            {"$group": {
+                "_id": "$model_used",
+                "input_tokens": {"$sum": {"$ifNull": ["$input_tokens", 0]}},
+                "output_tokens": {"$sum": {"$ifNull": ["$output_tokens", 0]}},
+            }},
+        ]
+        day_rows = await db.llm_usage.aggregate(day_pipeline).to_list(50)
+        day_cost = sum(_cost_for(r["_id"] or "", int(r.get("input_tokens") or 0), int(r.get("output_tokens") or 0)) for r in day_rows)
+        series_total_30d += day_cost
+        daily.append({
+            "date": day_start.strftime("%m/%d"),
+            "cost_usd": round(day_cost, 4),
+        })
+
+    # Month-end forecast based on month-to-date run rate
+    day_of_month = now.day
+    days_in_month = (month_start.replace(month=month_start.month % 12 + 1, day=1) - timedelta(days=1)).day if month_start.month < 12 else 31
+    forecast = round((total_cost / day_of_month) * days_in_month, 2) if day_of_month > 0 else 0.0
+
+    return {
+        "month_to_date": {
+            "cost_usd": round(total_cost, 4),
+            "input_tokens": total_in,
+            "output_tokens": total_out,
+            "calls": total_calls,
+            "day_of_month": day_of_month,
+            "days_in_month": days_in_month,
+        },
+        "by_model": by_model,
+        "daily": daily,
+        "forecast_month_end_usd": forecast,
+        "last_30d_cost_usd": round(series_total_30d, 4),
     }
 
 

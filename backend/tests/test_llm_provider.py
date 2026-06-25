@@ -69,6 +69,136 @@ def test_call_anthropic_raises_on_invalid_model(event_loop):
     assert "allowlist" in str(exc.value.detail).lower() or "bogus" in str(exc.value.detail).lower()
 
 
+# ── Cost helper unit tests ─────────────────────────────────────────────────────
+
+
+def test_estimate_tokens_empty_returns_one():
+    assert server._estimate_tokens("") == 1
+    assert server._estimate_tokens(None) == 1
+
+
+def test_estimate_tokens_hello_world():
+    # ~4 chars/token heuristic; "hello world" = 11 chars => 11//4 = 2
+    val = server._estimate_tokens("hello world")
+    assert 2 <= val <= 3
+
+
+def test_cost_for_sonnet_input_only():
+    # $3 per 1M input tokens
+    assert server._cost_for("claude-sonnet-4-5", 1_000_000, 0) == 3.0
+
+
+def test_cost_for_sonnet_output_only():
+    # $15 per 1M output tokens
+    assert server._cost_for("claude-sonnet-4-5", 0, 1_000_000) == 15.0
+
+
+def test_cost_for_opus_dated_model():
+    # $15 + $75 = $90 for 1M in + 1M out (dated model id used by Emergent path)
+    assert server._cost_for("claude-opus-4-5-20251101", 1_000_000, 1_000_000) == 90.0
+
+
+def test_cost_for_ollama_always_zero():
+    assert server._cost_for("ollama:llama3.1", 1_000_000, 1_000_000) == 0.0
+
+
+def test_cost_for_unknown_model_uses_sonnet_default():
+    # DEFAULT_PRICING = Sonnet ($3 + $15 = $18 for 1M+1M)
+    assert server._cost_for("unknown-model", 1_000_000, 1_000_000) == 18.0
+
+
+def test_cost_for_provider_prefixed_haiku():
+    # 'anthropic:claude-haiku-4-5' => $1 + $5 = $6 for 1M+1M
+    assert server._cost_for("anthropic:claude-haiku-4-5", 1_000_000, 1_000_000) == 6.0
+
+
+def test_cost_for_empty_model_returns_zero():
+    assert server._cost_for("", 1000, 1000) == 0.0
+
+
+# ── Token capture wiring: monkeypatch each _call_* helper and verify
+# call_claude dispatcher unpacks the tuple AND _log_llm_usage receives the tokens.
+
+
+def _make_log_capture(monkeypatch):
+    captured = {}
+
+    async def fake_log(instance_id, session_id, platform, model_used, model_attempted,
+                      success, retry_count, used_fallback, error_type,
+                      input_tokens=0, output_tokens=0):
+        captured["input_tokens"] = input_tokens
+        captured["output_tokens"] = output_tokens
+        captured["model_used"] = model_used
+        captured["success"] = success
+
+    monkeypatch.setattr(server, "_log_llm_usage", fake_log)
+    return captured
+
+
+def test_dispatcher_unpacks_emergent_tuple(monkeypatch, event_loop):
+    captured = _make_log_capture(monkeypatch)
+
+    async def fake_emergent(session_id, user_message, system_prompt, instance_id, model):
+        return ("pong", 42, 7)
+
+    async def fake_resolve(_inst):
+        return {"provider": "emergent", "model": "claude-opus-4-5-20251101"}
+
+    monkeypatch.setattr(server, "_call_emergent", fake_emergent)
+    monkeypatch.setattr(server, "_resolve_llm_config", fake_resolve)
+    monkeypatch.setenv("CLAUDE_API_KEY", "sk-emergent-fake-for-test")
+
+    text = event_loop.run_until_complete(
+        server.call_claude("sess", "hi", "sys", instance_id="inst", platform="web")
+    )
+    assert text == "pong"
+    assert captured["input_tokens"] == 42
+    assert captured["output_tokens"] == 7
+    assert captured["success"] is True
+
+
+def test_dispatcher_unpacks_anthropic_tuple(monkeypatch, event_loop):
+    captured = _make_log_capture(monkeypatch)
+
+    async def fake_anth(session_id, user_message, system_prompt, instance_id, model_short, api_key):
+        return ("hello", 100, 50)
+
+    async def fake_resolve(_inst):
+        return {"provider": "anthropic", "model": "claude-sonnet-4-5", "anthropic_api_key": "sk-ant-x"}
+
+    monkeypatch.setattr(server, "_call_anthropic", fake_anth)
+    monkeypatch.setattr(server, "_resolve_llm_config", fake_resolve)
+
+    text = event_loop.run_until_complete(
+        server.call_claude("sess", "hi", "sys", instance_id="inst", platform="web")
+    )
+    assert text == "hello"
+    assert captured["input_tokens"] == 100
+    assert captured["output_tokens"] == 50
+    assert captured["model_used"] == "anthropic:claude-sonnet-4-5"
+
+
+def test_dispatcher_unpacks_ollama_tuple(monkeypatch, event_loop):
+    captured = _make_log_capture(monkeypatch)
+
+    async def fake_oll(session_id, user_message, system_prompt, instance_id, model, base_url):
+        return ("yo", 200, 80)
+
+    async def fake_resolve(_inst):
+        return {"provider": "ollama", "model": "llama3.1", "ollama_base_url": "http://x"}
+
+    monkeypatch.setattr(server, "_call_ollama", fake_oll)
+    monkeypatch.setattr(server, "_resolve_llm_config", fake_resolve)
+
+    text = event_loop.run_until_complete(
+        server.call_claude("sess", "hi", "sys", instance_id="inst", platform="web")
+    )
+    assert text == "yo"
+    assert captured["input_tokens"] == 200
+    assert captured["output_tokens"] == 80
+    assert captured["model_used"] == "ollama:llama3.1"
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.new_event_loop()

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
@@ -29,12 +29,14 @@ export default function BotSettings() {
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
   const [llmTestResult, setLlmTestResult] = useState(null);
+  const [costData, setCostData] = useState(null);
 
   useEffect(() => {
     if (!instanceId) return;
     api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
     }).catch(() => {});
+    api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
   }, [instanceId]);
 
   const saveLlm = async () => {
@@ -261,6 +263,113 @@ export default function BotSettings() {
               )}
             </div>
           </div>
+
+          {/* ── Cost Dashboard — per-instance month-to-date spend + sparkline ── */}
+          {costData && (
+            <div data-testid="cost-dashboard-card" style={{ ...T.card, marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                <DollarSign size={14} color="#22c55e" />
+                <p style={{ ...T.sectionTitle, margin: 0 }}>Cost Dashboard</p>
+                <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, fontWeight: "400" }}>
+                  Month-to-date · day {costData.month_to_date?.day_of_month}/{costData.month_to_date?.days_in_month}
+                </span>
+              </div>
+              <p style={T.sectionSub}>Estimated LLM spend for this instance. Anthropic uses published list pricing; Ollama is free.</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+                <div style={{ padding: "10px 12px", backgroundColor: "rgba(34,197,94,0.06)", border: `1px solid rgba(34,197,94,0.2)`, borderRadius: "8px" }}>
+                  <p style={{ margin: 0, fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>MTD Cost</p>
+                  <p data-testid="cost-mtd" style={{ margin: "2px 0 0", fontFamily: fonts.mono, fontSize: "18px", fontWeight: "700", color: "#22c55e" }}>
+                    ${(costData.month_to_date?.cost_usd || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div style={{ padding: "10px 12px", backgroundColor: "rgba(251,191,36,0.06)", border: `1px solid rgba(251,191,36,0.2)`, borderRadius: "8px" }}>
+                  <p style={{ margin: 0, fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Forecast</p>
+                  <p data-testid="cost-forecast" style={{ margin: "2px 0 0", fontFamily: fonts.mono, fontSize: "18px", fontWeight: "700", color: colors.brand.warning }}>
+                    ${(costData.forecast_month_end_usd || 0).toFixed(2)}
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontFamily: fonts.body, fontSize: "9px", color: colors.text.muted }}>by month-end</p>
+                </div>
+                <div style={{ padding: "10px 12px", backgroundColor: "rgba(96,165,250,0.06)", border: `1px solid rgba(96,165,250,0.2)`, borderRadius: "8px" }}>
+                  <p style={{ margin: 0, fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Calls / Tokens</p>
+                  <p data-testid="cost-calls" style={{ margin: "2px 0 0", fontFamily: fonts.mono, fontSize: "14px", fontWeight: "700", color: colors.brand.light }}>
+                    {(costData.month_to_date?.calls || 0).toLocaleString()}
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontFamily: fonts.body, fontSize: "9px", color: colors.text.muted }}>
+                    {Math.round(((costData.month_to_date?.input_tokens || 0) + (costData.month_to_date?.output_tokens || 0)) / 1000)}k tokens
+                  </p>
+                </div>
+              </div>
+
+              {/* Sparkline — last 30 days */}
+              {costData.daily && costData.daily.length > 0 && (() => {
+                const max = Math.max(...costData.daily.map(d => d.cost_usd || 0), 0.0001);
+                const W = 360, H = 60, gap = 1;
+                const barW = (W - (costData.daily.length - 1) * gap) / costData.daily.length;
+                return (
+                  <div data-testid="cost-sparkline" style={{ padding: "8px 0 4px" }}>
+                    <p style={{ margin: "0 0 6px", fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Last 30 days · ${(costData.last_30d_cost_usd || 0).toFixed(2)} total
+                    </p>
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: `${H}px`, display: "block" }} preserveAspectRatio="none">
+                      {costData.daily.map((d, i) => {
+                        const cost = d.cost_usd || 0;
+                        const h = max > 0 ? (cost / max) * (H - 8) : 0;
+                        return (
+                          <rect
+                            key={i}
+                            x={i * (barW + gap)}
+                            y={H - h}
+                            width={barW}
+                            height={Math.max(h, 1)}
+                            fill={cost > 0 ? "#22c55e" : "rgba(148,163,184,0.2)"}
+                            opacity={cost > 0 ? 0.85 : 0.5}
+                          >
+                            <title>{`${d.date}: $${cost.toFixed(4)}`}</title>
+                          </rect>
+                        );
+                      })}
+                    </svg>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px", fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>
+                      <span>{costData.daily[0]?.date}</span>
+                      <span>{costData.daily[costData.daily.length - 1]?.date}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Per-model breakdown table */}
+              {costData.by_model && costData.by_model.length > 0 && (
+                <div style={{ marginTop: "12px" }}>
+                  <p style={{ margin: "0 0 6px", fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>By Model</p>
+                  <div data-testid="cost-by-model" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {costData.by_model.map((m, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`, borderRadius: "6px" }}>
+                        <span style={{ fontFamily: fonts.mono, fontSize: "9px", padding: "1px 6px", borderRadius: "4px", backgroundColor: "rgba(96,165,250,0.12)", color: colors.brand.light, fontWeight: "600", textTransform: "uppercase" }}>
+                          {m.provider}
+                        </span>
+                        <span style={{ flex: 1, fontFamily: fonts.mono, fontSize: "11px", color: colors.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {m.model.replace(/^(anthropic|ollama|emergent):/, "")}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                          {m.calls.toLocaleString()} calls
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: "#22c55e", fontWeight: "700", minWidth: "60px", textAlign: "right" }}>
+                          ${m.cost_usd.toFixed(4)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {costData.month_to_date?.calls === 0 && (
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, fontStyle: "italic", margin: "8px 0 0" }}>
+                  No LLM calls yet this month. Costs will appear here once the bot starts replying.
+                </p>
+              )}
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: "12px" }}>
             <button onClick={save} disabled={saving} data-testid="save-settings-btn"
