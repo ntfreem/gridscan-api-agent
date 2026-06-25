@@ -495,15 +495,16 @@ async def build_scripted_response(
     session_id: str,
     user_text: str = "",
 ) -> str:
-    """Scripted Mode v4 — Unified AI-Router pool.
+    """Scripted Mode v5 — Fixed Reply 1 + Reply 2 start, then no-repeat AI router.
 
     AI MODE (rephrase_mode in {ai, hybrid}):
-      Every user message → AI classifies intent, then picks the best line from a pool
-      that already excludes anything sent earlier in this conversation:
+      msg 1 → Reply 1 (primary_message), verbatim
+      msg 2 → Reply 2 (update_message), verbatim — only if it's set
+      msg 3+ → AI router picks from pools (excluding anything already sent):
         • intent='ack'         → pool = acknowledgment_replies (allowed to repeat once exhausted)
-        • intent='speculation' → silent (count not incremented)
-        • other intents        → pool = [primary, update, *variants] minus used_replies
-        • no match (idx=0)     → fallback_message (else silent)
+        • intent='speculation' → silent (count NOT incremented)
+        • other intents        → pool = variants minus used_replies
+        • no match (idx=0)     → fallback_message (once per conversation, also tracked)
       Bot replies are capped at `max_attempts` per cooldown window (default 10).
       After `reset_hours` of user idle time, count + used_replies reset.
 
@@ -549,22 +550,27 @@ async def build_scripted_response(
                 existing = {**existing, "count": 0, "used_replies": []}
         except Exception:
             pass
-    if int(existing.get("count") or 0) >= max_attempts:
+    current_count = int(existing.get("count") or 0)
+    if current_count >= max_attempts:
         logger.info(f"[SCRIPTED] silent — max_attempts ({max_attempts}) reached for user={user_id[:8]}")
         return ""
     used_replies = existing.get("used_replies") or []
     if not isinstance(used_replies, list):
         used_replies = []
 
-    # ── Intent classification (used by both AI mode router and the speculation gate) ──
+    # ── Intent classification (only needed for AI router at msg3+ or speculation gate) ──
     intent = None
-    if (classify_on or ai_router_on) and user_text:
+    needs_intent = (
+        # AI router will fire (count>=2 in AI mode, OR count==1 with update_msg blank in AI mode)
+        ai_router_on and (current_count >= 2 or (current_count == 1 and not update_msg))
+    ) or classify_on
+    if needs_intent and user_text:
         try:
             intent = await _classify_user_intent(user_text, session_id, instance_id)
         except Exception as _e:
             logger.warning(f"[SCRIPTED] intent classify exception, treating as 'other': {_e}")
             intent = "other"
-        logger.info(f"[SCRIPTED] intent={intent} user_text={user_text[:80]!r}")
+        logger.info(f"[SCRIPTED] intent={intent} count={current_count} user_text={user_text[:80]!r}")
         if intent == "speculation":
             logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
             try:
@@ -582,17 +588,17 @@ async def build_scripted_response(
 
     # ── Decide the reply ──
     response = ""
-    pool_used = None  # tracks which list the chosen reply came from (for analytics if needed)
-    current_count = int(existing.get("count") or 0)
+    pool_used = None  # "primary" | "update" | "variant" | "ack" | "fallback"
 
-    if ai_router_on and user_text:
-        if intent is None:  # classify_intent was off but ai_router still needs the intent
-            try:
-                intent = await _classify_user_intent(user_text, session_id, instance_id)
-            except Exception:
-                intent = "other"
-            logger.info(f"[SCRIPTED-ROUTER] intent={intent} user_text={user_text[:80]!r}")
-
+    # Reply 1 and Reply 2 ALWAYS fire first, regardless of mode (verbatim, no AI selection).
+    if current_count == 0:
+        response = primary
+        pool_used = "primary"
+    elif current_count == 1 and update_msg:
+        response = update_msg
+        pool_used = "update"
+    elif ai_router_on:
+        # ── Msg 3+ (or msg 2 if update_msg is blank) — AI router picks from variants / acks ──
         if intent == "ack" and ack_replies:
             # Acks can repeat once exhausted — they're short conversational fillers
             unused = [a for a in ack_replies if a not in used_replies] or ack_replies
@@ -600,31 +606,23 @@ async def build_scripted_response(
             response = unused[idx - 1] if idx > 0 else unused[0]
             pool_used = "ack"
         else:
-            # Build unified question pool, excluding anything already sent in this conversation
-            question_pool_full = ([primary] if primary else []) + ([update_msg] if update_msg else []) + variants
-            question_pool = [r for r in question_pool_full if r not in used_replies]
-            if question_pool:
-                idx = await _ai_pick_variant(user_text, question_pool, session_id, instance_id)
+            # Question / update / other → pick from variants pool (excluding already-sent lines)
+            unused_variants = [v for v in variants if v not in used_replies]
+            if unused_variants:
+                idx = await _ai_pick_variant(user_text, unused_variants, session_id, instance_id)
                 if idx > 0:
-                    response = question_pool[idx - 1]
-                    pool_used = "main"
-            # No suitable match → fallback (but only send fallback once per conversation)
+                    response = unused_variants[idx - 1]
+                    pool_used = "variant"
+            # No match → fallback (only once per conversation)
             if not response:
                 if fallback and fallback not in used_replies:
                     response = fallback
                     pool_used = "fallback"
                 else:
-                    return ""  # all options exhausted, stay silent until cooldown
+                    return ""  # exhausted, stay silent until cooldown
     else:
-        # ── MANUAL MODE — simple primary → update → silent ──
-        if current_count == 0:
-            response = primary
-            pool_used = "manual-primary"
-        elif current_count == 1 and update_msg:
-            response = update_msg
-            pool_used = "manual-update"
-        else:
-            return ""  # silent past msg2 in manual mode
+        # Manual mode past msg2 → silent (no AI cost, no fallback)
+        return ""
 
     if not response:
         return ""
@@ -634,8 +632,7 @@ async def build_scripted_response(
         "$inc": {"count": 1},
         "$set": {**key, "last_at": now.isoformat()},
     }
-    # Track every non-ack reply so AI doesn't repeat itself within the conversation.
-    # Acks are excluded so they can naturally cycle if user keeps saying thanks.
+    # Acks are excluded from used_replies so they can naturally cycle if user keeps thanking us.
     if pool_used != "ack":
         update_ops["$push"] = {"used_replies": response}
     await db.scripted_counters.update_one(key, update_ops, upsert=True)

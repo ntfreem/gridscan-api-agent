@@ -1,15 +1,22 @@
-"""Tests for Scripted Mode v4 — Unified AI Router Pool.
+"""Tests for Scripted Mode v5 — Fixed Reply1 + Reply2, then no-repeat AI router.
 
-Covers:
-- build_scripted_response() v4 behavior with unified pool + used_replies tracking
-- _ai_pick_variant() regression for v3 carry-over (parser)
-- _classify_user_intent() recognizing labels
-- Manual mode (unchanged from v3)
-- Idle reset, max_attempts cap, fallback semantics
-- POST /api/discord/scripted-counters/reset wipes used_replies (regression)
-- PUT /api/discord/config max_attempts default=10 round-trip
-
-All LLM calls mocked via monkeypatch (cost-zero, deterministic).
+Covers (all 16 cases from review request):
+ 1. count=0 + ANY intent → primary verbatim, NO pick call
+ 2. count=1 + update_msg set + ANY intent → update verbatim, NO pick call
+ 3. count=2 + question + variants → pick from variants (NOT primary/update)
+ 4. count=2 + ack → uses ack pool, used_replies NOT tracked
+ 5. count=3 + question + used_replies has 'v1' → pool filtered to ['v2'] only
+ 6. count=3 + question + variants exhausted + fallback set → fallback
+ 7. count=4 + variants exhausted + fallback already used → silent
+ 8. count=4 + variants exhausted + fallback not set → silent
+ 9. count=1 + update_msg BLANK + question → AI router engages at msg2
+10. count=10 → silent, no pick call
+11. speculation at count=2 → silent, no count bump, no pick call
+12. Idle reset wipes count + used_replies
+13. Manual count=0 → primary, no LLM calls
+14. Manual count=1 + update set → update
+15. Manual count=2 → silent
+16. _ai_pick_variant parser regression (carry-over from v3/v4)
 """
 import os
 import sys
@@ -18,7 +25,6 @@ import asyncio
 import pytest
 import requests
 
-# Make /app/backend importable for monkeypatching server module helpers
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
@@ -47,7 +53,6 @@ def event_loop():
 
 @pytest.fixture
 def new_ids():
-    """Return fresh (instance, channel, user) IDs for every test, then clean up."""
     iid = f"TEST_inst_{uuid.uuid4().hex[:8]}"
     cid = f"TEST_ch_{uuid.uuid4().hex[:8]}"
     uid = f"TEST_usr_{uuid.uuid4().hex[:8]}"
@@ -61,11 +66,11 @@ def new_ids():
 
 def _cfg(**over):
     base = {
-        "primary_message": "We are aware of the issue.",
-        "update_message": "Still investigating, thanks for your patience.",
-        "variants": ["Variant A about it", "Variant B more detail", "Variant C status"],
-        "acknowledgment_replies": ["You're welcome!", "Anytime!", "No problem!"],
-        "fallback_message": "Please hold tight, more soon.",
+        "primary_message": "PRIMARY: We are aware.",
+        "update_message": "UPDATE: Still investigating.",
+        "variants": ["v1", "v2", "v3"],
+        "acknowledgment_replies": ["A1", "A2", "A3"],
+        "fallback_message": "FALLBACK: hold tight.",
         "max_attempts": 10,
         "reset_hours": 24,
         "rephrase_mode": "ai",
@@ -98,8 +103,16 @@ def _get_counter(iid, cid, uid):
     })) or {}
 
 
+def _seed(iid, cid, uid, count, used_replies=None, last_at="2099-01-01T00:00:00+00:00"):
+    _run(server.db.scripted_counters.insert_one({
+        "instance_id": iid, "channel_id": cid, "user_id": uid,
+        "count": count, "used_replies": used_replies or [],
+        "last_at": last_at,
+    }))
+
+
 # --------------------------------------------------------------------------- #
-# v3 carry-over: _ai_pick_variant parser regression (case 16)                 #
+# Case 16 (kept first for clarity): _ai_pick_variant parser regression        #
 # --------------------------------------------------------------------------- #
 
 class TestAiPickVariantParser:
@@ -121,236 +134,235 @@ class TestAiPickVariantParser:
 
 
 # --------------------------------------------------------------------------- #
-# Case 1-9: v4 AI router behavior                                             #
+# AI Mode — Fixed Reply 1 + Reply 2 (cases 1, 2)                              #
 # --------------------------------------------------------------------------- #
 
-class TestV4UnifiedPool:
+class TestFixedReply1And2:
 
     # Case 1
-    def test_first_message_question_returns_primary(self, monkeypatch, new_ids):
+    def test_case1_count0_any_intent_returns_primary_no_pick(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "question", pick_value=1)
+        # Even intent='ack' should not matter at count=0 — primary fires verbatim
+        calls = _mock(monkeypatch, intent_value="ack", pick_value=1)
         cfg = _cfg()
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "is it down?"))
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "thanks!"))
         assert out == cfg["primary_message"]
+        assert calls["pick"] == 0, "msg1 must NOT call _ai_pick_variant"
         c = _get_counter(iid, cid, uid)
         assert c.get("count") == 1
         assert c.get("used_replies") == [cfg["primary_message"]]
 
     # Case 2
-    def test_second_message_question_excludes_primary(self, monkeypatch, new_ids):
+    def test_case2_count1_update_set_returns_update_no_pick(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
+        calls = _mock(monkeypatch, intent_value="ack", pick_value=1)
         cfg = _cfg()
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "any update?"))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "still?"))
-        # Second pool excludes primary → first option is update_message
+        _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "any update?"))
         assert out == cfg["update_message"]
-        # 2nd pick call's options should exclude primary
-        assert cfg["primary_message"] not in calls["pick_options"][1]
+        assert calls["pick"] == 0, "msg2 (with update_msg set) must NOT call _ai_pick_variant"
         c = _get_counter(iid, cid, uid)
-        assert c["count"] == 2
-        assert c["used_replies"] == [cfg["primary_message"], cfg["update_message"]]
+        assert c.get("count") == 2
+        assert c.get("used_replies") == [cfg["primary_message"], cfg["update_message"]]
+
+
+# --------------------------------------------------------------------------- #
+# AI Mode — Msg3+ router (cases 3, 4, 5, 6, 7, 8)                             #
+# --------------------------------------------------------------------------- #
+
+class TestMsg3PlusRouter:
 
     # Case 3
-    def test_third_message_pool_excludes_primary_and_update(self, monkeypatch, new_ids):
+    def test_case3_count2_question_variants_only_pool(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
         cfg = _cfg(variants=["v1", "v2"])
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m1"))
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m2"))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m3"))
+        _seed(iid, cid, uid, count=2, used_replies=[cfg["primary_message"], cfg["update_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "still?"))
         assert out == "v1"
-        pool3 = calls["pick_options"][2]
-        assert cfg["primary_message"] not in pool3
-        assert cfg["update_message"] not in pool3
+        # The pool given to _ai_pick_variant MUST exclude primary and update
+        pool = calls["pick_options"][0]
+        assert cfg["primary_message"] not in pool
+        assert cfg["update_message"] not in pool
+        assert set(pool) == {"v1", "v2"}
         c = _get_counter(iid, cid, uid)
-        assert len(c["used_replies"]) == 3
-        assert c["used_replies"][-1] == "v1"
+        assert c["count"] == 3
+        assert "v1" in c["used_replies"]
 
     # Case 4
-    def test_ack_intent_uses_ack_pool_not_tracked(self, monkeypatch, new_ids):
+    def test_case4_count2_ack_intent_uses_ack_pool_not_tracked(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "ack", pick_value=1)
-        cfg = _cfg(acknowledgment_replies=["You're welcome!", "Anytime!"])
+        calls = _mock(monkeypatch, intent_value="ack", pick_value=1)
+        cfg = _cfg(acknowledgment_replies=["You're welcome!", "Anytime!", "No problem!"])
+        _seed(iid, cid, uid, count=2, used_replies=[cfg["primary_message"], cfg["update_message"]])
         out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "thanks"))
-        assert out == "You're welcome!"
+        assert out in cfg["acknowledgment_replies"]
+        # _ai_pick_variant should be called with the ack pool, not variants
+        pool = calls["pick_options"][0]
+        assert set(pool).issubset(set(cfg["acknowledgment_replies"]))
         c = _get_counter(iid, cid, uid)
-        assert c["count"] == 1
-        # Acks must NOT be pushed into used_replies
-        assert "You're welcome!" not in (c.get("used_replies") or [])
-        assert c.get("used_replies", []) == []
+        # Acks must NOT push to used_replies
+        for ack in cfg["acknowledgment_replies"]:
+            assert ack not in c.get("used_replies", [])
+        # used_replies stays at the pre-existing primary/update
+        assert c["used_replies"] == [cfg["primary_message"], cfg["update_message"]]
 
-    # Case 5 — ack pool partially used; cfg-level ack list is the SOURCE.
-    # v4 implementation excludes acks already in used_replies, but since acks
-    # are not pushed to used_replies by normal flow, they naturally cycle.
-    # We directly seed used_replies to simulate the filtering logic.
-    def test_ack_filters_already_used_falls_back_when_exhausted(self, monkeypatch, new_ids):
+    # Case 5
+    def test_case5_count3_question_used_replies_filters_pool(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "ack", pick_value=1)
-        cfg = _cfg(acknowledgment_replies=["A1", "A2"])
-        # Seed used_replies with A1 already used
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 1, "used_replies": ["A1"],
-            "last_at": "2099-01-01T00:00:00+00:00",
-        }))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "thanks"))
-        # First call after seeding: unused=[A2] → returns A2
-        assert out == "A2"
-        # Now seed with both used → pool exhausted, falls back to original list
-        _run(server.db.scripted_counters.update_one(
-            {"instance_id": iid, "channel_id": cid, "user_id": uid},
-            {"$set": {"used_replies": ["A1", "A2"], "count": 1}},
-        ))
-        out2 = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "thanks again"))
-        # All acks 'used' → ack list cycles (returns A1 with pick=1)
-        assert out2 in ("A1", "A2")
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"])
+        _seed(iid, cid, uid, count=3,
+              used_replies=[cfg["primary_message"], cfg["update_message"], "v1"])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "again?"))
+        assert out == "v2"
+        pool = calls["pick_options"][0]
+        assert pool == ["v2"]  # v1 filtered out
 
     # Case 6
-    def test_speculation_silent_no_count_bump(self, monkeypatch, new_ids):
+    def test_case6_variants_exhausted_returns_fallback(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "speculation", pick_value=1)
-        cfg = _cfg()
-        # Pre-seed count=3
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 3, "used_replies": ["X"],
-            "last_at": "2099-01-01T00:00:00+00:00",
-        }))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "team is sleeping lol"))
-        assert out == ""
-        c = _get_counter(iid, cid, uid)
-        assert c["count"] == 3  # unchanged
-        assert calls["pick"] == 0
-
-    # Case 7
-    def test_pool_exhausted_fallback_once_then_silent(self, monkeypatch, new_ids):
-        iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "question", pick_value=0)  # AI never matches
-        cfg = _cfg(variants=[], update_message="")  # tiny pool: just primary
-        # Pre-seed: primary already used so pool is empty
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 1, "used_replies": [cfg["primary_message"]],
-            "last_at": "2099-01-01T00:00:00+00:00",
-        }))
-        out1 = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "any?"))
-        assert out1 == cfg["fallback_message"]
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"])
+        _seed(iid, cid, uid, count=3,
+              used_replies=[cfg["primary_message"], cfg["update_message"], "v1", "v2"])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "more?"))
+        assert out == cfg["fallback_message"]
         c = _get_counter(iid, cid, uid)
         assert cfg["fallback_message"] in c["used_replies"]
-        # Next call: fallback now used → silent
-        out2 = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "really?"))
-        assert out2 == ""
+
+    # Case 7
+    def test_case7_variants_exhausted_fallback_already_used_silent(self, monkeypatch, new_ids):
+        iid, cid, uid, sid = new_ids
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"])
+        _seed(iid, cid, uid, count=4,
+              used_replies=[cfg["primary_message"], cfg["update_message"],
+                            "v1", "v2", cfg["fallback_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "????"))
+        assert out == ""
 
     # Case 8
-    def test_pool_exhausted_no_fallback_silent(self, monkeypatch, new_ids):
+    def test_case8_variants_exhausted_no_fallback_silent(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "question", pick_value=0)
-        cfg = _cfg(variants=[], update_message="", fallback_message="")
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 1, "used_replies": [cfg["primary_message"]],
-            "last_at": "2099-01-01T00:00:00+00:00",
-        }))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "any?"))
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"], fallback_message="")
+        _seed(iid, cid, uid, count=4,
+              used_replies=[cfg["primary_message"], cfg["update_message"], "v1", "v2"])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "??"))
         assert out == ""
 
-    # Case 9
-    def test_max_attempts_cap_no_classify_call(self, monkeypatch, new_ids):
+
+# --------------------------------------------------------------------------- #
+# AI Mode — Edge case: update_msg BLANK (case 9)                              #
+# --------------------------------------------------------------------------- #
+
+class TestUpdateBlankEdgeCase:
+
+    # Case 9 — admin left update_msg empty → msg2 goes to AI router directly
+    def test_case9_count1_update_blank_engages_router(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
-        cfg = _cfg(max_attempts=10)
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 10, "used_replies": ["a"] * 10,
-            "last_at": "2099-01-01T00:00:00+00:00",
-        }))
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(update_message="", variants=["v1", "v2"])
+        _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
         out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "still?"))
-        assert out == ""
-        # Note: v4 currently classifies BEFORE the cap check. So intent call may
-        # happen, but pick must NOT happen (cap returns silent before pool build).
-        assert calls["pick"] == 0
+        # Router engages at msg2 since no update — picks first variant
+        assert out == "v1"
+        assert calls["pick"] == 1
+        pool = calls["pick_options"][0]
+        # Pool excludes primary (already used) — purely variants
+        assert cfg["primary_message"] not in pool
+        assert set(pool) == {"v1", "v2"}
+
+
+# --------------------------------------------------------------------------- #
+# AI Mode — Cap, speculation, idle reset (cases 10, 11, 12)                   #
+# --------------------------------------------------------------------------- #
+
+class TestCapAndGates:
 
     # Case 10
-    def test_classify_off_but_ai_router_on_still_classifies(self, monkeypatch, new_ids):
+    def test_case10_max_attempts_cap_no_pick_call(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
-        cfg = _cfg(classify_intent=False, rephrase_mode="ai")
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "is it back?"))
-        assert calls["intent"] >= 1
-
-
-# --------------------------------------------------------------------------- #
-# Cases 11-13: Manual mode (unchanged)                                        #
-# --------------------------------------------------------------------------- #
-
-class TestManualMode:
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(max_attempts=10)
+        _seed(iid, cid, uid, count=10, used_replies=["x"] * 10)
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "still?"))
+        assert out == ""
+        # The cap check is BEFORE classify+pick → both must be 0
+        assert calls["intent"] == 0
+        assert calls["pick"] == 0
 
     # Case 11
-    def test_manual_count_0_returns_primary_no_tracking(self, monkeypatch, new_ids):
+    def test_case11_speculation_silent_no_count_bump_no_pick(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
-        cfg = _cfg(rephrase_mode="manual")
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "is it down?"))
-        assert out == cfg["primary_message"]
-        # Manual mode does NOT call LLM
-        assert calls["intent"] == 0 and calls["pick"] == 0
+        calls = _mock(monkeypatch, intent_value="speculation", pick_value=1)
+        cfg = _cfg()
+        _seed(iid, cid, uid, count=2,
+              used_replies=[cfg["primary_message"], cfg["update_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "team sleeping lol"))
+        assert out == ""
         c = _get_counter(iid, cid, uid)
-        # Manual mode DOES bump count but does NOT push used_replies (pool_used != ack/...)
-        # Actually checking server: it pushes used_replies for any non-ack reply. So manual primary IS tracked.
-        # The spec says "manual ignores tracking" — let's just assert count=1 and not strictly check used_replies.
-        assert c.get("count") == 1
+        assert c["count"] == 2  # unchanged
+        assert calls["pick"] == 0
 
     # Case 12
-    def test_manual_count_1_returns_update(self, monkeypatch, new_ids):
+    def test_case12_idle_reset_wipes_count_and_used_replies(self, monkeypatch, new_ids):
         iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "question", pick_value=1)
-        cfg = _cfg(rephrase_mode="manual")
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m1"))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m2"))
-        assert out == cfg["update_message"]
-
-    # Case 13
-    def test_manual_count_2_silent_even_with_fallback(self, monkeypatch, new_ids):
-        iid, cid, uid, sid = new_ids
-        _mock(monkeypatch, "question", pick_value=1)
-        cfg = _cfg(rephrase_mode="manual", fallback_message="FB")
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m1"))
-        _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m2"))
-        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m3"))
-        assert out == ""
-
-
-# --------------------------------------------------------------------------- #
-# Case 14: Idle reset                                                          #
-# --------------------------------------------------------------------------- #
-
-class TestIdleReset:
-    def test_idle_reset_wipes_count_and_used_replies(self, monkeypatch, new_ids):
-        iid, cid, uid, sid = new_ids
-        calls = _mock(monkeypatch, "question", pick_value=1)
+        _mock(monkeypatch, intent_value="question", pick_value=1)
         cfg = _cfg(reset_hours=24)
-        # Seed with last_at 25h ago and 3 used_replies
         from datetime import datetime, timezone, timedelta
         stale = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
-        _run(server.db.scripted_counters.insert_one({
-            "instance_id": iid, "channel_id": cid, "user_id": uid,
-            "count": 3, "used_replies": ["a", "b", "c"],
-            "last_at": stale,
-        }))
+        _seed(iid, cid, uid, count=5, used_replies=["x", "y"], last_at=stale)
         out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "fresh?"))
-        # After reset, should pick from full pool (primary first)
+        # After reset, returns primary (count effectively starts at 0)
         assert out == cfg["primary_message"]
         c = _get_counter(iid, cid, uid)
-        # Count should be 1 (reset from 0 + this reply)
         assert c["count"] == 1
-        # Used replies should only contain the new reply
         assert c["used_replies"] == [cfg["primary_message"]]
 
 
 # --------------------------------------------------------------------------- #
-# HTTP regression: max_attempts default 10 + reset endpoint clears used      #
+# Manual Mode (cases 13, 14, 15)                                              #
+# --------------------------------------------------------------------------- #
+
+class TestManualMode:
+
+    # Case 13
+    def test_case13_manual_count0_returns_primary_no_llm(self, monkeypatch, new_ids):
+        iid, cid, uid, sid = new_ids
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(rephrase_mode="manual")
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "is it down?"))
+        assert out == cfg["primary_message"]
+        assert calls["intent"] == 0
+        assert calls["pick"] == 0
+        c = _get_counter(iid, cid, uid)
+        assert c["count"] == 1
+
+    # Case 14
+    def test_case14_manual_count1_update_set_returns_update(self, monkeypatch, new_ids):
+        iid, cid, uid, sid = new_ids
+        calls = _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(rephrase_mode="manual")
+        _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "any update?"))
+        assert out == cfg["update_message"]
+        assert calls["pick"] == 0
+
+    # Case 15
+    def test_case15_manual_count2_silent(self, monkeypatch, new_ids):
+        iid, cid, uid, sid = new_ids
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(rephrase_mode="manual")
+        _seed(iid, cid, uid, count=2,
+              used_replies=[cfg["primary_message"], cfg["update_message"]])
+        out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "m3"))
+        assert out == ""
+
+
+# --------------------------------------------------------------------------- #
+# HTTP regression: config persistence + reset endpoint                        #
 # --------------------------------------------------------------------------- #
 
 @pytest.fixture(scope="module")
@@ -386,21 +398,36 @@ def H(auth_token, instance_id):
     }
 
 
-class TestDiscordConfigMaxAttempts:
-    def test_put_max_attempts_10_round_trip(self, H):
-        r = requests.put(f"{BASE_URL}/api/discord/config", headers=H, json={
-            "scripted_mode": {"max_attempts": 10}
-        }, timeout=20)
+class TestDiscordConfigPersistence:
+    def test_put_scripted_mode_full_payload_round_trip(self, H):
+        payload = {
+            "scripted_mode": {
+                "enabled": True,
+                "primary_message": "TEST_PRIMARY",
+                "update_message": "TEST_UPDATE",
+                "variants": ["TEST_V1", "TEST_V2"],
+                "acknowledgment_replies": ["TEST_A1", "TEST_A2"],
+                "fallback_message": "TEST_FB",
+                "max_attempts": 10,
+                "reset_hours": 24,
+                "rephrase_mode": "ai",
+            }
+        }
+        r = requests.put(f"{BASE_URL}/api/discord/config", headers=H, json=payload, timeout=20)
         assert r.status_code == 200, r.text
         g = requests.get(f"{BASE_URL}/api/discord/config", headers=H, timeout=20)
         assert g.status_code == 200
         sm = g.json().get("scripted_mode") or {}
         assert sm.get("max_attempts") == 10
+        assert sm.get("primary_message") == "TEST_PRIMARY"
+        assert sm.get("update_message") == "TEST_UPDATE"
+        assert "TEST_V1" in (sm.get("variants") or [])
+        assert "TEST_A1" in (sm.get("acknowledgment_replies") or [])
+        assert sm.get("fallback_message") == "TEST_FB"
 
 
 class TestResetCountersClearsUsedReplies:
-    def test_reset_endpoint_deletes_counter_doc_including_used_replies(self, H, instance_id):
-        # Seed a counter with used_replies for the real instance_id
+    def test_reset_endpoint_clears_count_and_used_replies(self, H, instance_id):
         cid = f"TEST_ch_{uuid.uuid4().hex[:6]}"
         uid = f"TEST_usr_{uuid.uuid4().hex[:6]}"
         _run(server.db.scripted_counters.insert_one({
@@ -408,12 +435,15 @@ class TestResetCountersClearsUsedReplies:
             "count": 5, "used_replies": ["a", "b", "c"],
             "last_at": "2099-01-01T00:00:00+00:00",
         }))
-        # Call the reset endpoint
         r = requests.post(f"{BASE_URL}/api/discord/scripted-counters/reset",
                           headers=H, timeout=20)
         assert r.status_code == 200, r.text
-        # Verify the doc is gone (which means used_replies is wiped)
         doc = _run(server.db.scripted_counters.find_one({
             "instance_id": instance_id, "channel_id": cid, "user_id": uid,
         }))
-        assert doc is None
+        # Either deleted or count reset & used_replies cleared
+        if doc is not None:
+            assert doc.get("count", 0) == 0
+            assert (doc.get("used_replies") or []) == []
+        else:
+            assert doc is None

@@ -1,0 +1,38 @@
+{
+  "summary": "Scripted Mode v5 — Fixed Reply 1 + Reply 2 verbatim start, then no-repeat AI router on variants/acks/fallback (Reply 1 and Reply 2 excluded from msg3+ pool). Full backend + frontend pass. Rewrote /app/backend/tests/test_scripted_ai_router.py for v5: 22/22 tests pass (16 review-request cases + ack-tracking sanity check + 5 parser params split into 1 class). Frontend label/hint refresh verified at /admin/discord with 'Scripted Test' instance: 8/8 v5 copy checks pass, Max Replies per User default = 10, Ack hint hides when rephrase_mode='manual'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scripted_ai_router.py",
+    "/app/test_reports/pytest/v5_results.xml",
+    "/app/test_reports/pytest/v5_http_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "v5 implementation at /app/backend/server.py:490-639 cleanly enforces the new flow: count==0 → primary verbatim; count==1 + update_msg set → update verbatim; otherwise AI router. The `needs_intent` gate (line 563-566) correctly skips classify for the verbatim msg1/msg2 case but engages classify for the edge case count==1 + update_msg blank.",
+    "Pool composition at msg3+ uses ONLY `variants` minus `used_replies` (line 610) — primary and update are correctly excluded from the AI-router pool even though they remain in used_replies for tracking continuity.",
+    "Ack pool is tracked separately and NOT pushed to used_replies (line 636), allowing acks to naturally cycle.",
+    "Speculation gate (line 574-587) silent + no count bump preserved from v4.",
+    "Idle reset block (line 539-552) correctly wipes both count and used_replies before evaluating cap.",
+    "Frontend hints in /app/frontend/src/pages/DiscordSettings.js verified verbatim: line 907 'Reply 1 — Primary · always sent first', line 917 'Sent verbatim the FIRST time… no AI involved here.', line 919 'Reply 2 — Update · always sent second', line 929 'Sent verbatim the SECOND time. After this, the AI router takes over and picks from your Variants, Acknowledgments, or sends the Fallback if nothing fits.', line 1049 'After Reply 1 and Reply 2 are sent, the AI router uses these…'.",
+    "Minor optimization opportunity (unchanged from v4 report): when intent='ack' the response is computed via `unused[idx - 1] if idx > 0 else unused[0]` — if the LLM returns idx=0 we default to the first item, which is fine, but could log a warning so admins notice mis-classifications.",
+    "Concurrency caveat unchanged: $inc + $push in a single update_one is atomic per-document, but two concurrent requests at count=9 could both succeed and push N+1. discord_dedup TTL collection still backstops this in practice."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scripted_ai_router.py (full v5 rewrite, 22 test cases across 7 classes)"
+  ],
+  "success_rate": {"backend": "100% (22/22 with BASE_URL set; 20/22 + 2 skip if env missing)", "frontend": "100% (8/8 label/hint + Max=10 + Ack hides in Manual)"},
+  "test_credentials": "Admin: administrator / Admin@123 (from /app/memory/test_credentials.md). Frontend instance used: 'Scripted Test' (id 8292460c-de40-4a28-a711-640c0ecb8447).",
+  "seed_data_creation": "Each backend test fixture (new_ids) seeds a fresh TEST_inst_*/TEST_ch_*/TEST_usr_* triple in db.scripted_counters and tears it down. HTTP TestDiscordConfigPersistence wrote scripted_mode with TEST_PRIMARY / TEST_UPDATE / TEST_V*/TEST_A*/TEST_FB values to the first available instance — these are still persisted on the 'Scripted Test' instance and visible in the UI screenshot (admin can overwrite via UI).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "v5 test suite at /app/backend/tests/test_scripted_ai_router.py is the source of truth — 22/22 passing. Key v5 invariants asserted: (i) count=0 → primary verbatim with calls.pick==0 and calls.intent==1 only if classify_on (intent stays 0 by default since needs_intent gate is False for msg1); (ii) count=1 + update_msg set → update verbatim with calls.pick==0; (iii) count=1 + update_msg BLANK → AI router engages at msg2 (pool excludes primary already in used_replies); (iv) count>=2 → AI router on variants/acks/fallback; primary and update are NEVER in the msg3+ pool even though they remain in used_replies; (v) Acks NOT pushed to used_replies; (vi) Speculation silent + no count bump; (vii) Idle reset wipes count + used_replies; (viii) Max cap returns silent BEFORE both classify and pick (calls.intent == 0 and calls.pick == 0). Run with REACT_APP_BACKEND_URL set in env to include the 2 HTTP tests (config persistence + reset endpoint).",
+  "rca of the issue": "N/A — no regressions, no open bugs. v5 backend rewrite + frontend hint refresh landed cleanly. The 'Select an instance' banner on /admin/discord is expected behavior when no workspace is selected — picking 'Scripted Test' from the workspace dropdown unblocks the scripted-mode panel and reveals all v5 hints + the 8/8 copy checks pass."
+}

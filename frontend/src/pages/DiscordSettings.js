@@ -904,7 +904,7 @@ export default function DiscordSettings() {
             {scripted.enabled && (
               <div style={{ marginTop: "8px" }}>
                 {/* Reply 1 — Primary */}
-                <label style={T.label}>Reply 1 — Primary <span style={{ color: colors.brand.warning }}>*</span> <span style={{ color: colors.text.muted, fontWeight: "400" }}>· typically the incident announcement</span></label>
+                <label style={T.label}>Reply 1 — Primary <span style={{ color: colors.brand.warning }}>*</span> <span style={{ color: colors.text.muted, fontWeight: "400" }}>· always sent first</span></label>
                 <textarea
                   value={scripted.primary_message}
                   onChange={e => setScripted(p => ({ ...p, primary_message: e.target.value }))}
@@ -914,9 +914,9 @@ export default function DiscordSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
-                <p style={T.hint}>In <strong>AI/Hybrid</strong> mode this joins the unified pool — the router picks it whenever it best matches the user's question. In <strong>Manual</strong> mode it's the first reply, verbatim.</p>
+                <p style={T.hint}>Sent verbatim the FIRST time a user asks during an incident window — no AI involved here.</p>
 
-                <label style={{ ...T.label, marginTop: "16px" }}>Reply 2 — Update <span style={{ color: colors.text.muted, fontWeight: "400" }}>· typically a follow-up status line</span></label>
+                <label style={{ ...T.label, marginTop: "16px" }}>Reply 2 — Update <span style={{ color: colors.text.muted, fontWeight: "400" }}>· always sent second</span></label>
                 <textarea
                   value={scripted.update_message}
                   onChange={e => setScripted(p => ({ ...p, update_message: e.target.value }))}
@@ -926,7 +926,7 @@ export default function DiscordSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
-                <p style={T.hint}>Also joins the AI router pool. The router never repeats a line in the same conversation, so once Reply 1 + Reply 2 are used, it moves on to your Variants.</p>
+                <p style={T.hint}>Sent verbatim the SECOND time. After this, the AI router takes over and picks from your <strong>Variants</strong>, <strong>Acknowledgments</strong>, or sends the <strong>Fallback</strong> if nothing fits.</p>
 
                 <div style={{
                   marginTop: "14px",
@@ -1046,7 +1046,7 @@ export default function DiscordSettings() {
                       </span>
                     </div>
                     <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "0 0 12px", lineHeight: "1.5" }}>
-                      Short replies for &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. The AI router uses these whenever it detects a user is just acknowledging — never to answer a question. If a user keeps thanking you after every reply, the router cycles through these and only repeats once the list is exhausted.
+                      Short replies for &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. After Reply 1 and Reply 2 are sent, the AI router uses these whenever it detects a user is just acknowledging — never to answer a question. If a user keeps thanking you, the router cycles through these and only repeats once the list is exhausted.
                     </p>
                     {scripted.acknowledgment_replies.map((v, i) => (
                       <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
