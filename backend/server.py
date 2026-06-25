@@ -2359,52 +2359,14 @@ async def get_scripted_counters_count(instance_id: str = Depends(get_instance_ac
     }
 
 
-@api_router.post("/discord/scripted-mode/sandbox")
-async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_instance_access)):
-    """Dry-run a sequence of user messages through Scripted Mode and see what the bot
-    would reply at each step. Does NOT touch `scripted_counters` — purely simulated.
-
-    Body:
-      {
-        "messages": ["is the bridge down?", "any update?", "thanks!"],
-        "scripted_config": {...}   # optional — overrides saved config for testing unsaved edits
-      }
-
-    Returns:
-      {
-        "turns": [
-          {
-            "user_message": str,
-            "intent": str | None,
-            "pool_name": "primary"|"update"|"variant"|"ack"|"fallback"|"silent",
-            "pool_considered": [str],
-            "bot_reply": str,
-            "skip_reason": str | None,
-            "count_after": int,
-            "used_replies_after": [str]
-          },
-          ...
-        ]
-      }
-    """
-    messages = body.get("messages") or []
-    if not isinstance(messages, list) or len(messages) == 0:
-        raise HTTPException(status_code=400, detail="`messages` must be a non-empty list")
-    if len(messages) > 25:
-        raise HTTPException(status_code=400, detail="Sandbox is capped at 25 messages per run")
-
-    override = body.get("scripted_config")
-    if isinstance(override, dict):
-        scripted_cfg = override
-    else:
-        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
-        scripted_cfg = cfg.get("scripted_mode") or {}
-
+async def _run_sandbox_simulation(scripted_cfg: dict, messages: List[str], instance_id: str) -> List[dict]:
+    """Run a sequence of user messages through the Scripted Mode decision helper
+    in pure simulation mode (NO writes to scripted_counters). Returns the turn list
+    that both the /sandbox endpoint and scenario runner consume."""
     session_id = f"sandbox_{instance_id}_{datetime.now(timezone.utc).timestamp()}"
     count = 0
     used_replies: List[str] = []
     turns = []
-
     for msg in messages:
         if not isinstance(msg, str) or not msg.strip():
             continue
@@ -2417,7 +2379,6 @@ async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_insta
             "bot_reply": decision.get("reply", ""),
             "skip_reason": decision.get("skip_reason"),
         }
-        # Advance simulated state same way build_scripted_response would
         if decision.get("reply"):
             count += 1
             if decision.get("pool_name") != "ack":
@@ -2425,8 +2386,207 @@ async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_insta
         turn["count_after"] = count
         turn["used_replies_after"] = list(used_replies)
         turns.append(turn)
+    return turns
 
+
+def _compare_against_golden(turns: List[dict], golden_turns: List[dict]) -> List[dict]:
+    """Compare actual turns to golden turns. Returns a list of failure dicts.
+    Match on (pool_name, intent) — the specific variant string is non-deterministic
+    when AI picks from a pool, so we don't compare bot_reply text."""
+    failures = []
+    if len(turns) != len(golden_turns):
+        failures.append({
+            "turn_index": -1, "field": "turn_count",
+            "expected": len(golden_turns), "actual": len(turns),
+        })
+        return failures
+    for i, (actual, golden) in enumerate(zip(turns, golden_turns)):
+        if actual.get("pool_name") != golden.get("pool_name"):
+            failures.append({
+                "turn_index": i, "field": "pool_name",
+                "expected": golden.get("pool_name"), "actual": actual.get("pool_name"),
+            })
+        # Intent comparison: only enforce if the golden recorded one (skip None)
+        if golden.get("intent") is not None and actual.get("intent") != golden.get("intent"):
+            failures.append({
+                "turn_index": i, "field": "intent",
+                "expected": golden.get("intent"), "actual": actual.get("intent"),
+            })
+    return failures
+
+
+@api_router.post("/discord/scripted-mode/sandbox")
+async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_instance_access)):
+    """Dry-run a sequence of user messages through Scripted Mode and see what the bot
+    would reply at each step. Does NOT touch `scripted_counters` — purely simulated.
+
+    Body:
+      {
+        "messages": ["is the bridge down?", "any update?", "thanks!"],
+        "scripted_config": {...}   # optional — overrides saved config for testing unsaved edits
+      }
+    """
+    messages = body.get("messages") or []
+    if not isinstance(messages, list) or len(messages) == 0:
+        raise HTTPException(status_code=400, detail="`messages` must be a non-empty list")
+    if len(messages) > 25:
+        raise HTTPException(status_code=400, detail="Sandbox is capped at 25 messages per run")
+    override = body.get("scripted_config")
+    if isinstance(override, dict):
+        scripted_cfg = override
+    else:
+        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+        scripted_cfg = cfg.get("scripted_mode") or {}
+    turns = await _run_sandbox_simulation(scripted_cfg, messages, instance_id)
     return {"turns": turns}
+
+
+# ── Saved Scenarios — regression tests for Scripted Mode copy ──────────────────────
+
+class ScenarioCreate(BaseModel):
+    name: str
+    messages: List[str]
+    description: Optional[str] = None
+
+
+@api_router.get("/discord/scripted-mode/scenarios")
+async def list_scenarios(instance_id: str = Depends(get_instance_access)):
+    """List all saved Scripted Mode scenarios for this instance."""
+    rows = await db.scripted_scenarios.find(
+        {"instance_id": instance_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(200)
+    return {"scenarios": rows}
+
+
+@api_router.post("/discord/scripted-mode/scenarios")
+async def create_scenario(body: ScenarioCreate, instance_id: str = Depends(get_instance_access)):
+    """Create a new saved scenario. `golden_turns` is captured on the FIRST `/run`."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="`name` is required")
+    msgs = [m.strip() for m in (body.messages or []) if isinstance(m, str) and m.strip()]
+    if not msgs:
+        raise HTTPException(status_code=400, detail="`messages` must have at least one non-empty entry")
+    if len(msgs) > 25:
+        raise HTTPException(status_code=400, detail="Scenarios are capped at 25 messages")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "instance_id": instance_id,
+        "name": name,
+        "description": (body.description or "").strip() or None,
+        "messages": msgs,
+        "golden_turns": None,
+        "last_run": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.scripted_scenarios.insert_one(dict(doc))
+    return doc
+
+
+@api_router.delete("/discord/scripted-mode/scenarios/{scenario_id}")
+async def delete_scenario(scenario_id: str, instance_id: str = Depends(get_instance_access)):
+    """Delete a saved scenario."""
+    result = await db.scripted_scenarios.delete_one({"id": scenario_id, "instance_id": instance_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    return {"success": True}
+
+
+async def _run_scenario_doc(scenario: dict, scripted_cfg: dict, instance_id: str) -> dict:
+    """Run one scenario's messages, compare to its golden_turns, persist last_run.
+    Returns the full run result."""
+    turns = await _run_sandbox_simulation(scripted_cfg, scenario.get("messages") or [], instance_id)
+    golden = scenario.get("golden_turns")
+    now = datetime.now(timezone.utc).isoformat()
+    if not golden:
+        # First run — auto-capture as golden (admin can re-save later via /save-golden)
+        await db.scripted_scenarios.update_one(
+            {"id": scenario["id"]},
+            {"$set": {
+                "golden_turns": [{"pool_name": t["pool_name"], "intent": t.get("intent"), "bot_reply": t.get("bot_reply", "")} for t in turns],
+                "last_run": {"status": "captured_golden", "ran_at": now, "turns": turns, "failures": []},
+                "updated_at": now,
+            }}
+        )
+        return {"status": "captured_golden", "ran_at": now, "turns": turns, "failures": []}
+
+    failures = _compare_against_golden(turns, golden)
+    status = "pass" if not failures else "fail"
+    last_run = {"status": status, "ran_at": now, "turns": turns, "failures": failures}
+    await db.scripted_scenarios.update_one(
+        {"id": scenario["id"]},
+        {"$set": {"last_run": last_run, "updated_at": now}}
+    )
+    return last_run
+
+
+async def _load_scripted_cfg(instance_id: str, override: Optional[dict] = None) -> dict:
+    if isinstance(override, dict):
+        return override
+    cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+    return cfg.get("scripted_mode") or {}
+
+
+@api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/run")
+async def run_scenario(scenario_id: str, body: Optional[dict] = None, instance_id: str = Depends(get_instance_access)):
+    """Run one scenario. Body may include `scripted_config` to test unsaved form values."""
+    scenario = await db.scripted_scenarios.find_one({"id": scenario_id, "instance_id": instance_id}, {"_id": 0})
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    scripted_cfg = await _load_scripted_cfg(instance_id, (body or {}).get("scripted_config"))
+    result = await _run_scenario_doc(scenario, scripted_cfg, instance_id)
+    return result
+
+
+@api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/save-golden")
+async def save_scenario_golden(scenario_id: str, instance_id: str = Depends(get_instance_access)):
+    """Promote the most recent `last_run` to be the new golden baseline.
+    Use after intentional Variant/Ack copy changes."""
+    scenario = await db.scripted_scenarios.find_one({"id": scenario_id, "instance_id": instance_id}, {"_id": 0})
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    last_run = scenario.get("last_run")
+    if not last_run or not last_run.get("turns"):
+        raise HTTPException(status_code=400, detail="No last run found — run the scenario first")
+    new_golden = [{"pool_name": t["pool_name"], "intent": t.get("intent"), "bot_reply": t.get("bot_reply", "")} for t in last_run["turns"]]
+    now = datetime.now(timezone.utc).isoformat()
+    await db.scripted_scenarios.update_one(
+        {"id": scenario_id},
+        {"$set": {"golden_turns": new_golden, "updated_at": now}}
+    )
+    return {"success": True, "golden_turns": new_golden}
+
+
+@api_router.post("/discord/scripted-mode/scenarios/run-all")
+async def run_all_scenarios(body: Optional[dict] = None, instance_id: str = Depends(get_instance_access)):
+    """Run every scenario sequentially. Returns a per-scenario pass/fail summary."""
+    scenarios = await db.scripted_scenarios.find({"instance_id": instance_id}, {"_id": 0}).to_list(200)
+    scripted_cfg = await _load_scripted_cfg(instance_id, (body or {}).get("scripted_config"))
+    results = []
+    passed = failed = captured = 0
+    for s in scenarios:
+        try:
+            r = await _run_scenario_doc(s, scripted_cfg, instance_id)
+            status = r.get("status", "fail")
+            if status == "pass":
+                passed += 1
+            elif status == "captured_golden":
+                captured += 1
+            else:
+                failed += 1
+            results.append({
+                "id": s["id"], "name": s["name"], "status": status,
+                "failures_count": len(r.get("failures", [])),
+            })
+        except Exception as e:
+            failed += 1
+            results.append({"id": s["id"], "name": s["name"], "status": "error", "error": str(e)})
+    return {
+        "total": len(scenarios), "passed": passed, "failed": failed,
+        "captured_golden": captured, "results": results,
+    }
 
 
 @api_router.post("/discord/scripted-counters/reset")

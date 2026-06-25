@@ -393,6 +393,10 @@ export default function DiscordSettings() {
   const [sandboxTurns, setSandboxTurns] = useState([]);
   const [sandboxRunning, setSandboxRunning] = useState(false);
   const [sandboxOpen, setSandboxOpen] = useState(false);
+  const [scenarios, setScenarios] = useState([]);
+  const [scenariosOpen, setScenariosOpen] = useState(false);
+  const [runningScenario, setRunningScenario] = useState(null); // scenario id currently running, or "all"
+  const [newScenarioName, setNewScenarioName] = useState("");
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -488,6 +492,79 @@ export default function DiscordSettings() {
       toast.error(e.response?.data?.detail || "Sandbox run failed");
     } finally {
       setSandboxRunning(false);
+    }
+  };
+
+  const loadScenarios = useCallback(async () => {
+    try {
+      const r = await api.get(`/discord/scripted-mode/scenarios`);
+      setScenarios(r.data?.scenarios || []);
+    } catch {/* ignore */}
+  }, [instanceId]);
+
+  useEffect(() => { if (instanceId) loadScenarios(); }, [instanceId, loadScenarios]);
+
+  const saveCurrentAsScenario = async () => {
+    const name = (newScenarioName || "").trim();
+    if (!name) { toast.error("Enter a scenario name"); return; }
+    const messages = sandboxInput.split("\n").map(s => s.trim()).filter(Boolean);
+    if (messages.length === 0) { toast.error("Sandbox input is empty"); return; }
+    try {
+      await api.post(`/discord/scripted-mode/scenarios`, { name, messages });
+      toast.success(`Saved "${name}" — first run will capture the golden snapshot.`);
+      setNewScenarioName("");
+      loadScenarios();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save scenario");
+    }
+  };
+
+  const runScenario = async (s) => {
+    setRunningScenario(s.id);
+    try {
+      await api.post(`/discord/scripted-mode/scenarios/${s.id}/run`, { scripted_config: scripted });
+      await loadScenarios();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Run failed");
+    } finally {
+      setRunningScenario(null);
+    }
+  };
+
+  const runAllScenarios = async () => {
+    if (scenarios.length === 0) { toast.error("No scenarios saved yet"); return; }
+    setRunningScenario("all");
+    try {
+      const r = await api.post(`/discord/scripted-mode/scenarios/run-all`, { scripted_config: scripted });
+      const { total, passed, failed, captured_golden } = r.data || {};
+      if (failed > 0) toast.error(`${failed}/${total} failed`);
+      else toast.success(`${passed} passed, ${captured_golden} captured — ${total}/${total} green`);
+      await loadScenarios();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Run-all failed");
+    } finally {
+      setRunningScenario(null);
+    }
+  };
+
+  const deleteScenario = async (s) => {
+    if (!window.confirm(`Delete scenario "${s.name}"?`)) return;
+    try {
+      await api.delete(`/discord/scripted-mode/scenarios/${s.id}`);
+      loadScenarios();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  const saveScenarioGolden = async (s) => {
+    if (!window.confirm(`Promote the latest run of "${s.name}" to the new golden baseline?`)) return;
+    try {
+      await api.post(`/discord/scripted-mode/scenarios/${s.id}/save-golden`);
+      toast.success(`"${s.name}" golden updated.`);
+      loadScenarios();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Save-golden failed");
     }
   };
 
@@ -1229,7 +1306,7 @@ export default function DiscordSettings() {
                         onFocus={onFocus} onBlur={onBlur}
                         style={{ ...T.input, resize: "vertical", fontFamily: fonts.mono, fontSize: "12px", padding: "10px 12px" }}
                       />
-                      <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         <button
                           onClick={runSandbox}
                           disabled={sandboxRunning}
@@ -1257,6 +1334,32 @@ export default function DiscordSettings() {
                             Clear results
                           </button>
                         )}
+                        <input
+                          type="text"
+                          value={newScenarioName}
+                          onChange={e => setNewScenarioName(e.target.value)}
+                          placeholder="Save as scenario…"
+                          data-testid="scenario-name-input"
+                          onFocus={onFocus} onBlur={onBlur}
+                          style={{ ...T.input, padding: "6px 10px", fontSize: "12px", maxWidth: "200px" }}
+                        />
+                        <button
+                          onClick={saveCurrentAsScenario}
+                          disabled={!newScenarioName.trim()}
+                          data-testid="scenario-save-btn"
+                          style={{
+                            padding: "8px 12px",
+                            background: "none",
+                            border: `1px solid ${colors.brand.light}`,
+                            color: colors.brand.light,
+                            borderRadius: "8px",
+                            cursor: newScenarioName.trim() ? "pointer" : "not-allowed",
+                            opacity: newScenarioName.trim() ? 1 : 0.5,
+                            fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                          }}
+                        >
+                          + Save
+                        </button>
                         <p style={{ fontSize: "10px", color: colors.text.muted, margin: 0, marginLeft: "auto", fontFamily: fonts.body }}>
                           Each message uses ~2 small Claude calls — costs apply.
                         </p>
@@ -1323,6 +1426,136 @@ export default function DiscordSettings() {
                                     </ul>
                                   </details>
                                 )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Saved Scenarios — regression suite for Scripted Mode copy ── */}
+                <div data-testid="scenarios-card" style={{ marginTop: "16px", border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <button
+                    onClick={() => setScenariosOpen(o => !o)}
+                    data-testid="scenarios-toggle"
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: "10px",
+                      padding: "12px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <CheckCircle size={14} color={colors.brand.success || "#22c55e"} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                        Saved Scenarios
+                        {scenarios.length > 0 && (
+                          <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, marginLeft: "8px", fontWeight: "400" }}>
+                            ({scenarios.length})
+                          </span>
+                        )}
+                      </p>
+                      <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "2px 0 0", lineHeight: "1.4" }}>
+                        Snapshot test your golden conversations. First run captures the baseline; later runs flag any change in intent/pool routing.
+                      </p>
+                    </div>
+                    <ChevronDown size={16} color={colors.text.muted} style={{ transform: scenariosOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                  </button>
+
+                  {scenariosOpen && (
+                    <div style={{ padding: "0 14px 14px" }}>
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
+                        <button
+                          onClick={runAllScenarios}
+                          disabled={runningScenario !== null || scenarios.length === 0}
+                          data-testid="scenarios-run-all-btn"
+                          style={{
+                            padding: "8px 14px",
+                            backgroundColor: colors.brand.light,
+                            color: "#0a0a0a",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                            cursor: (runningScenario !== null || scenarios.length === 0) ? "not-allowed" : "pointer",
+                            opacity: (runningScenario !== null || scenarios.length === 0) ? 0.5 : 1,
+                            display: "flex", alignItems: "center", gap: "6px",
+                          }}
+                        >
+                          <Zap size={12} /> {runningScenario === "all" ? "Running…" : "Run all"}
+                        </button>
+                        <p style={{ fontSize: "10px", color: colors.text.muted, margin: 0, fontFamily: fonts.body }}>
+                          Uses your current form values.
+                        </p>
+                      </div>
+
+                      {scenarios.length === 0 ? (
+                        <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, fontStyle: "italic", margin: 0 }}>
+                          No scenarios saved yet. Type some messages in the Sandbox above, then enter a name and click <strong>+ Save</strong>.
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {scenarios.map((s) => {
+                            const lr = s.last_run || {};
+                            const status = lr.status; // pass | fail | captured_golden | undefined
+                            const badgeStyle = status === "pass"
+                              ? { bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.3)", fg: "#22c55e", label: "PASS" }
+                              : status === "fail"
+                                ? { bg: "rgba(244,63,94,0.1)", border: "rgba(244,63,94,0.3)", fg: colors.brand.error, label: `FAIL (${lr.failures?.length || 0})` }
+                                : status === "captured_golden"
+                                  ? { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", fg: colors.brand.warning, label: "GOLDEN CAPTURED" }
+                                  : { bg: "rgba(148,163,184,0.06)", border: "rgba(148,163,184,0.2)", fg: colors.text.muted, label: "NOT RUN" };
+                            return (
+                              <div
+                                key={s.id}
+                                data-testid={`scenario-row-${s.id}`}
+                                style={{
+                                  padding: "10px 12px",
+                                  border: `1px solid ${badgeStyle.border}`,
+                                  backgroundColor: badgeStyle.bg,
+                                  borderRadius: "8px",
+                                  display: "flex", alignItems: "center", gap: "10px",
+                                }}
+                              >
+                                <span
+                                  data-testid={`scenario-status-${s.id}`}
+                                  style={{ fontFamily: fonts.mono, fontSize: "10px", padding: "2px 8px", borderRadius: "5px", backgroundColor: badgeStyle.fg, color: "#0a0a0a", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}
+                                >
+                                  {badgeStyle.label}
+                                </span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.text.primary }}>
+                                    {s.name}
+                                  </p>
+                                  <p style={{ margin: "2px 0 0", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                                    {s.messages?.length || 0} message(s)
+                                    {lr.ran_at && ` · ran ${new Date(lr.ran_at).toLocaleString()}`}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => runScenario(s)}
+                                  disabled={runningScenario !== null}
+                                  data-testid={`scenario-run-${s.id}`}
+                                  style={{ padding: "5px 10px", background: "none", border: `1px solid ${colors.border.default}`, borderRadius: "6px", color: colors.text.secondary, cursor: runningScenario !== null ? "not-allowed" : "pointer", fontFamily: fonts.body, fontSize: "11px", opacity: runningScenario === null ? 1 : 0.5 }}
+                                >
+                                  {runningScenario === s.id ? "…" : "Run"}
+                                </button>
+                                {status === "fail" && (
+                                  <button
+                                    onClick={() => saveScenarioGolden(s)}
+                                    data-testid={`scenario-save-golden-${s.id}`}
+                                    title="Promote this run to be the new golden"
+                                    style={{ padding: "5px 10px", background: "none", border: `1px solid rgba(251,191,36,0.4)`, borderRadius: "6px", color: colors.brand.warning, cursor: "pointer", fontFamily: fonts.body, fontSize: "11px" }}
+                                  >
+                                    Re-bless
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => deleteScenario(s)}
+                                  data-testid={`scenario-delete-${s.id}`}
+                                  style={{ padding: "5px 8px", background: "none", border: "none", color: colors.text.muted, cursor: "pointer" }}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
                               </div>
                             );
                           })}
