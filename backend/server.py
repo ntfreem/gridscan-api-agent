@@ -530,6 +530,32 @@ async def build_scripted_response(
     classify_on = bool(scripted_cfg.get("classify_intent"))
     ai_router_on = mode in ("ai", "hybrid")
 
+    # ── Early cap check (BEFORE any LLM call) — saves a wasted classify on capped users ──
+    key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
+    now = datetime.now(timezone.utc)
+    existing = await db.scripted_counters.find_one(key) or {}
+    # Apply idle reset first so users coming back after the cooldown aren't permanently capped
+    last_iso = existing.get("last_at")
+    if last_iso:
+        try:
+            last_dt = datetime.fromisoformat(last_iso)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
+                await db.scripted_counters.update_one(
+                    key,
+                    {"$set": {"count": 0, "used_replies": []}},
+                )
+                existing = {**existing, "count": 0, "used_replies": []}
+        except Exception:
+            pass
+    if int(existing.get("count") or 0) >= max_attempts:
+        logger.info(f"[SCRIPTED] silent — max_attempts ({max_attempts}) reached for user={user_id[:8]}")
+        return ""
+    used_replies = existing.get("used_replies") or []
+    if not isinstance(used_replies, list):
+        used_replies = []
+
     # ── Intent classification (used by both AI mode router and the speculation gate) ──
     intent = None
     if (classify_on or ai_router_on) and user_text:
@@ -554,43 +580,10 @@ async def build_scripted_response(
                 pass
             return ""  # speculation → silent, no counter bump
 
-    # ── Per-user counter & used-reply tracking (reset on idle) ──
-    key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
-    now = datetime.now(timezone.utc)
-    existing = await db.scripted_counters.find_one(key) or {}
-    used_replies = existing.get("used_replies") or []
-    if not isinstance(used_replies, list):
-        used_replies = []
-
-    # Idle reset → wipe count AND used_replies (fresh conversation)
-    last_iso = existing.get("last_at")
-    if last_iso:
-        try:
-            last_dt = datetime.fromisoformat(last_iso)
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
-                await db.scripted_counters.update_one(
-                    key,
-                    {"$set": {"count": 0, "used_replies": []}},
-                )
-                used_replies = []
-        except Exception:
-            pass
-
-    # Hard cap (post-idle-reset, pre-increment): if count already at the cap, stay silent.
-    current_count = int(existing.get("count") or 0)
-    # After idle reset above, current_count may be stale; re-read for accuracy.
-    refreshed = await db.scripted_counters.find_one(key) or {}
-    current_count = int(refreshed.get("count") or 0)
-    used_replies = refreshed.get("used_replies") or used_replies
-    if current_count >= max_attempts:
-        logger.info(f"[SCRIPTED] silent — max_attempts ({max_attempts}) reached for user={user_id[:8]}")
-        return ""
-
     # ── Decide the reply ──
     response = ""
     pool_used = None  # tracks which list the chosen reply came from (for analytics if needed)
+    current_count = int(existing.get("count") or 0)
 
     if ai_router_on and user_text:
         if intent is None:  # classify_intent was off but ai_router still needs the intent

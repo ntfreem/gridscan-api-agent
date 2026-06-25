@@ -105,6 +105,18 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Scripted Mode v4 — Unified AI Router Pool (DONE 2026-02-XX)
+- AI/Hybrid mode: **every** user message now goes through the AI router from msg1 onwards. No more fixed Reply 1 → Reply 2 → variants sequence.
+- Unified question pool = `[primary, update, *variants]`. AI picks the most suitable line per user message.
+- **No-repeat guarantee**: `used_replies` is tracked on `scripted_counters` doc. The pool is filtered to exclude already-sent lines before each AI pick.
+- **Acknowledgments stay separate** and cycle (allowed to repeat once the list is exhausted).
+- **Fallback** fires only when AI can't match any remaining pool item, and only once per conversation (also tracked in `used_replies`).
+- **Hard cap** at `max_attempts` (default raised from 2 → **10**) bot replies per user per cooldown window. Cap check now happens **before** any LLM call → zero LLM cost when capped.
+- **Idle reset** clears both `count` AND `used_replies` after `reset_hours` of user inactivity (fresh conversation).
+- **Manual mode unchanged**: msg1=primary, msg2=update, msg3+=silent, zero LLM cost.
+- UI: relabeled "Primary Message" → "Reply 1 — Primary", "Update Message" → "Reply 2 — Update", "Max Attempts per User" → "Max Replies per User". Hints updated to describe unified pool + no-repeat behavior + idle-reset semantics.
+- Tests: `/app/backend/tests/test_scripted_ai_router.py` rewritten (21/21 cases pass).
+
 ### Scripted Mode v3 — AI Conversation Router (DONE 2026-02-XX)
 - Replaces the "silent after msg2" behavior. Msg3+ now uses AI as a router (never a generator) to pick from admin-defined message pools
 - New `acknowledgment_replies` field in `ScriptedModeConfig` — short replies for "thanks/ok/got it"
