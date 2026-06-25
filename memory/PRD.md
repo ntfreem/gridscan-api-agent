@@ -105,6 +105,13 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Discord App Setup — DB Single Source of Truth (DONE 2026-02-XX)
+- Fixed bug where "Clear All Discord App Settings" left the Current Configuration card showing green "All credentials configured" with stale masked values
+- Root cause: `get_discord_credentials()` was OR-ing each DB field with the corresponding `.env` value (DISCORD_CLIENT_ID/SECRET/REDIRECT_URI/BOT_TOKEN) — so clearing the DB silently re-populated from env
+- Fix: removed `.env` fallback; `db.discord_app_config` is now the single source of truth
+- Also fixed browser autofilling the admin email into the Client ID field (added `autoComplete="off"` / `autoComplete="new-password"` per field)
+- Tests: `/app/backend/tests/test_discord_app_config.py` covers clear → get → put → re-clear lifecycle (8/8 pass)
+
 ## Backlog
 
 ### P1 — Multi-Server per Instance (PARKED — revisit later)
