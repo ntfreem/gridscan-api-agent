@@ -57,6 +57,21 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 llm_sessions: Dict[str, LlmChat] = {}
+# Conversation history cache for non-Emergent providers (Anthropic SDK, Ollama).
+# emergentintegrations' LlmChat manages its own history; for the other providers we keep
+# a parallel { session_key: [{"role": "user|assistant", "content": str}, …] } map.
+llm_history: Dict[str, List[dict]] = {}
+
+# Anthropic models allowed for the BYO path (allowlist for cost control).
+# Map UI short-name → API model id.
+ALLOWED_ANTHROPIC_MODELS = {
+    "claude-haiku-4-5": "claude-haiku-4-5-20251101",
+    "claude-sonnet-4-5": "claude-sonnet-4-5-20251101",
+    "claude-opus-4-5": "claude-opus-4-5-20251101",
+}
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
+DEFAULT_OLLAMA_MODEL = "llama3.1"
+DEFAULT_EMERGENT_MODEL = "claude-sonnet-4-5-20251101"
 
 # Per-instance Discord bot tracking
 # Guild-to-instance mapping for shared token routing
@@ -169,6 +184,14 @@ class BotConfigUpdate(BaseModel):
     custom_instructions: Optional[str] = None
     tone_instructions: Optional[str] = None
     manual_tone_examples: Optional[List[dict]] = None
+
+
+class LLMProviderConfig(BaseModel):
+    """Per-instance LLM provider settings. Stored on bot_instances.llm_config."""
+    provider: str  # "emergent" | "anthropic" | "ollama"
+    model: Optional[str] = None
+    anthropic_api_key: Optional[str] = None  # only used when provider == "anthropic"
+    ollama_base_url: Optional[str] = None    # only used when provider == "ollama"; defaults to OLLAMA_BASE_URL env
 
 class FAQEntry(BaseModel):
     title: str
@@ -665,44 +688,145 @@ async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> 
         return ""
 
 
+async def _resolve_llm_config(instance_id: str) -> dict:
+    """Read the per-instance LLM provider config. Falls back to {provider: 'emergent'} when absent."""
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"llm_config": 1}) or {}
+    cfg = inst.get("llm_config") or {}
+    if not isinstance(cfg, dict) or not cfg.get("provider"):
+        return {"provider": "emergent", "model": DEFAULT_EMERGENT_MODEL}
+    cfg = dict(cfg)
+    cfg.setdefault("provider", "emergent")
+    return cfg
+
+
+async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
+                          instance_id: str, model: str) -> str:
+    """LLM call via emergentintegrations + Emergent Universal Key (existing behavior)."""
+    api_key = os.environ.get("CLAUDE_API_KEY") or os.environ.get("EMERGENT_LLM_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Emergent LLM key not configured")
+    key = f"{session_id}_{instance_id}_emergent_{model}"
+    if key not in llm_sessions:
+        llm_sessions[key] = LlmChat(api_key=api_key, session_id=key, system_message=system_prompt).with_model("anthropic", model)
+    else:
+        # Refresh the system prompt on cached sessions
+        try:
+            session = llm_sessions[key]
+            messages = getattr(session, "messages", None)
+            if messages and isinstance(messages, list) and messages and isinstance(messages[0], dict):
+                if messages[0].get("role") == "system":
+                    messages[0] = {"role": "system", "content": system_prompt}
+                else:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
+        except Exception as _e:
+            logger.warning(f"[session-refresh] non-fatal: {_e}")
+    return await llm_sessions[key].send_message(UserMessage(text=user_message))
+
+
+async def _call_anthropic(session_id: str, user_message: str, system_prompt: str,
+                          instance_id: str, model_short: str, api_key: str) -> str:
+    """LLM call via direct Anthropic SDK using a per-instance BYO API key."""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API key not configured for this instance")
+    api_model = ALLOWED_ANTHROPIC_MODELS.get(model_short)
+    if not api_model:
+        raise HTTPException(status_code=500, detail=f"Model '{model_short}' is not in the Anthropic allowlist")
+    import anthropic as _anthropic
+    client = _anthropic.AsyncAnthropic(api_key=api_key)
+    key = f"{session_id}_{instance_id}_anthropic_{model_short}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+    try:
+        resp = await client.messages.create(
+            model=api_model,
+            max_tokens=8096,
+            system=system_prompt,
+            messages=history,
+        )
+    except _anthropic.AuthenticationError as e:
+        raise HTTPException(status_code=401, detail=f"Anthropic auth failed: {e}")
+    except _anthropic.RateLimitError as e:
+        raise HTTPException(status_code=429, detail=f"Anthropic rate limit: {e}")
+    text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
+    history.append({"role": "assistant", "content": text})
+    llm_history[key] = history[-40:]  # keep last 20 turns
+    return text
+
+
+async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
+                       instance_id: str, model: str, base_url: str) -> str:
+    """LLM call via Ollama (self-hosted). POST /api/chat with the conversation history."""
+    base_url = (base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
+    key = f"{session_id}_{instance_id}_ollama_{model}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+    messages = [{"role": "system", "content": system_prompt}] + history
+    payload = {"model": model, "messages": messages, "stream": False}
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            r = await client.post(f"{base_url}/api/chat", json=payload)
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"Ollama error {e.response.status_code}: {e.response.text[:200]}")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Ollama unreachable at {base_url}: {e}")
+    data = r.json()
+    text = (data.get("message") or {}).get("content") or ""
+    history.append({"role": "assistant", "content": text})
+    llm_history[key] = history[-40:]
+    return text
+
+
 async def call_claude(session_id: str, user_message: str, system_prompt: str,
                       instance_id: str = "default", platform: str = "web") -> str:
-    api_key = os.environ.get("CLAUDE_API_KEY", "")
+    """Multi-provider LLM dispatcher. Routes to Emergent / Anthropic-direct / Ollama based on
+    the per-instance `llm_config` saved on bot_instances. Preserves the legacy retry+fallback
+    behavior for the Emergent path (Opus → Sonnet) for backward compatibility."""
+    cfg = await _resolve_llm_config(instance_id)
+    provider = (cfg.get("provider") or "emergent").lower()
+    retry_count = 0
+
+    if provider == "anthropic":
+        model_short = cfg.get("model") or DEFAULT_ANTHROPIC_MODEL
+        api_key = cfg.get("anthropic_api_key") or ""
+        try:
+            result = await _call_anthropic(session_id, user_message, system_prompt, instance_id, model_short, api_key)
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", True, 0, False, None)
+            return result
+        except HTTPException:
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "anthropic_error")
+            raise
+        except Exception as e:
+            logger.error(f"Anthropic call failed: {e}")
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "unknown")
+            raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
+
+    if provider == "ollama":
+        model = cfg.get("model") or DEFAULT_OLLAMA_MODEL
+        base_url = cfg.get("ollama_base_url") or ""
+        try:
+            result = await _call_ollama(session_id, user_message, system_prompt, instance_id, model, base_url)
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", True, 0, False, None)
+            return result
+        except HTTPException:
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", False, 0, False, "ollama_error")
+            raise
+
+    # ── EMERGENT (default) — legacy retry + Opus→Sonnet fallback ───────────────
+    api_key = os.environ.get("CLAUDE_API_KEY") or os.environ.get("EMERGENT_LLM_KEY", "")
     if not api_key:
         raise HTTPException(status_code=500, detail="LLM API key not configured")
 
-    primary_model = "claude-opus-4-5-20251101"
+    primary_model = cfg.get("model") or "claude-opus-4-5-20251101"
     fallback_model = "claude-sonnet-4-5-20251101"
     max_retries = 2
-    retry_count = 0
     used_fallback = False
     last_error = None  # noqa: F841
     error_type = None
 
     async def _attempt(model: str) -> str:
         nonlocal retry_count
-        key = f"{session_id}_{instance_id}_{model}"
-        if key not in llm_sessions:
-            llm_sessions[key] = LlmChat(
-                api_key=api_key,
-                session_id=key,
-                system_message=system_prompt
-            ).with_model("anthropic", model)
-        else:
-            # Refresh the system prompt on cached sessions so toggles like Passive Mode
-            # take effect immediately for returning users. Wrapped in try/except so any
-            # library-internal change doesn't break the reply path.
-            try:
-                session = llm_sessions[key]
-                messages = getattr(session, "messages", None)
-                if messages and isinstance(messages, list) and messages and isinstance(messages[0], dict):
-                    if messages[0].get("role") == "system":
-                        messages[0] = {"role": "system", "content": system_prompt}
-                    else:
-                        messages.insert(0, {"role": "system", "content": system_prompt})
-            except Exception as _e:
-                logger.warning(f"[session-refresh] non-fatal: {_e}")
-        return await llm_sessions[key].send_message(UserMessage(text=user_message))
+        return await _call_emergent(session_id, user_message, system_prompt, instance_id, model)
 
     # Try primary model with retries
     for attempt in range(max_retries + 1):
@@ -720,10 +844,10 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
                           else "unknown")
             if attempt < max_retries:
                 retry_count += 1
-                logger.warning(f"Claude Opus attempt {attempt+1} failed ({error_type}), retrying...")
-                await asyncio.sleep(1.5 ** attempt)  # 1s, 1.5s backoff
+                logger.warning(f"Claude primary attempt {attempt+1} failed ({error_type}), retrying...")
+                await asyncio.sleep(1.5 ** attempt)
             else:
-                logger.error(f"Claude Opus exhausted retries: {e}")
+                logger.error(f"Claude primary exhausted retries: {e}")
 
     # Fallback to Sonnet
     try:
@@ -1478,6 +1602,86 @@ async def delete_instance(instance_id: str, current_user: dict = Depends(require
     for col in [db.bot_config, db.knowledge_sources, db.conversations, db.discord_config]:
         await col.delete_many({"instance_id": instance_id})
     return {"success": True}
+
+
+# ── Per-instance LLM provider configuration ─────────────────────────────────────
+
+@api_router.get("/admin/instances/{instance_id}/llm-config")
+async def get_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
+    """Return the per-instance LLM provider settings. Secret values are masked."""
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0, "llm_config": 1})
+    if inst is None:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    cfg = inst.get("llm_config") or {}
+    provider = cfg.get("provider") or "emergent"
+    key = cfg.get("anthropic_api_key") or ""
+    return {
+        "provider": provider,
+        "model": cfg.get("model") or "",
+        "anthropic_api_key_set": bool(key),
+        "anthropic_api_key_preview": (key[:7] + "…" + key[-4:]) if len(key) > 12 else "",
+        "ollama_base_url": cfg.get("ollama_base_url") or "",
+        "allowed_anthropic_models": list(ALLOWED_ANTHROPIC_MODELS.keys()),
+        "default_models": {
+            "emergent": DEFAULT_EMERGENT_MODEL,
+            "anthropic": DEFAULT_ANTHROPIC_MODEL,
+            "ollama": DEFAULT_OLLAMA_MODEL,
+        },
+    }
+
+
+@api_router.put("/admin/instances/{instance_id}/llm-config")
+async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, current_user: dict = Depends(require_admin)):
+    """Save per-instance LLM provider. When `anthropic_api_key` is empty in the body, the existing
+    stored key is preserved (lets admins update other fields without re-pasting the secret)."""
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0, "llm_config": 1})
+    if inst is None:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    provider = (body.provider or "").lower()
+    if provider not in ("emergent", "anthropic", "ollama"):
+        raise HTTPException(status_code=400, detail="provider must be one of: emergent, anthropic, ollama")
+    existing = inst.get("llm_config") or {}
+    model = (body.model or "").strip() or None
+    if provider == "anthropic" and model and model not in ALLOWED_ANTHROPIC_MODELS:
+        raise HTTPException(status_code=400, detail=f"Anthropic model must be one of: {list(ALLOWED_ANTHROPIC_MODELS.keys())}")
+    new_cfg = {
+        "provider": provider,
+        "model": model,
+        # Preserve existing key when caller omits it (so admins can update model without re-pasting the secret)
+        "anthropic_api_key": (body.anthropic_api_key.strip() if body.anthropic_api_key else None) or existing.get("anthropic_api_key"),
+        "ollama_base_url": (body.ollama_base_url or "").strip() or None,
+    }
+    await db.bot_instances.update_one(
+        {"id": instance_id},
+        {"$set": {"llm_config": new_cfg, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    # Clear any cached LLM sessions for this instance — provider change invalidates them
+    for k in list(llm_sessions.keys()):
+        if f"_{instance_id}_" in k:
+            llm_sessions.pop(k, None)
+    for k in list(llm_history.keys()):
+        if f"_{instance_id}_" in k:
+            llm_history.pop(k, None)
+    logger.info(f"[LLM] instance={instance_id} provider={provider} model={model}")
+    return {"success": True}
+
+
+@api_router.post("/admin/instances/{instance_id}/llm-config/test")
+async def test_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
+    """Send a one-shot 'ping' through the configured provider to verify credentials work."""
+    try:
+        out = await call_claude(
+            session_id=f"healthcheck_{datetime.now(timezone.utc).timestamp()}",
+            user_message="Reply with exactly the word: pong",
+            system_prompt="You are a health check responder. Reply with exactly one word: pong",
+            instance_id=instance_id,
+            platform="healthcheck",
+        )
+        return {"success": True, "response": (out or "").strip()[:200]}
+    except HTTPException as e:
+        return {"success": False, "error": str(e.detail), "status_code": e.status_code}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @api_router.post("/admin/instances/{instance_id}/assign-user")

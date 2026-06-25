@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
@@ -14,6 +14,62 @@ export default function BotSettings() {
   const [approvedCount, setApprovedCount] = useState(0);
   const [newEx, setNewEx] = useState({ label: "", user_msg: "", bot_msg: "" });
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // LLM provider per-instance configuration
+  const [llm, setLlm] = useState({
+    provider: "emergent",
+    model: "",
+    anthropic_api_key: "",
+    ollama_base_url: "",
+    anthropic_api_key_set: false,
+    anthropic_api_key_preview: "",
+    allowed_anthropic_models: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
+    default_models: { emergent: "claude-sonnet-4-5-20251101", anthropic: "claude-sonnet-4-5", ollama: "llama3.1" },
+  });
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmTesting, setLlmTesting] = useState(false);
+  const [llmTestResult, setLlmTestResult] = useState(null);
+
+  useEffect(() => {
+    if (!instanceId) return;
+    api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
+      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
+    }).catch(() => {});
+  }, [instanceId]);
+
+  const saveLlm = async () => {
+    const payload = {
+      provider: llm.provider,
+      model: llm.model || null,
+      // Send key only if the admin typed a new one; backend preserves existing on empty
+      anthropic_api_key: llm.anthropic_api_key.trim() || null,
+      ollama_base_url: llm.ollama_base_url || null,
+    };
+    setLlmSaving(true); setLlmTestResult(null);
+    try {
+      await api.put(`/admin/instances/${instanceId}/llm-config`, payload);
+      toast.success(`Provider saved: ${llm.provider}`);
+      // Reload to refresh masked key preview
+      const r = await api.get(`/admin/instances/${instanceId}/llm-config`);
+      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save LLM config");
+    } finally { setLlmSaving(false); }
+  };
+
+  const testLlm = async () => {
+    setLlmTesting(true); setLlmTestResult(null);
+    try {
+      const r = await api.post(`/admin/instances/${instanceId}/llm-config/test`);
+      setLlmTestResult(r.data);
+      if (r.data?.success) toast.success(`Ping ok → ${r.data.response?.slice(0, 60)}`);
+      else toast.error(`Ping failed: ${r.data?.error?.slice(0, 80)}`);
+    } catch (e) {
+      const err = e.response?.data?.detail || e.message;
+      setLlmTestResult({ success: false, error: err });
+      toast.error(`Ping failed: ${err}`);
+    } finally { setLlmTesting(false); }
+  };
 
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
@@ -89,6 +145,112 @@ export default function BotSettings() {
               placeholder="Always respond in English. Never share pricing without directing to sales..."
               data-testid="bot-instructions-input" onFocus={onFocus} onBlur={onBlur} />
             <p style={T.hint}>These rules override everything else.</p>
+          </div>
+
+          {/* ── LLM Provider — per-instance routing ── */}
+          <div data-testid="llm-provider-card" style={{ ...T.card, marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <Cpu size={14} color={colors.brand.light} />
+              <p style={{ ...T.sectionTitle, margin: 0 }}>LLM Provider</p>
+            </div>
+            <p style={T.sectionSub}>Pick where this instance&apos;s AI calls go. <strong>Emergent</strong> uses the platform&apos;s Universal Key (default). <strong>Anthropic Direct</strong> bills against your own Anthropic account. <strong>Ollama</strong> calls a self-hosted model.</p>
+
+            <label style={T.label}>Provider</label>
+            <select
+              value={llm.provider}
+              onChange={e => setLlm(p => ({ ...p, provider: e.target.value, model: "" }))}
+              data-testid="llm-provider-select"
+              style={{ ...T.input, cursor: "pointer" }}
+            >
+              <option value="emergent">Emergent Universal Key (default)</option>
+              <option value="anthropic">Anthropic Direct (BYO key)</option>
+              <option value="ollama">Ollama (self-hosted)</option>
+            </select>
+
+            <label style={{ ...T.label, marginTop: "14px" }}>Model</label>
+            {llm.provider === "anthropic" ? (
+              <select
+                value={llm.model || ""}
+                onChange={e => setLlm(p => ({ ...p, model: e.target.value }))}
+                data-testid="llm-model-select"
+                style={{ ...T.input, cursor: "pointer" }}
+              >
+                <option value="">{`Default (${llm.default_models?.anthropic})`}</option>
+                {(llm.allowed_anthropic_models || []).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={llm.model || ""}
+                onChange={e => setLlm(p => ({ ...p, model: e.target.value }))}
+                placeholder={llm.provider === "ollama" ? "e.g. llama3.1, mistral" : `Default: ${llm.default_models?.emergent}`}
+                data-testid="llm-model-input"
+                onFocus={onFocus} onBlur={onBlur}
+                style={T.input}
+              />
+            )}
+            <p style={T.hint}>
+              {llm.provider === "anthropic" && "Allowed: Haiku 4.5 (cheapest), Sonnet 4.5 (balanced), Opus 4.5 (best quality)."}
+              {llm.provider === "emergent" && "Anthropic model name. Leave blank to use Opus → Sonnet fallback."}
+              {llm.provider === "ollama" && "Any model installed on your Ollama server."}
+            </p>
+
+            {llm.provider === "anthropic" && (
+              <>
+                <label style={{ ...T.label, marginTop: "14px" }}>Anthropic API Key</label>
+                <input
+                  type="password"
+                  value={llm.anthropic_api_key}
+                  onChange={e => setLlm(p => ({ ...p, anthropic_api_key: e.target.value }))}
+                  placeholder={llm.anthropic_api_key_set ? `Current: ${llm.anthropic_api_key_preview} — leave blank to keep` : "sk-ant-…"}
+                  autoComplete="new-password"
+                  data-testid="llm-anthropic-key-input"
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={T.input}
+                />
+                <p style={T.hint}>
+                  Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" style={{ color: colors.brand.light }}>console.anthropic.com</a>. Leave blank to keep the existing saved key.
+                </p>
+              </>
+            )}
+
+            {llm.provider === "ollama" && (
+              <>
+                <label style={{ ...T.label, marginTop: "14px" }}>Ollama Base URL</label>
+                <input
+                  value={llm.ollama_base_url}
+                  onChange={e => setLlm(p => ({ ...p, ollama_base_url: e.target.value }))}
+                  placeholder="http://localhost:11434"
+                  data-testid="llm-ollama-url-input"
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={T.input}
+                />
+                <p style={T.hint}>Where your Ollama server is reachable from the BridgeBot backend. Leave blank to fall back to <code>OLLAMA_BASE_URL</code> env (default localhost:11434).</p>
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "14px", alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={saveLlm} disabled={llmSaving} data-testid="llm-save-btn"
+                style={{ ...T.btnPrimary, opacity: llmSaving ? 0.6 : 1 }}>
+                <Save size={13} /> {llmSaving ? "Saving…" : "Save Provider"}
+              </button>
+              <button onClick={testLlm} disabled={llmTesting} data-testid="llm-test-btn"
+                style={{ ...T.btnSecondary, opacity: llmTesting ? 0.6 : 1 }}>
+                <Zap size={13} /> {llmTesting ? "Pinging…" : "Test Connection"}
+              </button>
+              {llmTestResult && (
+                <span data-testid="llm-test-result" style={{
+                  fontFamily: fonts.mono, fontSize: "11px",
+                  color: llmTestResult.success ? "#22c55e" : colors.brand.error,
+                  backgroundColor: llmTestResult.success ? "rgba(34,197,94,0.08)" : "rgba(244,63,94,0.08)",
+                  padding: "5px 9px", borderRadius: "6px",
+                  border: `1px solid ${llmTestResult.success ? "rgba(34,197,94,0.3)" : "rgba(244,63,94,0.3)"}`,
+                }}>
+                  {llmTestResult.success ? `✓ ${(llmTestResult.response || "").slice(0, 60)}` : `✗ ${(llmTestResult.error || "").slice(0, 60)}`}
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: "12px" }}>
