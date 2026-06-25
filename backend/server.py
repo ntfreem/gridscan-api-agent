@@ -487,37 +487,30 @@ DEFAULT_ACK_REPLIES = [
 ]
 
 
-async def build_scripted_response(
-    instance_id: str,
-    channel_id: str,
-    user_id: str,
+async def _decide_scripted_reply(
     scripted_cfg: dict,
+    current_count: int,
+    used_replies: List[str],
+    user_text: str,
     session_id: str,
-    user_text: str = "",
-) -> str:
-    """Scripted Mode v5 — Fixed Reply 1 + Reply 2 start, then no-repeat AI router.
+    instance_id: str,
+) -> dict:
+    """Pure Scripted Mode v5 decision logic — NO database I/O.
 
-    AI MODE (rephrase_mode in {ai, hybrid}):
-      msg 1 → Reply 1 (primary_message), verbatim
-      msg 2 → Reply 2 (update_message), verbatim — only if it's set
-      msg 3+ → AI router picks from pools (excluding anything already sent):
-        • intent='ack'         → pool = acknowledgment_replies (allowed to repeat once exhausted)
-        • intent='speculation' → silent (count NOT incremented)
-        • other intents        → pool = variants minus used_replies
-        • no match (idx=0)     → fallback_message (once per conversation, also tracked)
-      Bot replies are capped at `max_attempts` per cooldown window (default 10).
-      After `reset_hours` of user idle time, count + used_replies reset.
+    Returns a dict:
+      {
+        "reply": str,                 # the chosen response (empty string = silent)
+        "pool_name": str,             # primary | update | variant | ack | fallback | silent
+        "intent": str | None,         # classified intent (None if not classified)
+        "pool_considered": List[str], # the candidate list the router picked from (empty for fixed-verbatim msg1/msg2)
+        "skip_reason": str | None,    # set when reply is empty: max_attempts | speculation | exhausted | no_primary | manual_silent
+      }
 
-    MANUAL MODE (no AI cost):
-      • msg 1 → primary_message
-      • msg 2 → update_message (if set)
-      • msg 3+ → silent until cooldown resets
-
-    AI never generates text — it only classifies intent and picks an index from admin-defined pools.
+    Used by both the live `build_scripted_response` and the `/discord/scripted-mode/sandbox` endpoint.
     """
     primary = (scripted_cfg.get("primary_message") or "").strip()
     if not primary:
-        return ""
+        return {"reply": "", "pool_name": "silent", "intent": None, "pool_considered": [], "skip_reason": "no_primary"}
     update_msg = (scripted_cfg.get("update_message") or "").strip()
     variants = [v.strip() for v in (scripted_cfg.get("variants") or []) if isinstance(v, str) and v.strip()]
     ack_replies_raw = scripted_cfg.get("acknowledgment_replies")
@@ -526,42 +519,17 @@ async def build_scripted_response(
     ack_replies = [a.strip() for a in ack_replies_raw if isinstance(a, str) and a.strip()]
     fallback = (scripted_cfg.get("fallback_message") or "").strip()
     max_attempts = int(scripted_cfg.get("max_attempts") or 10)
-    reset_hours = int(scripted_cfg.get("reset_hours") or 24)
     mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()
     classify_on = bool(scripted_cfg.get("classify_intent"))
     ai_router_on = mode in ("ai", "hybrid")
 
-    # ── Early cap check (BEFORE any LLM call) — saves a wasted classify on capped users ──
-    key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
-    now = datetime.now(timezone.utc)
-    existing = await db.scripted_counters.find_one(key) or {}
-    # Apply idle reset first so users coming back after the cooldown aren't permanently capped
-    last_iso = existing.get("last_at")
-    if last_iso:
-        try:
-            last_dt = datetime.fromisoformat(last_iso)
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
-                await db.scripted_counters.update_one(
-                    key,
-                    {"$set": {"count": 0, "used_replies": []}},
-                )
-                existing = {**existing, "count": 0, "used_replies": []}
-        except Exception:
-            pass
-    current_count = int(existing.get("count") or 0)
+    # Hard cap — silent without firing the LLM
     if current_count >= max_attempts:
-        logger.info(f"[SCRIPTED] silent — max_attempts ({max_attempts}) reached for user={user_id[:8]}")
-        return ""
-    used_replies = existing.get("used_replies") or []
-    if not isinstance(used_replies, list):
-        used_replies = []
+        return {"reply": "", "pool_name": "silent", "intent": None, "pool_considered": [], "skip_reason": "max_attempts"}
 
-    # ── Intent classification (only needed for AI router at msg3+ or speculation gate) ──
+    # Intent classification (only when needed)
     intent = None
     needs_intent = (
-        # AI router will fire (count>=2 in AI mode, OR count==1 with update_msg blank in AI mode)
         ai_router_on and (current_count >= 2 or (current_count == 1 and not update_msg))
     ) or classify_on
     if needs_intent and user_text:
@@ -570,73 +538,106 @@ async def build_scripted_response(
         except Exception as _e:
             logger.warning(f"[SCRIPTED] intent classify exception, treating as 'other': {_e}")
             intent = "other"
-        logger.info(f"[SCRIPTED] intent={intent} count={current_count} user_text={user_text[:80]!r}")
         if intent == "speculation":
-            logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
-            try:
-                await db.scripted_skips.insert_one({
-                    "instance_id": instance_id,
-                    "channel_id": channel_id,
-                    "user_id": user_id,
-                    "reason": "speculation",
-                    "preview": user_text[:200],
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
-            except Exception:
-                pass
-            return ""  # speculation → silent, no counter bump
+            return {"reply": "", "pool_name": "silent", "intent": intent, "pool_considered": [], "skip_reason": "speculation"}
 
-    # ── Decide the reply ──
-    response = ""
-    pool_used = None  # "primary" | "update" | "variant" | "ack" | "fallback"
-
-    # Reply 1 and Reply 2 ALWAYS fire first, regardless of mode (verbatim, no AI selection).
+    # Fixed verbatim Reply 1 and Reply 2 (never AI for these)
     if current_count == 0:
-        response = primary
-        pool_used = "primary"
-    elif current_count == 1 and update_msg:
-        response = update_msg
-        pool_used = "update"
-    elif ai_router_on:
-        # ── Msg 3+ (or msg 2 if update_msg is blank) — AI router picks from variants / acks ──
-        if intent == "ack" and ack_replies:
-            # Acks can repeat once exhausted — they're short conversational fillers
-            unused = [a for a in ack_replies if a not in used_replies] or ack_replies
-            idx = await _ai_pick_variant(user_text, unused, session_id, instance_id)
-            response = unused[idx - 1] if idx > 0 else unused[0]
-            pool_used = "ack"
-        else:
-            # Question / update / other → pick from variants pool (excluding already-sent lines)
-            unused_variants = [v for v in variants if v not in used_replies]
-            if unused_variants:
-                idx = await _ai_pick_variant(user_text, unused_variants, session_id, instance_id)
-                if idx > 0:
-                    response = unused_variants[idx - 1]
-                    pool_used = "variant"
-            # No match → fallback (only once per conversation)
-            if not response:
-                if fallback and fallback not in used_replies:
-                    response = fallback
-                    pool_used = "fallback"
-                else:
-                    return ""  # exhausted, stay silent until cooldown
-    else:
-        # Manual mode past msg2 → silent (no AI cost, no fallback)
+        return {"reply": primary, "pool_name": "primary", "intent": intent, "pool_considered": [primary], "skip_reason": None}
+    if current_count == 1 and update_msg:
+        return {"reply": update_msg, "pool_name": "update", "intent": intent, "pool_considered": [update_msg], "skip_reason": None}
+
+    # Msg 3+ (or msg 2 if update_msg is blank) — AI router OR manual-mode silence
+    if not ai_router_on:
+        return {"reply": "", "pool_name": "silent", "intent": intent, "pool_considered": [], "skip_reason": "manual_silent"}
+
+    # Acknowledgment → pick from ack pool (cycles once exhausted)
+    if intent == "ack" and ack_replies:
+        unused = [a for a in ack_replies if a not in used_replies] or ack_replies
+        idx = await _ai_pick_variant(user_text, unused, session_id, instance_id)
+        reply = unused[idx - 1] if idx > 0 else unused[0]
+        return {"reply": reply, "pool_name": "ack", "intent": intent, "pool_considered": unused, "skip_reason": None}
+
+    # Question / update / other → variants pool (filtered)
+    unused_variants = [v for v in variants if v not in used_replies]
+    if unused_variants:
+        idx = await _ai_pick_variant(user_text, unused_variants, session_id, instance_id)
+        if idx > 0:
+            return {"reply": unused_variants[idx - 1], "pool_name": "variant", "intent": intent, "pool_considered": unused_variants, "skip_reason": None}
+
+    # Nothing fits — fallback (once per conversation)
+    if fallback and fallback not in used_replies:
+        return {"reply": fallback, "pool_name": "fallback", "intent": intent, "pool_considered": [fallback], "skip_reason": None}
+
+    # Pool exhausted, stay silent until cooldown
+    return {"reply": "", "pool_name": "silent", "intent": intent, "pool_considered": unused_variants, "skip_reason": "exhausted"}
+
+
+async def build_scripted_response(
+    instance_id: str,
+    channel_id: str,
+    user_id: str,
+    scripted_cfg: dict,
+    session_id: str,
+    user_text: str = "",
+) -> str:
+    """Scripted Mode v5 — DB-backed wrapper around _decide_scripted_reply.
+    Handles idle reset, persistence, and speculation skip logging."""
+    reset_hours = int(scripted_cfg.get("reset_hours") or 24)
+    primary_present = bool((scripted_cfg.get("primary_message") or "").strip())
+    if not primary_present:
         return ""
 
-    if not response:
+    key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
+    now = datetime.now(timezone.utc)
+    existing = await db.scripted_counters.find_one(key) or {}
+    # Idle reset
+    last_iso = existing.get("last_at")
+    if last_iso:
+        try:
+            last_dt = datetime.fromisoformat(last_iso)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
+                await db.scripted_counters.update_one(key, {"$set": {"count": 0, "used_replies": []}})
+                existing = {**existing, "count": 0, "used_replies": []}
+        except Exception:
+            pass
+    current_count = int(existing.get("count") or 0)
+    used_replies = existing.get("used_replies") if isinstance(existing.get("used_replies"), list) else []
+
+    decision = await _decide_scripted_reply(scripted_cfg, current_count, used_replies, user_text, session_id, instance_id)
+
+    if decision["skip_reason"] == "speculation":
+        logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
+        try:
+            await db.scripted_skips.insert_one({
+                "instance_id": instance_id,
+                "channel_id": channel_id,
+                "user_id": user_id,
+                "reason": "speculation",
+                "preview": user_text[:200],
+                "timestamp": now.isoformat(),
+            })
+        except Exception:
+            pass
+    elif decision["skip_reason"] == "max_attempts":
+        logger.info(f"[SCRIPTED] silent — max_attempts reached for user={user_id[:8]}")
+    elif decision["reply"]:
+        logger.info(f"[SCRIPTED] reply pool={decision['pool_name']} intent={decision.get('intent')} count={current_count}")
+
+    if not decision["reply"]:
         return ""
 
-    # ── Persist counter + used reply (atomic) ──
+    # Persist counter + used reply (acks excluded from used_replies so they can naturally cycle)
     update_ops = {
         "$inc": {"count": 1},
         "$set": {**key, "last_at": now.isoformat()},
     }
-    # Acks are excluded from used_replies so they can naturally cycle if user keeps thanking us.
-    if pool_used != "ack":
-        update_ops["$push"] = {"used_replies": response}
+    if decision["pool_name"] != "ack":
+        update_ops["$push"] = {"used_replies": decision["reply"]}
     await db.scripted_counters.update_one(key, update_ops, upsert=True)
-    return response
+    return decision["reply"]
 
 
 async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> str:
@@ -2327,20 +2328,105 @@ async def update_discord_config(body: DiscordConfigUpdate, instance_id: str = De
 
 @api_router.get("/discord/scripted-counters/count")
 async def get_scripted_counters_count(instance_id: str = Depends(get_instance_access)):
-    """Return how many per-user counters and skips are currently held for this instance.
-    Used by Scripted Mode UI so admins can see who's currently throttled."""
-    active = await db.scripted_counters.count_documents({"instance_id": instance_id})
+    """Return how many users currently have an active Scripted Mode conversation.
+    `active_counters` filters by `last_at` within the cooldown window (uses instance's
+    configured `reset_hours`, defaulting to 24). `total_counters` is the raw row count
+    (includes stale rows that will reset on the user's next message)."""
+    cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+    scripted_cfg = cfg.get("scripted_mode") or {}
+    reset_hours = int(scripted_cfg.get("reset_hours") or 24)
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=reset_hours)).isoformat()
+    total = await db.scripted_counters.count_documents({"instance_id": instance_id})
+    active = await db.scripted_counters.count_documents({
+        "instance_id": instance_id,
+        "last_at": {"$gte": cutoff_iso},
+    })
     skips_24h = 0
     try:
-        from datetime import timedelta
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         skips_24h = await db.scripted_skips.count_documents({
             "instance_id": instance_id,
-            "timestamp": {"$gte": cutoff},
+            "timestamp": {"$gte": cutoff_24h},
         })
     except Exception:
         pass
-    return {"active_counters": active, "skips_last_24h": skips_24h}
+    return {
+        "active_counters": active,
+        "total_counters": total,
+        "stale_counters": max(0, total - active),
+        "skips_last_24h": skips_24h,
+        "reset_hours": reset_hours,
+    }
+
+
+@api_router.post("/discord/scripted-mode/sandbox")
+async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_instance_access)):
+    """Dry-run a sequence of user messages through Scripted Mode and see what the bot
+    would reply at each step. Does NOT touch `scripted_counters` — purely simulated.
+
+    Body:
+      {
+        "messages": ["is the bridge down?", "any update?", "thanks!"],
+        "scripted_config": {...}   # optional — overrides saved config for testing unsaved edits
+      }
+
+    Returns:
+      {
+        "turns": [
+          {
+            "user_message": str,
+            "intent": str | None,
+            "pool_name": "primary"|"update"|"variant"|"ack"|"fallback"|"silent",
+            "pool_considered": [str],
+            "bot_reply": str,
+            "skip_reason": str | None,
+            "count_after": int,
+            "used_replies_after": [str]
+          },
+          ...
+        ]
+      }
+    """
+    messages = body.get("messages") or []
+    if not isinstance(messages, list) or len(messages) == 0:
+        raise HTTPException(status_code=400, detail="`messages` must be a non-empty list")
+    if len(messages) > 25:
+        raise HTTPException(status_code=400, detail="Sandbox is capped at 25 messages per run")
+
+    override = body.get("scripted_config")
+    if isinstance(override, dict):
+        scripted_cfg = override
+    else:
+        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+        scripted_cfg = cfg.get("scripted_mode") or {}
+
+    session_id = f"sandbox_{instance_id}_{datetime.now(timezone.utc).timestamp()}"
+    count = 0
+    used_replies: List[str] = []
+    turns = []
+
+    for msg in messages:
+        if not isinstance(msg, str) or not msg.strip():
+            continue
+        decision = await _decide_scripted_reply(scripted_cfg, count, list(used_replies), msg.strip(), session_id, instance_id)
+        turn = {
+            "user_message": msg.strip(),
+            "intent": decision.get("intent"),
+            "pool_name": decision.get("pool_name"),
+            "pool_considered": decision.get("pool_considered", []),
+            "bot_reply": decision.get("reply", ""),
+            "skip_reason": decision.get("skip_reason"),
+        }
+        # Advance simulated state same way build_scripted_response would
+        if decision.get("reply"):
+            count += 1
+            if decision.get("pool_name") != "ack":
+                used_replies.append(decision["reply"])
+        turn["count_after"] = count
+        turn["used_replies_after"] = list(used_replies)
+        turns.append(turn)
+
+    return {"turns": turns}
 
 
 @api_router.post("/discord/scripted-counters/reset")

@@ -362,6 +362,93 @@ class TestManualMode:
 
 
 # --------------------------------------------------------------------------- #
+# NEW: _decide_scripted_reply pure helper — pool_name & skip_reason coverage  #
+# --------------------------------------------------------------------------- #
+
+class TestDecideScriptedReplyPureHelper:
+    """Tests the new pure decision helper (no DB IO). Verifies the full pool_name
+    enum {primary|update|variant|ack|fallback|silent} and the skip_reason enum
+    {None|max_attempts|speculation|exhausted|no_primary|manual_silent}."""
+
+    def test_pool_primary_at_count0(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        d = _run(server._decide_scripted_reply(_cfg(), 0, [], "hi", "s", "i"))
+        assert d["pool_name"] == "primary"
+        assert d["skip_reason"] is None
+        assert d["reply"] == _cfg()["primary_message"]
+
+    def test_pool_update_at_count1_with_update_msg(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        d = _run(server._decide_scripted_reply(_cfg(), 1, [_cfg()["primary_message"]], "any update?", "s", "i"))
+        assert d["pool_name"] == "update"
+        assert d["skip_reason"] is None
+        assert d["reply"] == _cfg()["update_message"]
+
+    def test_pool_variant_at_count2_question(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"])
+        d = _run(server._decide_scripted_reply(cfg, 2, [cfg["primary_message"], cfg["update_message"]], "still?", "s", "i"))
+        assert d["pool_name"] == "variant"
+        assert d["reply"] == "v1"
+        assert d["skip_reason"] is None
+
+    def test_pool_ack_at_count2_with_ack_intent(self, monkeypatch):
+        _mock(monkeypatch, intent_value="ack", pick_value=1)
+        cfg = _cfg()
+        d = _run(server._decide_scripted_reply(cfg, 2, [cfg["primary_message"], cfg["update_message"]], "thanks", "s", "i"))
+        assert d["pool_name"] == "ack"
+        assert d["reply"] in cfg["acknowledgment_replies"]
+        assert d["skip_reason"] is None
+
+    def test_pool_fallback_when_variants_exhausted(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1", "v2"])
+        d = _run(server._decide_scripted_reply(cfg, 3, [cfg["primary_message"], cfg["update_message"], "v1", "v2"], "more?", "s", "i"))
+        assert d["pool_name"] == "fallback"
+        assert d["reply"] == cfg["fallback_message"]
+        assert d["skip_reason"] is None
+
+    def test_skip_max_attempts(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(max_attempts=10)
+        d = _run(server._decide_scripted_reply(cfg, 10, ["x"] * 10, "still?", "s", "i"))
+        assert d["pool_name"] == "silent"
+        assert d["skip_reason"] == "max_attempts"
+        assert d["reply"] == ""
+
+    def test_skip_speculation(self, monkeypatch):
+        _mock(monkeypatch, intent_value="speculation", pick_value=1)
+        cfg = _cfg()
+        d = _run(server._decide_scripted_reply(cfg, 2, [cfg["primary_message"], cfg["update_message"]], "team sleeping lol", "s", "i"))
+        assert d["pool_name"] == "silent"
+        assert d["skip_reason"] == "speculation"
+        assert d["intent"] == "speculation"
+
+    def test_skip_exhausted(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(variants=["v1"], fallback_message="")
+        d = _run(server._decide_scripted_reply(cfg, 3, [cfg["primary_message"], cfg["update_message"], "v1"], "???", "s", "i"))
+        assert d["pool_name"] == "silent"
+        assert d["skip_reason"] == "exhausted"
+
+    def test_skip_no_primary(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(primary_message="")
+        d = _run(server._decide_scripted_reply(cfg, 0, [], "anything", "s", "i"))
+        assert d["pool_name"] == "silent"
+        assert d["skip_reason"] == "no_primary"
+
+    def test_skip_manual_silent_at_count2(self, monkeypatch):
+        _mock(monkeypatch, intent_value="question", pick_value=1)
+        cfg = _cfg(rephrase_mode="manual")
+        d = _run(server._decide_scripted_reply(cfg, 2, [cfg["primary_message"], cfg["update_message"]], "m3", "s", "i"))
+        assert d["pool_name"] == "silent"
+        assert d["skip_reason"] == "manual_silent"
+        assert d["reply"] == ""
+
+
+
+# --------------------------------------------------------------------------- #
 # HTTP regression: config persistence + reset endpoint                        #
 # --------------------------------------------------------------------------- #
 

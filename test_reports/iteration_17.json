@@ -1,0 +1,40 @@
+{
+  "summary": "Verified BridgeBot Scripted Mode v6 changes end-to-end: (1) pure `_decide_scripted_reply` helper, (2) enhanced GET /api/discord/scripted-counters/count with active/total/stale/reset_hours fields, (3) new POST /api/discord/scripted-mode/sandbox dry-run endpoint, and (4) Reply Sandbox UI on /admin/discord. Backend: extended /app/backend/tests/test_scripted_ai_router.py with 10 new pure-helper cases (pool_name × skip_reason matrix) — 30/30 unit tests pass (20 existing v5 + 10 new). Created /app/backend/tests/test_scripted_sandbox_http.py with 13 HTTP curl-style tests covering empty-db zeros, active row, stale row (now - reset_hours - 1), reset_hours echo, sandbox validation (empty=400, >25=400), 3-message shape, NO db writes invariant (count_documents before==after==0), saved-config fallback, and state-progression invariants (turn0=primary count=1, turn1=update count=2, exhausted/silent at end, manual_silent at count=2). All 13 pass. Frontend: Login → /admin/discord → instance switch → Scripted Mode toggle ON. counters-card displays 'Active user counters: 0' when empty; after seeding a stale row, the scripted-counters-stale span renders '+ 1 idle (will auto-reset)' and Reset Counters becomes enabled. sandbox-card, sandbox-toggle, sandbox-input, sandbox-run-btn, sandbox-clear-btn all present and functional. Empty-input toast 'Enter at least one message' shown; >25-line toast 'Max 25 messages per run' shown. A live 3-message dry-run produced turn-0=primary count_after=1, turn-1=update count_after=2, turn-2=ack count_after=3 with the correct pool-considered list (4 default acks). Clear button removes rendered turns. v5 regression labels (Reply 1 — Primary, Reply 2 — Update, Max Replies per User) all present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scripted_ai_router.py",
+    "/app/backend/tests/test_scripted_sandbox_http.py",
+    "/app/test_reports/pytest/iter17_scripted_ai_router.xml",
+    "/app/test_reports/pytest/iter17_sandbox_http.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Refactor is behavior-preserving: all 20 existing v5 test cases pass unchanged against the new wrapper. `_decide_scripted_reply` is correctly side-effect-free and `build_scripted_response` cleanly layers DB IO (idle reset + persistence + speculation skip logging) on top.",
+    "Sandbox endpoint correctly mirrors `build_scripted_response`'s state-progression: only advances count + used_replies when decision.reply is non-empty, and only pushes to used_replies when pool != 'ack'. Verified via count_documents before==after==0 that NO scripted_counters write occurs.",
+    "GET /api/discord/scripted-counters/count cutoff uses `last_at >= now - reset_hours` (ISO string lexicographic compare on UTC isoformat — safe because timezones are normalized to +00:00). Total = raw count; stale = total - active. Matches spec.",
+    "Sandbox session_id is `sandbox_{instance_id}_{timestamp}` — good for avoiding collisions with real conversations and gives the Claude classify/pick prompts a fresh context per run.",
+    "Minor: server.py is now 2655 lines — consider splitting Scripted Mode (lines ~480-640 + endpoints ~2329-2440) into a `scripted_mode.py` module for maintainability. Not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scripted_ai_router.py (added TestDecideScriptedReplyPureHelper class with 10 new cases)",
+    "/app/backend/tests/test_scripted_sandbox_http.py (NEW — 13 HTTP curl-style tests for /scripted-counters/count + /scripted-mode/sandbox)"
+  ],
+  "success_rate": {
+    "backend": "100% — 30/30 unit (20 v5 + 10 new helper) + 13/13 HTTP curl tests pass",
+    "frontend": "100% — all 8 sandbox UI testids + stale-span + counter-card + v5 regression labels verified live"
+  },
+  "test_credentials": "Admin: administrator / Admin@123. Instance: Scripted Test (8292460c-de40-4a28-a711-640c0ecb8447).",
+  "seed_data_creation": "test_scripted_sandbox_http.py self-cleans via autouse `clean_counters` fixture. UI stale-span test seeded 1 row (last_at = now - 72h), screenshotted, then cleaned via inline script. Final DB state: scripted_counters cleared for the test instance.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 spec areas (pure helper, count endpoint enhancement, sandbox endpoint, Sandbox UI) are functional and tested. Mock pattern in test_scripted_ai_router.py uses `monkeypatch.setattr(server, '_classify_user_intent', ...)` and `monkeypatch.setattr(server, '_ai_pick_variant', ...)` — keep this pattern for any future Scripted Mode tests. The sandbox endpoint runs REAL Claude calls (~2 small calls per message at count>=2) — UI tests need ~10-15s wait per sandbox run. For frontend stale-row test, you must seed via a direct Mongo insert and wait one 5s poll cycle (counter card auto-refreshes via loadStatus interval). The v5 hint labels and toggle-persistence fix from iter_15/iter_16 are unchanged.",
+  "rca of the issue": "N/A — feature work verification, no bugs found."
+}

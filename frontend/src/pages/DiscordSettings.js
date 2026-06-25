@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2, Mail } from "lucide-react";
+import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2, Mail, ChevronDown } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 const LISTEN_MODES = [
@@ -387,8 +387,12 @@ export default function DiscordSettings() {
     rephrase_mode: "hybrid",
     classify_intent: true,
   });
-  const [scriptedCounters, setScriptedCounters] = useState({ active_counters: 0, skips_last_24h: 0 });
+  const [scriptedCounters, setScriptedCounters] = useState({ active_counters: 0, total_counters: 0, stale_counters: 0, skips_last_24h: 0, reset_hours: 24 });
   const [resettingCounters, setResettingCounters] = useState(false);
+  const [sandboxInput, setSandboxInput] = useState("is the bridge down?\nany update?\nthanks!");
+  const [sandboxTurns, setSandboxTurns] = useState([]);
+  const [sandboxRunning, setSandboxRunning] = useState(false);
+  const [sandboxOpen, setSandboxOpen] = useState(false);
   const [handoffChannels, setHandoffChannels] = useState([]);
   const [resumingHandoff, setResumingHandoff] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -452,7 +456,7 @@ export default function DiscordSettings() {
     // Always poll scripted counters — the backend returns 0/0 cheaply when Scripted Mode is off.
     // (Previously gated on `scripted.enabled`, which caused the toggle to revert: deps changed
     //  → useEffect re-fired loadConfig() → server state overwrote the unsaved toggle.)
-    api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, skips_last_24h: 0 })).catch(() => {});
+    api.get(`/discord/scripted-counters/count`).then(r => setScriptedCounters(r.data || { active_counters: 0, total_counters: 0, stale_counters: 0, skips_last_24h: 0, reset_hours: 24 })).catch(() => {});
   }, [instanceId]);
 
   const handleResetScriptedCounters = async () => {
@@ -461,11 +465,29 @@ export default function DiscordSettings() {
     try {
       const r = await api.post(`/discord/scripted-counters/reset`);
       toast.success(`Reset ${r.data?.cleared || 0} user counter(s). The next message will get the Primary reply.`);
-      setScriptedCounters((p) => ({ ...p, active_counters: 0 }));
+      setScriptedCounters((p) => ({ ...p, active_counters: 0, total_counters: 0, stale_counters: 0 }));
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to reset counters");
     } finally {
       setResettingCounters(false);
+    }
+  };
+
+  const runSandbox = async () => {
+    const messages = sandboxInput.split("\n").map(s => s.trim()).filter(Boolean);
+    if (messages.length === 0) { toast.error("Enter at least one message"); return; }
+    if (messages.length > 25) { toast.error("Max 25 messages per run"); return; }
+    setSandboxRunning(true);
+    try {
+      const r = await api.post(`/discord/scripted-mode/sandbox`, {
+        messages,
+        scripted_config: scripted, // use the UNSAVED form values
+      });
+      setSandboxTurns(r.data?.turns || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Sandbox run failed");
+    } finally {
+      setSandboxRunning(false);
     }
   };
 
@@ -1136,16 +1158,23 @@ export default function DiscordSettings() {
                       <span data-testid="scripted-counters-count" style={{ fontFamily: fonts.mono, color: colors.brand.light, marginLeft: "4px" }}>
                         {scriptedCounters.active_counters}
                       </span>
+                      {scriptedCounters.stale_counters > 0 && (
+                        <span data-testid="scripted-counters-stale" style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, marginLeft: "8px", fontWeight: "400" }}>
+                          + {scriptedCounters.stale_counters} idle (will auto-reset)
+                        </span>
+                      )}
                     </p>
                     <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
                       {scriptedCounters.active_counters > 0
-                        ? `${scriptedCounters.active_counters} user(s) are currently mid-sequence. Reset to send everyone the Primary Message again on their next ask — without waiting ${scripted.reset_hours}h.`
-                        : `No active counters. The next message from any user will receive the Primary reply.`}
+                        ? `${scriptedCounters.active_counters} user(s) mid-conversation. Reset to send everyone the Primary reply again — without waiting ${scriptedCounters.reset_hours || scripted.reset_hours}h.`
+                        : scriptedCounters.stale_counters > 0
+                          ? `No active conversations. ${scriptedCounters.stale_counters} idle row(s) will auto-clear on each user's next message — or hit Reset to clear them now.`
+                          : `No active counters. The next message from any user will receive the Primary reply.`}
                     </p>
                   </div>
                   <button
                     onClick={handleResetScriptedCounters}
-                    disabled={resettingCounters || scriptedCounters.active_counters === 0}
+                    disabled={resettingCounters || (scriptedCounters.active_counters === 0 && scriptedCounters.stale_counters === 0)}
                     data-testid="scripted-reset-counters-btn"
                     style={{
                       flexShrink: 0,
@@ -1155,14 +1184,152 @@ export default function DiscordSettings() {
                       border: `1px solid rgba(96,165,250,0.3)`,
                       borderRadius: "8px",
                       fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                      cursor: (resettingCounters || scriptedCounters.active_counters === 0) ? "not-allowed" : "pointer",
-                      opacity: (resettingCounters || scriptedCounters.active_counters === 0) ? 0.5 : 1,
+                      cursor: (resettingCounters || (scriptedCounters.active_counters === 0 && scriptedCounters.stale_counters === 0)) ? "not-allowed" : "pointer",
+                      opacity: (resettingCounters || (scriptedCounters.active_counters === 0 && scriptedCounters.stale_counters === 0)) ? 0.5 : 1,
                       display: "flex", alignItems: "center", gap: "6px",
                       transition: "all 0.2s",
                     }}
                   >
                     <RefreshCw size={12} /> {resettingCounters ? "Resetting…" : "Reset Counters"}
                   </button>
+                </div>
+
+                {/* ── Reply Sandbox — dry-run a conversation through the AI router ── */}
+                <div data-testid="sandbox-card" style={{ marginTop: "16px", border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <button
+                    onClick={() => setSandboxOpen(o => !o)}
+                    data-testid="sandbox-toggle"
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: "10px",
+                      padding: "12px 14px", background: "none", border: "none", cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <Zap size={14} color={colors.brand.light} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                        Reply Sandbox
+                      </p>
+                      <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "2px 0 0", lineHeight: "1.4" }}>
+                        Dry-run a sequence of user messages through the router — see intent, pool, picked reply at each step. Uses your current form values (no save needed).
+                      </p>
+                    </div>
+                    <ChevronDown size={16} color={colors.text.muted} style={{ transform: sandboxOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                  </button>
+
+                  {sandboxOpen && (
+                    <div style={{ padding: "0 14px 14px" }}>
+                      <label style={{ ...T.label, fontSize: "11px" }}>User messages (one per line, max 25)</label>
+                      <textarea
+                        value={sandboxInput}
+                        onChange={e => setSandboxInput(e.target.value)}
+                        data-testid="sandbox-input"
+                        rows={5}
+                        placeholder={"is the bridge down?\nany update?\nthanks!"}
+                        onFocus={onFocus} onBlur={onBlur}
+                        style={{ ...T.input, resize: "vertical", fontFamily: fonts.mono, fontSize: "12px", padding: "10px 12px" }}
+                      />
+                      <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+                        <button
+                          onClick={runSandbox}
+                          disabled={sandboxRunning}
+                          data-testid="sandbox-run-btn"
+                          style={{
+                            padding: "8px 14px",
+                            backgroundColor: colors.brand.warning,
+                            color: "#1a1a1a",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                            cursor: sandboxRunning ? "not-allowed" : "pointer",
+                            opacity: sandboxRunning ? 0.6 : 1,
+                            display: "flex", alignItems: "center", gap: "6px",
+                          }}
+                        >
+                          <Zap size={12} /> {sandboxRunning ? "Running…" : "Run Sandbox"}
+                        </button>
+                        {sandboxTurns.length > 0 && (
+                          <button
+                            onClick={() => setSandboxTurns([])}
+                            data-testid="sandbox-clear-btn"
+                            style={{ padding: "8px 12px", background: "none", border: `1px solid ${colors.border.default}`, borderRadius: "8px", color: colors.text.secondary, cursor: "pointer", fontFamily: fonts.body, fontSize: "12px" }}
+                          >
+                            Clear results
+                          </button>
+                        )}
+                        <p style={{ fontSize: "10px", color: colors.text.muted, margin: 0, marginLeft: "auto", fontFamily: fonts.body }}>
+                          Each message uses ~2 small Claude calls — costs apply.
+                        </p>
+                      </div>
+
+                      {sandboxTurns.length > 0 && (
+                        <div data-testid="sandbox-results" style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {sandboxTurns.map((turn, i) => {
+                            const poolColors = {
+                              primary: { bg: "rgba(96,165,250,0.08)", border: "rgba(96,165,250,0.3)", fg: colors.brand.light },
+                              update: { bg: "rgba(96,165,250,0.08)", border: "rgba(96,165,250,0.3)", fg: colors.brand.light },
+                              variant: { bg: "rgba(168,85,247,0.08)", border: "rgba(168,85,247,0.3)", fg: "#a855f7" },
+                              ack: { bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.3)", fg: "#22c55e" },
+                              fallback: { bg: "rgba(251,191,36,0.08)", border: "rgba(251,191,36,0.3)", fg: colors.brand.warning },
+                              silent: { bg: "rgba(148,163,184,0.06)", border: "rgba(148,163,184,0.2)", fg: colors.text.muted },
+                            };
+                            const c = poolColors[turn.pool_name] || poolColors.silent;
+                            return (
+                              <div
+                                key={i}
+                                data-testid={`sandbox-turn-${i}`}
+                                style={{
+                                  border: `1px solid ${c.border}`,
+                                  borderRadius: "8px",
+                                  padding: "10px 12px",
+                                  backgroundColor: c.bg,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+                                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, fontWeight: "600" }}>#{i + 1}</span>
+                                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", padding: "2px 7px", borderRadius: "5px", backgroundColor: c.fg, color: "#0a0a0a", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    {turn.pool_name}
+                                  </span>
+                                  {turn.intent && (
+                                    <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.secondary, border: `1px solid ${colors.border.default}`, padding: "1px 6px", borderRadius: "5px" }}>
+                                      intent: {turn.intent}
+                                    </span>
+                                  )}
+                                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, marginLeft: "auto" }}>
+                                    count after: {turn.count_after}
+                                  </span>
+                                </div>
+                                <p style={{ margin: "0 0 6px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.primary }}>
+                                  <span style={{ color: colors.text.muted, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "6px" }}>User:</span>
+                                  {turn.user_message}
+                                </p>
+                                {turn.bot_reply ? (
+                                  <p data-testid={`sandbox-turn-${i}-reply`} style={{ margin: 0, fontFamily: fonts.body, fontSize: "12px", color: c.fg, fontWeight: "500" }}>
+                                    <span style={{ color: colors.text.muted, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "6px", fontWeight: "600" }}>Bot:</span>
+                                    {turn.bot_reply}
+                                  </p>
+                                ) : (
+                                  <p data-testid={`sandbox-turn-${i}-silent`} style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", fontStyle: "italic", color: colors.text.muted }}>
+                                    Silent — {turn.skip_reason || "no reply"}
+                                  </p>
+                                )}
+                                {turn.pool_considered && turn.pool_considered.length > 0 && turn.pool_name !== "primary" && turn.pool_name !== "update" && (
+                                  <details style={{ marginTop: "6px" }}>
+                                    <summary style={{ fontSize: "10px", color: colors.text.muted, cursor: "pointer", fontFamily: fonts.body }}>
+                                      Pool considered ({turn.pool_considered.length})
+                                    </summary>
+                                    <ul style={{ margin: "4px 0 0", padding: "0 0 0 18px", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.secondary }}>
+                                      {turn.pool_considered.map((p, j) => <li key={j}>{p}</li>)}
+                                    </ul>
+                                  </details>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginTop: "16px", padding: "10px 12px", backgroundColor: "rgba(251,191,36,0.06)", border: `1px solid rgba(251,191,36,0.18)`, borderRadius: "8px" }}>
