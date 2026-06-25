@@ -382,7 +382,7 @@ export default function DiscordSettings() {
     variants: [],
     acknowledgment_replies: [],
     fallback_message: "",
-    max_attempts: 2,
+    max_attempts: 10,
     reset_hours: 24,
     rephrase_mode: "hybrid",
     classify_intent: true,
@@ -438,7 +438,7 @@ export default function DiscordSettings() {
           ? sc.acknowledgment_replies
           : DEFAULT_ACKS,
         fallback_message: sc.fallback_message || "",
-        max_attempts: sc.max_attempts || 2,
+        max_attempts: sc.max_attempts || 10,
         reset_hours: sc.reset_hours || 24,
         rephrase_mode: sc.rephrase_mode || "hybrid",
         classify_intent: sc.classify_intent !== false,
@@ -903,8 +903,8 @@ export default function DiscordSettings() {
 
             {scripted.enabled && (
               <div style={{ marginTop: "8px" }}>
-                {/* Primary message */}
-                <label style={T.label}>Primary Message <span style={{ color: colors.brand.warning }}>*</span> <span style={{ color: colors.text.muted, fontWeight: "400" }}>· 1st reply</span></label>
+                {/* Reply 1 — Primary */}
+                <label style={T.label}>Reply 1 — Primary <span style={{ color: colors.brand.warning }}>*</span> <span style={{ color: colors.text.muted, fontWeight: "400" }}>· typically the incident announcement</span></label>
                 <textarea
                   value={scripted.primary_message}
                   onChange={e => setScripted(p => ({ ...p, primary_message: e.target.value }))}
@@ -914,9 +914,9 @@ export default function DiscordSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
-                <p style={T.hint}>Sent the FIRST time a user asks during an incident window. Verbatim.</p>
+                <p style={T.hint}>In <strong>AI/Hybrid</strong> mode this joins the unified pool — the router picks it whenever it best matches the user's question. In <strong>Manual</strong> mode it's the first reply, verbatim.</p>
 
-                <label style={{ ...T.label, marginTop: "16px" }}>Update Message <span style={{ color: colors.text.muted, fontWeight: "400" }}>· 2nd reply</span></label>
+                <label style={{ ...T.label, marginTop: "16px" }}>Reply 2 — Update <span style={{ color: colors.text.muted, fontWeight: "400" }}>· typically a follow-up status line</span></label>
                 <textarea
                   value={scripted.update_message}
                   onChange={e => setScripted(p => ({ ...p, update_message: e.target.value }))}
@@ -926,7 +926,7 @@ export default function DiscordSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
                 />
-                <p style={T.hint}>Sent the SECOND time the same user asks. After this, the AI Conversation Router picks from your variants & acknowledgments (when Rephrase Mode includes AI) — otherwise silent until cooldown.</p>
+                <p style={T.hint}>Also joins the AI router pool. The router never repeats a line in the same conversation, so once Reply 1 + Reply 2 are used, it moves on to your Variants.</p>
 
                 <div style={{
                   marginTop: "14px",
@@ -1046,7 +1046,7 @@ export default function DiscordSettings() {
                       </span>
                     </div>
                     <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "0 0 12px", lineHeight: "1.5" }}>
-                      Short replies for when a user just says &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. After the Primary and Update messages, AI classifies each new message and picks the best line from your <strong>Acknowledgment Replies</strong> (for thanks/ok) or <strong>Manual Variants</strong> (for new questions). AI never writes new text — only selects from these lists. If nothing fits, the Fallback Message is sent.
+                      Short replies for &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. The AI router uses these whenever it detects a user is just acknowledging — never to answer a question. If a user keeps thanking you after every reply, the router cycles through these and only repeats once the list is exhausted.
                     </p>
                     {scripted.acknowledgment_replies.map((v, i) => (
                       <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
@@ -1081,14 +1081,14 @@ export default function DiscordSettings() {
                 {/* Max attempts + Reset hours */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "16px" }}>
                   <div>
-                    <label style={T.label}>Max Attempts per User</label>
+                    <label style={T.label}>Max Replies per User</label>
                     <input type="number" min="1" max="100"
                       value={scripted.max_attempts}
                       onChange={e => setScripted(p => ({ ...p, max_attempts: parseInt(e.target.value) || 1 }))}
                       data-testid="scripted-max-attempts"
                       onFocus={onFocus} onBlur={onBlur} style={T.input}
                     />
-                    <p style={T.hint}>After this many replies to a user, send fallback.</p>
+                    <p style={T.hint}>Hard cap on bot replies per user per cooldown window (default 10). After this, silent until the counter resets.</p>
                   </div>
                   <div>
                     <label style={T.label}>Counter Reset (hours)</label>
@@ -1098,7 +1098,7 @@ export default function DiscordSettings() {
                       data-testid="scripted-reset-hours"
                       onFocus={onFocus} onBlur={onBlur} style={T.input}
                     />
-                    <p style={T.hint}>Counter resets per user after this many idle hours.</p>
+                    <p style={T.hint}>Timer starts from the last interaction — once the user goes idle this long, the counter and used-reply tracking reset (fresh conversation).</p>
                   </div>
                 </div>
 

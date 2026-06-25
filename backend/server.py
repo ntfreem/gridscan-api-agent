@@ -495,21 +495,22 @@ async def build_scripted_response(
     session_id: str,
     user_text: str = "",
 ) -> str:
-    """Scripted Mode v2 reply builder.
+    """Scripted Mode v4 — Unified AI-Router pool.
 
-    Flow:
-      1. If `classify_intent` is on, ask Claude to classify the message.
-         - speculation / commentary → silent (return ""), counter NOT incremented
-         - question / update / ack / other → proceed
-      2. Per-user-per-channel counter (resets after `reset_hours` of idle):
-         - count == 0 → reply with `primary_message` (verbatim)
-         - count == 1 → reply with `update_message` if set (else rephrased primary)
-         - count >= 2 → **AI Router** (only when rephrase_mode in {ai, hybrid}):
-             * intent=ack → pick best acknowledgment_replies via AI
-             * intent=question/update/other → pick best `variants` via AI
-             * AI returns 0 / no match → `fallback_message` (else silent)
-         - count >= 2 in manual mode → silent
-      3. Counter atomically incremented after the reply is chosen.
+    AI MODE (rephrase_mode in {ai, hybrid}):
+      Every user message → AI classifies intent, then picks the best line from a pool
+      that already excludes anything sent earlier in this conversation:
+        • intent='ack'         → pool = acknowledgment_replies (allowed to repeat once exhausted)
+        • intent='speculation' → silent (count not incremented)
+        • other intents        → pool = [primary, update, *variants] minus used_replies
+        • no match (idx=0)     → fallback_message (else silent)
+      Bot replies are capped at `max_attempts` per cooldown window (default 10).
+      After `reset_hours` of user idle time, count + used_replies reset.
+
+    MANUAL MODE (no AI cost):
+      • msg 1 → primary_message
+      • msg 2 → update_message (if set)
+      • msg 3+ → silent until cooldown resets
 
     AI never generates text — it only classifies intent and picks an index from admin-defined pools.
     """
@@ -523,14 +524,13 @@ async def build_scripted_response(
         ack_replies_raw = DEFAULT_ACK_REPLIES
     ack_replies = [a.strip() for a in ack_replies_raw if isinstance(a, str) and a.strip()]
     fallback = (scripted_cfg.get("fallback_message") or "").strip()
-    max_attempts = int(scripted_cfg.get("max_attempts") or 2)
+    max_attempts = int(scripted_cfg.get("max_attempts") or 10)
     reset_hours = int(scripted_cfg.get("reset_hours") or 24)
     mode = (scripted_cfg.get("rephrase_mode") or "hybrid").lower()
     classify_on = bool(scripted_cfg.get("classify_intent"))
-    ai_router_on = mode in ("ai", "hybrid")  # AI router is gated on AI/hybrid rephrase modes
+    ai_router_on = mode in ("ai", "hybrid")
 
-    # Intent classification (v2 feature) — silent on speculation/commentary.
-    # We capture `intent` here so the AI router below can reuse it without a second classify call.
+    # ── Intent classification (used by both AI mode router and the speculation gate) ──
     intent = None
     if (classify_on or ai_router_on) and user_text:
         try:
@@ -539,7 +539,7 @@ async def build_scripted_response(
             logger.warning(f"[SCRIPTED] intent classify exception, treating as 'other': {_e}")
             intent = "other"
         logger.info(f"[SCRIPTED] intent={intent} user_text={user_text[:80]!r}")
-        if classify_on and intent == "speculation":
+        if intent == "speculation":
             logger.info(f"[SCRIPTED] silent — speculation/commentary detected from user={user_id[:8]}")
             try:
                 await db.scripted_skips.insert_one({
@@ -552,12 +552,17 @@ async def build_scripted_response(
                 })
             except Exception:
                 pass
-            return ""
+            return ""  # speculation → silent, no counter bump
 
-    # Per-instance / channel / user counter — reset if idle > reset_hours
+    # ── Per-user counter & used-reply tracking (reset on idle) ──
     key = {"instance_id": instance_id, "channel_id": channel_id, "user_id": user_id}
     now = datetime.now(timezone.utc)
     existing = await db.scripted_counters.find_one(key) or {}
+    used_replies = existing.get("used_replies") or []
+    if not isinstance(used_replies, list):
+        used_replies = []
+
+    # Idle reset → wipe count AND used_replies (fresh conversation)
     last_iso = existing.get("last_at")
     if last_iso:
         try:
@@ -565,79 +570,83 @@ async def build_scripted_response(
             if last_dt.tzinfo is None:
                 last_dt = last_dt.replace(tzinfo=timezone.utc)
             if (now - last_dt).total_seconds() / 3600.0 >= reset_hours:
-                await db.scripted_counters.update_one(key, {"$set": {"count": 0}})
+                await db.scripted_counters.update_one(
+                    key,
+                    {"$set": {"count": 0, "used_replies": []}},
+                )
+                used_replies = []
         except Exception:
             pass
 
-    # Atomic increment so concurrent messages can't double-reply
-    from pymongo import ReturnDocument
-    updated = await db.scripted_counters.find_one_and_update(
-        key,
-        {"$inc": {"count": 1}, "$set": {**key, "last_at": now.isoformat()}},
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
-    new_count = int((updated or {}).get("count") or 1)
-    count = new_count - 1  # 0 = first contact, 1 = second, …
+    # Hard cap (post-idle-reset, pre-increment): if count already at the cap, stay silent.
+    current_count = int(existing.get("count") or 0)
+    # After idle reset above, current_count may be stale; re-read for accuracy.
+    refreshed = await db.scripted_counters.find_one(key) or {}
+    current_count = int(refreshed.get("count") or 0)
+    used_replies = refreshed.get("used_replies") or used_replies
+    if current_count >= max_attempts:
+        logger.info(f"[SCRIPTED] silent — max_attempts ({max_attempts}) reached for user={user_id[:8]}")
+        return ""
 
-    # V2 sequence: primary → update → AI router (or silent in manual mode)
-    if count == 0:
-        return primary
-    if count == 1 and update_msg:
-        return update_msg
-    # If user set update_message blank, fall back to v1 rephrase behavior up to max_attempts
-    if not update_msg and new_count <= max_attempts:
-        response = ""
-        if mode == "manual" and variants:
-            response = variants[(count - 1) % len(variants)]
-        elif mode == "ai":
-            response = await _ai_rephrase(primary, session_id, instance_id) or primary
-        else:
-            response = await _ai_rephrase(primary, session_id, instance_id)
-            if not response and variants:
-                response = variants[(count - 1) % len(variants)]
-            if not response:
-                response = primary
-        return response
+    # ── Decide the reply ──
+    response = ""
+    pool_used = None  # tracks which list the chosen reply came from (for analytics if needed)
 
-    # ── Msg 3+ — AI Conversation Router ───────────────────────────────────────
-    # Only when rephrase_mode involves AI (ai/hybrid). In `manual` mode we stay silent
-    # so the admin keeps strict zero-LLM cost.
     if ai_router_on and user_text:
-        # Classify on demand if we didn't already (classify_intent toggle was off)
-        if intent is None:
+        if intent is None:  # classify_intent was off but ai_router still needs the intent
             try:
                 intent = await _classify_user_intent(user_text, session_id, instance_id)
             except Exception:
                 intent = "other"
             logger.info(f"[SCRIPTED-ROUTER] intent={intent} user_text={user_text[:80]!r}")
 
-        # Speculation/commentary in router mode → silent (don't waste a fallback message)
-        if intent == "speculation":
-            return ""
-
-        # Acknowledgment ("thanks", "ok", "got it") → pick from ack pool
         if intent == "ack" and ack_replies:
-            idx = await _ai_pick_variant(user_text, ack_replies, session_id, instance_id)
-            if idx > 0:
-                return ack_replies[idx - 1]
-            # AI couldn't pick → first ack as safe default (these are short and benign)
-            return ack_replies[0]
+            # Acks can repeat once exhausted — they're short conversational fillers
+            unused = [a for a in ack_replies if a not in used_replies] or ack_replies
+            idx = await _ai_pick_variant(user_text, unused, session_id, instance_id)
+            response = unused[idx - 1] if idx > 0 else unused[0]
+            pool_used = "ack"
+        else:
+            # Build unified question pool, excluding anything already sent in this conversation
+            question_pool_full = ([primary] if primary else []) + ([update_msg] if update_msg else []) + variants
+            question_pool = [r for r in question_pool_full if r not in used_replies]
+            if question_pool:
+                idx = await _ai_pick_variant(user_text, question_pool, session_id, instance_id)
+                if idx > 0:
+                    response = question_pool[idx - 1]
+                    pool_used = "main"
+            # No suitable match → fallback (but only send fallback once per conversation)
+            if not response:
+                if fallback and fallback not in used_replies:
+                    response = fallback
+                    pool_used = "fallback"
+                else:
+                    return ""  # all options exhausted, stay silent until cooldown
+    else:
+        # ── MANUAL MODE — simple primary → update → silent ──
+        if current_count == 0:
+            response = primary
+            pool_used = "manual-primary"
+        elif current_count == 1 and update_msg:
+            response = update_msg
+            pool_used = "manual-update"
+        else:
+            return ""  # silent past msg2 in manual mode
 
-        # Question / update / other → pick from variant pool
-        if variants:
-            idx = await _ai_pick_variant(user_text, variants, session_id, instance_id)
-            if idx > 0:
-                return variants[idx - 1]
-
-        # Nothing fits → fallback (or silent if no fallback configured)
-        if fallback:
-            return fallback
+    if not response:
         return ""
 
-    # Manual mode (no AI cost) — silent past msg2 until cooldown resets.
-    # Fallback is only used inside the AI router flow above; manual mode never sends it.
-    return ""
+    # ── Persist counter + used reply (atomic) ──
+    update_ops = {
+        "$inc": {"count": 1},
+        "$set": {**key, "last_at": now.isoformat()},
+    }
+    # Track every non-ack reply so AI doesn't repeat itself within the conversation.
+    # Acks are excluded so they can naturally cycle if user keeps saying thanks.
+    if pool_used != "ack":
+        update_ops["$push"] = {"used_replies": response}
+    await db.scripted_counters.update_one(key, update_ops, upsert=True)
+    return response
 
 
 async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> str:
