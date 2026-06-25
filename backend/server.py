@@ -465,11 +465,12 @@ async def _ai_pick_variant(user_text: str, options: List[str], session_id: str, 
             instance_id=instance_id,
             platform="discord",
         )
-        token = (out or "").strip().split()[0] if out else ""
-        token = "".join(ch for ch in token if ch.isdigit())
-        if not token:
+        # Scan the entire LLM output for the first signed integer.
+        # Handles 'option 2', 'Pick: 1', '  3 ', '2.', etc. Negative values are out-of-range → 0.
+        m = re.search(r'-?\d+', out or "")
+        if not m:
             return 0
-        idx = int(token)
+        idx = int(m.group(0))
         if 1 <= idx <= len(options):
             return idx
         return 0
@@ -634,9 +635,8 @@ async def build_scripted_response(
             return fallback
         return ""
 
-    # Past max attempts / past 2nd message in manual mode — silent (or send fallback once)
-    if fallback and count == 2:
-        return fallback
+    # Manual mode (no AI cost) — silent past msg2 until cooldown resets.
+    # Fallback is only used inside the AI router flow above; manual mode never sends it.
     return ""
 
 
