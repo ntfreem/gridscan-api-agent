@@ -747,6 +747,8 @@ async def _call_anthropic(session_id: str, user_message: str, system_prompt: str
         raise HTTPException(status_code=401, detail=f"Anthropic auth failed: {e}")
     except _anthropic.RateLimitError as e:
         raise HTTPException(status_code=429, detail=f"Anthropic rate limit: {e}")
+    except _anthropic.APIError as e:
+        raise HTTPException(status_code=502, detail=f"Anthropic API error: {e}")
     text = "".join(block.text for block in resp.content if getattr(block, "type", "") == "text")
     history.append({"role": "assistant", "content": text})
     llm_history[key] = history[-40:]  # keep last 20 turns

@@ -115,6 +115,15 @@ export default function BotSettings() {
       <p style={T.overline}>Configuration</p>
       <h1 style={T.h1}>Bot Settings</h1>
 
+      {!instanceId ? (
+        <div data-testid="no-instance-empty-state" style={{ ...T.card, marginTop: "20px", textAlign: "center", padding: "40px 24px" }}>
+          <Cpu size={28} color={colors.text.muted} style={{ margin: "0 auto 12px" }} />
+          <p style={{ ...T.sectionTitle, margin: "0 0 6px" }}>Select a workspace first</p>
+          <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, maxWidth: "440px", marginLeft: "auto", marginRight: "auto" }}>
+            Use the workspace switcher in the sidebar to pick the bot instance you want to configure. Each instance has its own identity, knowledge base, and LLM provider.
+          </p>
+        </div>
+      ) : (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
         {/* LEFT */}
         <div>
@@ -383,6 +392,7 @@ export default function BotSettings() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

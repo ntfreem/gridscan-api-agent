@@ -105,6 +105,22 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+### Per-Instance LLM Provider (Emergent / Anthropic Direct / Ollama) (DONE 2026-02-XX)
+- Ported v3.0.0's BYO-Anthropic-key feature **plus** kept Emergent and added Ollama as options.
+- New per-instance `llm_config` on `bot_instances`: `{provider, model, anthropic_api_key, ollama_base_url}`.
+- Three providers:
+  - **emergent** (default): existing emergentintegrations + Universal Key path with the legacy Opus → Sonnet fallback. Behavior fully preserved for any instance without `llm_config`.
+  - **anthropic**: direct Anthropic SDK with per-instance BYO API key. Model allowlist: `claude-haiku-4-5`, `claude-sonnet-4-5`, `claude-opus-4-5`.
+  - **ollama**: HTTP POST to `{base_url}/api/chat` (default `OLLAMA_BASE_URL` env or `http://localhost:11434`). Any model installed on the Ollama server.
+- Refactor: `call_claude` is now a dispatcher; extracted `_call_emergent`, `_call_anthropic`, `_call_ollama`. Added parallel `llm_history` cache for non-Emergent providers.
+- New endpoints (admin only):
+  - `GET /api/admin/instances/{id}/llm-config` — returns provider, model, masked key preview (`sk-ant-…{last4}`), defaults, allowed models
+  - `PUT /api/admin/instances/{id}/llm-config` — saves config; empty `anthropic_api_key` preserves existing saved key; switching providers clears LLM session caches; validates provider and (for anthropic) model
+  - `POST /api/admin/instances/{id}/llm-config/test` — one-shot "pong" health check; always returns 200 with `{success: bool, response/error}` so the UI can render a status chip without exceptions
+- UI: new "LLM Provider" card on `BotSettings.js` with provider dropdown, conditional fields (free-text model for emergent/ollama, dropdown for anthropic, API key for anthropic, base URL for ollama), Save and Test Connection buttons, result chip.
+- UX polish: "Select a workspace first" empty state on Bot Settings page when no instance is selected (was rendering inert forms before).
+- Tests: `/app/backend/tests/test_llm_provider.py` (15/15 pass) + 51/51 scripted regression unchanged.
+
 ### Saved Scenarios — Regression Suite for Scripted Mode (DONE 2026-02-XX)
 - Snapshot-test your Scripted Mode copy: save a sandbox conversation as a named scenario, run it later, system compares per-turn `(pool_name, intent)` against the golden baseline.
 - First run auto-captures the golden; subsequent runs return pass / fail / captured_golden.
