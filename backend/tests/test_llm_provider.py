@@ -38,10 +38,12 @@ import server  # noqa: E402
 # ── Unit tests against the server module directly ───────────────────────────────
 
 
-def test_allowlist_has_exactly_three_models():
+def test_allowlist_has_expected_models():
     keys = set(server.ALLOWED_ANTHROPIC_MODELS.keys())
-    assert keys == {"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"}
-    assert len(server.ALLOWED_ANTHROPIC_MODELS) == 3
+    # Allowlist expanded (Jan 2026) to include sonnet-4-6 + opus-4-8 alongside originals.
+    expected = {"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5", "claude-sonnet-4-6", "claude-opus-4-8"}
+    assert expected.issubset(keys), f"Missing models from allowlist: {expected - keys}"
+    assert len(server.ALLOWED_ANTHROPIC_MODELS) >= 5
 
 
 def test_resolve_llm_config_defaults_to_emergent(event_loop):
@@ -253,7 +255,7 @@ def test_get_llm_config_defaults(instance_id, admin_headers):
     body = r.json()
     assert body["provider"] == "emergent"
     assert "default_models" in body and "emergent" in body["default_models"]
-    assert isinstance(body["allowed_anthropic_models"], list) and len(body["allowed_anthropic_models"]) == 3
+    assert isinstance(body["allowed_anthropic_models"], list) and len(body["allowed_anthropic_models"]) >= 3
 
 
 def test_put_emergent_no_model_succeeds(instance_id, admin_headers):

@@ -63,15 +63,17 @@ llm_sessions: Dict[str, LlmChat] = {}
 llm_history: Dict[str, List[dict]] = {}
 
 # Anthropic models allowed for the BYO path (allowlist for cost control).
-# Map UI short-name → API model id.
+# Map UI short-name → real API model id (verified against Emergent's model catalog).
 ALLOWED_ANTHROPIC_MODELS = {
-    "claude-haiku-4-5": "claude-haiku-4-5-20251101",
-    "claude-sonnet-4-5": "claude-sonnet-4-5-20251101",
-    "claude-opus-4-5": "claude-opus-4-5-20251101",
+    "claude-haiku-4-5":  "claude-haiku-4-5-20251001",
+    "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
+    "claude-opus-4-5":   "claude-opus-4-5-20251101",
+    "claude-sonnet-4-6": "claude-sonnet-4-6",
+    "claude-opus-4-8":   "claude-opus-4-8",
 }
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 DEFAULT_OLLAMA_MODEL = "llama3.1"
-DEFAULT_EMERGENT_MODEL = "claude-sonnet-4-5-20251101"
+DEFAULT_EMERGENT_MODEL = "claude-sonnet-4-6"
 
 # Per-instance Discord bot tracking
 # Guild-to-instance mapping for shared token routing
@@ -827,8 +829,8 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     if not api_key:
         raise HTTPException(status_code=500, detail="LLM API key not configured")
 
-    primary_model = cfg.get("model") or "claude-opus-4-5-20251101"
-    fallback_model = "claude-sonnet-4-5-20251101"
+    primary_model = cfg.get("model") or "claude-sonnet-4-6"
+    fallback_model = "claude-sonnet-4-5-20250929"
     max_retries = 2
     used_fallback = False
     last_error = None  # noqa: F841
@@ -902,13 +904,18 @@ async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
 # admin dashboard. Ollama (self-hosted) is treated as $0. For unknown models we
 # fall back to Sonnet pricing as a conservative estimate.
 LLM_PRICING = {
-    # Anthropic 4-series
+    # Anthropic 4-5 series (date suffixes verified against Emergent catalog)
     "claude-haiku-4-5":            {"in": 1.00,  "out": 5.00},
-    "claude-haiku-4-5-20251101":   {"in": 1.00,  "out": 5.00},
+    "claude-haiku-4-5-20251001":   {"in": 1.00,  "out": 5.00},
     "claude-sonnet-4-5":           {"in": 3.00,  "out": 15.00},
-    "claude-sonnet-4-5-20251101":  {"in": 3.00,  "out": 15.00},
+    "claude-sonnet-4-5-20250929":  {"in": 3.00,  "out": 15.00},
     "claude-opus-4-5":             {"in": 15.00, "out": 75.00},
     "claude-opus-4-5-20251101":    {"in": 15.00, "out": 75.00},
+    # Newer 4-6 / 4-7 / 4-8 series
+    "claude-sonnet-4-6":           {"in": 3.00,  "out": 15.00},
+    "claude-opus-4-6":             {"in": 15.00, "out": 75.00},
+    "claude-opus-4-7":             {"in": 15.00, "out": 75.00},
+    "claude-opus-4-8":             {"in": 15.00, "out": 75.00},
     # Legacy 3.5
     "claude-3-5-haiku-20241022":   {"in": 0.80,  "out": 4.00},
     "claude-3-5-sonnet-20241022":  {"in": 3.00,  "out": 15.00},
@@ -1693,6 +1700,9 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
         raise HTTPException(status_code=400, detail="provider must be one of: emergent, anthropic, ollama")
     existing = inst.get("llm_config") or {}
     model = (body.model or "").strip() or None
+    # Reject API keys accidentally pasted into the Model field (sk-, bbk_, etc.)
+    if model and re.match(r"^(sk-|bbk_)", model, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Model must be a model name (e.g. claude-sonnet-4-5), not an API key.")
     if provider == "anthropic" and model and model not in ALLOWED_ANTHROPIC_MODELS:
         raise HTTPException(status_code=400, detail=f"Anthropic model must be one of: {list(ALLOWED_ANTHROPIC_MODELS.keys())}")
     new_cfg = {

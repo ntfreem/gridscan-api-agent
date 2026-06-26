@@ -197,15 +197,22 @@ export default function BotSettings() {
                 onChange={e => setLlm(p => ({ ...p, model: e.target.value }))}
                 placeholder={llm.provider === "ollama" ? "e.g. llama3.1, mistral" : `Default: ${llm.default_models?.emergent}`}
                 data-testid="llm-model-input"
+                autoComplete="off"
+                name="dc-llm-model-name"
                 onFocus={onFocus} onBlur={onBlur}
                 style={T.input}
               />
             )}
             <p style={T.hint}>
               {llm.provider === "anthropic" && "Allowed: Haiku 4.5 (cheapest), Sonnet 4.5 (balanced), Opus 4.5 (best quality)."}
-              {llm.provider === "emergent" && "Anthropic model name. Leave blank to use Opus → Sonnet fallback."}
+              {llm.provider === "emergent" && "Model name only — Emergent supplies the key automatically. Leave blank to use Opus → Sonnet fallback."}
               {llm.provider === "ollama" && "Any model installed on your Ollama server."}
             </p>
+            {/^(sk-|bbk_)/i.test(llm.model || "") && (
+              <p data-testid="llm-model-key-warning" style={{ margin: "6px 0 0", padding: "6px 10px", fontSize: "11px", color: colors.brand.error, backgroundColor: "rgba(244,63,94,0.08)", border: `1px solid rgba(244,63,94,0.3)`, borderRadius: "6px", fontFamily: fonts.body }}>
+                That looks like an API key, not a model name. Clear this field — Emergent does not need a key here.
+              </p>
+            )}
 
             {llm.provider === "anthropic" && (
               <>

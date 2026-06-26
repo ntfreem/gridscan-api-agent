@@ -1,0 +1,936 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="42" failures="17" skipped="12" tests="105" time="85.485" timestamp="2026-06-26T11:30:23.621115+00:00" hostname="agent-env-eaaaa30a-2f40-4d08-bdd9-ba33976050ea"><testcase classname="backend.tests.test_llm_provider" name="test_allowlist_has_expected_models" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_resolve_llm_config_defaults_to_emergent" time="1.113" /><testcase classname="backend.tests.test_llm_provider" name="test_call_anthropic_raises_on_empty_key" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_call_anthropic_raises_on_invalid_model" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_estimate_tokens_empty_returns_one" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_estimate_tokens_hello_world" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_sonnet_input_only" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_sonnet_output_only" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_opus_dated_model" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_ollama_always_zero" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_unknown_model_uses_sonnet_default" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_provider_prefixed_haiku" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_cost_for_empty_model_returns_zero" time="0.051" /><testcase classname="backend.tests.test_llm_provider" name="test_dispatcher_unpacks_emergent_tuple" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_dispatcher_unpacks_anthropic_tuple" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_dispatcher_unpacks_ollama_tuple" time="0.000" /><testcase classname="backend.tests.test_llm_provider" name="test_get_llm_config_requires_auth" time="1.042" /><testcase classname="backend.tests.test_llm_provider" name="test_get_llm_config_defaults" time="0.535"><failure message="AssertionError: assert (True and 5 == 3)&#10; +  where True = isinstance(['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'], list)&#10; +  and   5 = len(['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'])">backend/tests/test_llm_provider.py:258: in test_get_llm_config_defaults
+    assert isinstance(body["allowed_anthropic_models"], list) and len(body["allowed_anthropic_models"]) == 3
+E   AssertionError: assert (True and 5 == 3)
+E    +  where True = isinstance(['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'], list)
+E    +  and   5 = len(['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'])</failure></testcase><testcase classname="backend.tests.test_llm_provider" name="test_put_emergent_no_model_succeeds" time="0.330" /><testcase classname="backend.tests.test_llm_provider" name="test_put_anthropic_with_key_and_mask_preview" time="0.534" /><testcase classname="backend.tests.test_llm_provider" name="test_put_anthropic_invalid_model_returns_400" time="0.205" /><testcase classname="backend.tests.test_llm_provider" name="test_put_unsupported_provider_returns_400" time="0.212" /><testcase classname="backend.tests.test_llm_provider" name="test_put_empty_key_preserves_existing" time="0.874" /><testcase classname="backend.tests.test_llm_provider" name="test_put_ollama_saves" time="0.536" /><testcase classname="backend.tests.test_llm_provider" name="test_test_endpoint_emergent_success" time="1.735" /><testcase classname="backend.tests.test_llm_provider" name="test_test_endpoint_anthropic_bad_key_graceful" time="0.943" /><testcase classname="backend.tests.test_llm_provider" name="test_test_endpoint_ollama_unreachable_graceful" time="60.444"><failure message="AssertionError: &lt;!DOCTYPE html&gt;&#10;  &lt;!--[if lt IE 7]&gt; &lt;html class=&quot;no-js ie6 oldie&quot; lang=&quot;en-US&quot;&gt; &lt;![endif]--&gt;&#10;  &lt;!--[if IE 7]&gt;    &lt;html class=&quot;no-js ie7 oldie&quot; lang=&quot;en-US&quot;&gt; &lt;![endif]--&gt;&#10;  &lt;!--[if IE 8]&gt;    &lt;html class=&quot;no-js ie8 oldie&quot; lang=&quot;en-US&quot;&gt; &lt;![endif]--&gt;&#10;  &lt;!--[if gt IE 8]&gt;&lt;!--&gt; &lt;html class=&quot;no-js&quot; lang=&quot;en-US&quot;&gt; &lt;!--&lt;![endif]--&gt;&#10;  &lt;head&gt;&#10;  &#10;  &lt;title&gt;preview.emergentagent.com | 502: Bad gateway&lt;/title&gt;&#10;  &lt;meta charset=&quot;UTF-8&quot; /&gt;&#10;  &lt;meta http-equiv=&quot;Content-Type&quot; content=&quot;text/html; charset=UTF-8&quot; /&gt;&#10;  &lt;meta http-equiv=&quot;X-UA-Compatible&quot; content=&quot;IE=Edge&quot; /&gt;&#10;  &lt;meta name=&quot;robots&quot; content=&quot;noindex, nofollow&quot; /&gt;&#10;  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot; /&gt;&#10;  &lt;link rel=&quot;stylesheet&quot; id=&quot;cf_styles-css&quot; href=&quot;/cdn-cgi/styles/main.css&quot; /&gt;&#10;  &lt;/head&gt;&#10;  &lt;body&gt;&#10;  &lt;div id=&quot;cf-wrapper&quot;&gt;&#10;      &lt;div id=&quot;cf-error-details&quot; class=&quot;p-0&quot;&gt;&#10;          &lt;header class=&quot;mx-auto pt-10 lg:pt-6 lg:px-8 w-240 lg:w-full mb-8&quot;&gt;&#10;              &lt;h1 class=&quot;inline-block sm:block sm:mb-2 font-light text-60 lg:text-4xl text-black-dark leading-tight mr-2&quot;&gt;&#10;                  &lt;span class=&quot;inline-block&quot;&gt;Bad gateway&lt;/span&gt;&#10;                  &lt;span class=&quot;code-label&quot;&gt;Error code 502&lt;/span&gt;&#10;              &lt;/h1&gt;&#10;              &lt;div&gt;&#10;                  Visit &lt;a href=&quot;https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;&gt;cloudflare.com&lt;/a&gt; for more information.&#10;              &lt;/div&gt;&#10;              &lt;div class=&quot;mt-3&quot;&gt;2026-06-26 11:31:34 UTC&lt;/div&gt;&#10;          &lt;/header&gt;&#10;          &lt;div class=&quot;my-8 bg-gradient-gray&quot;&gt;&#10;              &lt;div class=&quot;w-240 lg:w-full mx-auto&quot;&gt;&#10;                  &lt;div class=&quot;clearfix md:px-8&quot;&gt;&#10;                      &lt;div id=&quot;cf-browser-status&quot; class=&quot; relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center&quot;&gt;&#10;    &lt;div class=&quot;relative mb-10 md:m-0&quot;&gt;&#10;      &#10;      &lt;span class=&quot;cf-icon-browser block md:hidden h-20 bg-center bg-no-repeat&quot;&gt;&lt;/span&gt;&#10;      &lt;span class=&quot;cf-icon-ok w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4&quot;&gt;&lt;/span&gt;&#10;      &#10;    &lt;/div&gt;&#10;    &lt;span class=&quot;md:block w-full truncate&quot;&gt;You&lt;/span&gt;&#10;    &lt;h3 class=&quot;md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3&quot;&gt;&#10;    &#10;      Browser&#10;    &#10;    &lt;/h3&gt;&#10;    &#10;    &lt;span class=&quot;leading-1.3 text-2xl text-green-success&quot;&gt;Working&lt;/span&gt;&#10;    &#10;  &lt;/div&gt;&#10;                      &lt;div id=&quot;cf-cloudflare-status&quot; class=&quot; relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center&quot;&gt;&#10;    &lt;div class=&quot;relative mb-10 md:m-0&quot;&gt;&#10;      &lt;a href=&quot;https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;#38;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;&gt;&#10;      &lt;span class=&quot;cf-icon-cloud block md:hidden h-20 bg-center bg-no-repeat&quot;&gt;&lt;/span&gt;&#10;      &lt;span class=&quot;cf-icon-ok w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4&quot;&gt;&lt;/span&gt;&#10;      &lt;/a&gt;&#10;    &lt;/div&gt;&#10;    &lt;span class=&quot;md:block w-full truncate&quot;&gt;Chicago&lt;/span&gt;&#10;    &lt;h3 class=&quot;md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3&quot;&gt;&#10;    &lt;a href=&quot;https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;&gt;&#10;      Cloudflare&#10;    &lt;/a&gt;&#10;    &lt;/h3&gt;&#10;    &#10;    &lt;span class=&quot;leading-1.3 text-2xl text-green-success&quot;&gt;Working&lt;/span&gt;&#10;    &#10;  &lt;/div&gt;&#10;                      &lt;div id=&quot;cf-host-status&quot; class=&quot;cf-error-source relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center&quot;&gt;&#10;    &lt;div class=&quot;relative mb-10 md:m-0&quot;&gt;&#10;      &#10;      &lt;span class=&quot;cf-icon-server block md:hidden h-20 bg-center bg-no-repeat&quot;&gt;&lt;/span&gt;&#10;      &lt;span class=&quot;cf-icon-error w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4&quot;&gt;&lt;/span&gt;&#10;      &#10;    &lt;/div&gt;&#10;    &lt;span class=&quot;md:block w-full truncate&quot;&gt;futurism-chat-ui.cluster-5.preview.emergentcf.cloud&lt;/span&gt;&#10;    &lt;h3 class=&quot;md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3&quot;&gt;&#10;    &#10;      Host&#10;    &#10;    &lt;/h3&gt;&#10;    &#10;    &lt;span class=&quot;leading-1.3 text-2xl text-red-error&quot;&gt;Error&lt;/span&gt;&#10;    &#10;  &lt;/div&gt;&#10;                  &lt;/div&gt;&#10;              &lt;/div&gt;&#10;          &lt;/div&gt;&#10;  &#10;          &lt;div class=&quot;w-240 lg:w-full mx-auto mb-8 lg:px-8&quot;&gt;&#10;              &lt;div class=&quot;clearfix&quot;&gt;&#10;                  &lt;div class=&quot;w-1/2 md:w-full float-left pr-6 md:pb-10 md:pr-0 leading-relaxed&quot;&gt;&#10;                      &lt;h2 class=&quot;text-3xl font-normal leading-1.3 mb-4&quot;&gt;What happened?&lt;/h2&gt;&#10;                      &lt;p&gt;The web server reported a bad gateway error.&lt;/p&gt;&#10;                  &lt;/div&gt;&#10;                  &lt;div class=&quot;w-1/2 md:w-full float-left leading-relaxed&quot;&gt;&#10;                      &lt;h2 class=&quot;text-3xl font-normal leading-1.3 mb-4&quot;&gt;What can I do?&lt;/h2&gt;&#10;                      &lt;p class=&quot;mb-6&quot;&gt;Please try again in a few minutes.&lt;/p&gt;&#10;                  &lt;/div&gt;&#10;              &lt;/div&gt;&#10;          &lt;/div&gt;&#10;  &#10;          &lt;div class=&quot;cf-error-footer cf-wrapper w-240 lg:w-full py-10 sm:py-4 sm:px-8 mx-auto text-center sm:text-left border-solid border-0 border-t border-gray-300&quot;&gt;&#10;      &lt;p class=&quot;text-13&quot;&gt;&#10;        &lt;span class=&quot;cf-footer-item sm:block sm:mb-1&quot;&gt;Cloudflare Ray ID: &lt;strong class=&quot;font-semibold&quot;&gt;a11be1731f6c844d&lt;/strong&gt;&lt;/span&gt;&#10;        &lt;span class=&quot;cf-footer-separator sm:hidden&quot;&gt;&amp;bull;&lt;/span&gt;&#10;        &lt;span id=&quot;cf-footer-item-ip&quot; class=&quot;cf-footer-item hidden sm:block sm:mb-1&quot;&gt;&#10;          Your IP:&#10;          &lt;button type=&quot;button&quot; id=&quot;cf-footer-ip-reveal&quot; class=&quot;cf-footer-ip-reveal-btn&quot;&gt;Click to reveal&lt;/button&gt;&#10;          &lt;span class=&quot;hidden&quot; id=&quot;cf-footer-ip&quot;&gt;35.225.230.28&lt;/span&gt;&#10;          &lt;span class=&quot;cf-footer-separator sm:hidden&quot;&gt;&amp;bull;&lt;/span&gt;&#10;        &lt;/span&gt;&#10;        &lt;span class=&quot;cf-footer-item sm:block sm:mb-1&quot;&gt;&lt;span&gt;Performance &amp;amp; security by&lt;/span&gt; &lt;a rel=&quot;noopener noreferrer&quot; href=&quot;https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;#38;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud&quot; id=&quot;brand_link&quot; target=&quot;_blank&quot;&gt;Cloudflare&lt;/a&gt;&lt;/span&gt;&#10;        &#10;      &lt;/p&gt;&#10;      &lt;script&gt;(function(){function d(){var b=a.getElementById(&quot;cf-footer-item-ip&quot;),c=a.getElementById(&quot;cf-footer-ip-reveal&quot;);b&amp;&amp;&quot;classList&quot;in b&amp;&amp;(b.classList.remove(&quot;hidden&quot;),c.addEventListener(&quot;click&quot;,function(){c.classList.add(&quot;hidden&quot;);a.getElementById(&quot;cf-footer-ip&quot;).classList.remove(&quot;hidden&quot;)}))}var a=document;document.addEventListener&amp;&amp;a.addEventListener(&quot;DOMContentLoaded&quot;,d)})();&lt;/script&gt;&#10;    &lt;/div&gt;&lt;!-- /.error-footer --&gt;&#10;  &#10;      &lt;/div&gt;&#10;  &lt;/div&gt;&#10;  &lt;script&gt;(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML=&quot;window.__CF$cv$params={r:'a11be172fa05844d',t:'MTc4MjQ3MzQzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);&quot;;b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;&#10;  &lt;/html&gt;&#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_llm_provider.py:375: in test_test_endpoint_ollama_unreachable_graceful
+    assert r.status_code == 200, r.text
+E   AssertionError: &lt;!DOCTYPE html&gt;
+E     &lt;!--[if lt IE 7]&gt; &lt;html class="no-js ie6 oldie" lang="en-US"&gt; &lt;![endif]--&gt;
+E     &lt;!--[if IE 7]&gt;    &lt;html class="no-js ie7 oldie" lang="en-US"&gt; &lt;![endif]--&gt;
+E     &lt;!--[if IE 8]&gt;    &lt;html class="no-js ie8 oldie" lang="en-US"&gt; &lt;![endif]--&gt;
+E     &lt;!--[if gt IE 8]&gt;&lt;!--&gt; &lt;html class="no-js" lang="en-US"&gt; &lt;!--&lt;![endif]--&gt;
+E     &lt;head&gt;
+E     
+E     &lt;title&gt;preview.emergentagent.com | 502: Bad gateway&lt;/title&gt;
+E     &lt;meta charset="UTF-8" /&gt;
+E     &lt;meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /&gt;
+E     &lt;meta http-equiv="X-UA-Compatible" content="IE=Edge" /&gt;
+E     &lt;meta name="robots" content="noindex, nofollow" /&gt;
+E     &lt;meta name="viewport" content="width=device-width,initial-scale=1" /&gt;
+E     &lt;link rel="stylesheet" id="cf_styles-css" href="/cdn-cgi/styles/main.css" /&gt;
+E     &lt;/head&gt;
+E     &lt;body&gt;
+E     &lt;div id="cf-wrapper"&gt;
+E         &lt;div id="cf-error-details" class="p-0"&gt;
+E             &lt;header class="mx-auto pt-10 lg:pt-6 lg:px-8 w-240 lg:w-full mb-8"&gt;
+E                 &lt;h1 class="inline-block sm:block sm:mb-2 font-light text-60 lg:text-4xl text-black-dark leading-tight mr-2"&gt;
+E                     &lt;span class="inline-block"&gt;Bad gateway&lt;/span&gt;
+E                     &lt;span class="code-label"&gt;Error code 502&lt;/span&gt;
+E                 &lt;/h1&gt;
+E                 &lt;div&gt;
+E                     Visit &lt;a href="https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud" target="_blank" rel="noopener noreferrer"&gt;cloudflare.com&lt;/a&gt; for more information.
+E                 &lt;/div&gt;
+E                 &lt;div class="mt-3"&gt;2026-06-26 11:31:34 UTC&lt;/div&gt;
+E             &lt;/header&gt;
+E             &lt;div class="my-8 bg-gradient-gray"&gt;
+E                 &lt;div class="w-240 lg:w-full mx-auto"&gt;
+E                     &lt;div class="clearfix md:px-8"&gt;
+E                         &lt;div id="cf-browser-status" class=" relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center"&gt;
+E       &lt;div class="relative mb-10 md:m-0"&gt;
+E         
+E         &lt;span class="cf-icon-browser block md:hidden h-20 bg-center bg-no-repeat"&gt;&lt;/span&gt;
+E         &lt;span class="cf-icon-ok w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4"&gt;&lt;/span&gt;
+E         
+E       &lt;/div&gt;
+E       &lt;span class="md:block w-full truncate"&gt;You&lt;/span&gt;
+E       &lt;h3 class="md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3"&gt;
+E       
+E         Browser
+E       
+E       &lt;/h3&gt;
+E       
+E       &lt;span class="leading-1.3 text-2xl text-green-success"&gt;Working&lt;/span&gt;
+E       
+E     &lt;/div&gt;
+E                         &lt;div id="cf-cloudflare-status" class=" relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center"&gt;
+E       &lt;div class="relative mb-10 md:m-0"&gt;
+E         &lt;a href="https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;#38;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud" target="_blank" rel="noopener noreferrer"&gt;
+E         &lt;span class="cf-icon-cloud block md:hidden h-20 bg-center bg-no-repeat"&gt;&lt;/span&gt;
+E         &lt;span class="cf-icon-ok w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4"&gt;&lt;/span&gt;
+E         &lt;/a&gt;
+E       &lt;/div&gt;
+E       &lt;span class="md:block w-full truncate"&gt;Chicago&lt;/span&gt;
+E       &lt;h3 class="md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3"&gt;
+E       &lt;a href="https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud" target="_blank" rel="noopener noreferrer"&gt;
+E         Cloudflare
+E       &lt;/a&gt;
+E       &lt;/h3&gt;
+E       
+E       &lt;span class="leading-1.3 text-2xl text-green-success"&gt;Working&lt;/span&gt;
+E       
+E     &lt;/div&gt;
+E                         &lt;div id="cf-host-status" class="cf-error-source relative w-1/3 md:w-full py-15 md:p-0 md:py-8 md:text-left md:border-solid md:border-0 md:border-b md:border-gray-400 overflow-hidden float-left md:float-none text-center"&gt;
+E       &lt;div class="relative mb-10 md:m-0"&gt;
+E         
+E         &lt;span class="cf-icon-server block md:hidden h-20 bg-center bg-no-repeat"&gt;&lt;/span&gt;
+E         &lt;span class="cf-icon-error w-12 h-12 absolute left-1/2 md:left-auto md:right-0 md:top-0 -ml-6 -bottom-4"&gt;&lt;/span&gt;
+E         
+E       &lt;/div&gt;
+E       &lt;span class="md:block w-full truncate"&gt;futurism-chat-ui.cluster-5.preview.emergentcf.cloud&lt;/span&gt;
+E       &lt;h3 class="md:inline-block mt-3 md:mt-0 text-2xl text-gray-600 font-light leading-1.3"&gt;
+E       
+E         Host
+E       
+E       &lt;/h3&gt;
+E       
+E       &lt;span class="leading-1.3 text-2xl text-red-error"&gt;Error&lt;/span&gt;
+E       
+E     &lt;/div&gt;
+E                     &lt;/div&gt;
+E                 &lt;/div&gt;
+E             &lt;/div&gt;
+E     
+E             &lt;div class="w-240 lg:w-full mx-auto mb-8 lg:px-8"&gt;
+E                 &lt;div class="clearfix"&gt;
+E                     &lt;div class="w-1/2 md:w-full float-left pr-6 md:pb-10 md:pr-0 leading-relaxed"&gt;
+E                         &lt;h2 class="text-3xl font-normal leading-1.3 mb-4"&gt;What happened?&lt;/h2&gt;
+E                         &lt;p&gt;The web server reported a bad gateway error.&lt;/p&gt;
+E                     &lt;/div&gt;
+E                     &lt;div class="w-1/2 md:w-full float-left leading-relaxed"&gt;
+E                         &lt;h2 class="text-3xl font-normal leading-1.3 mb-4"&gt;What can I do?&lt;/h2&gt;
+E                         &lt;p class="mb-6"&gt;Please try again in a few minutes.&lt;/p&gt;
+E                     &lt;/div&gt;
+E                 &lt;/div&gt;
+E             &lt;/div&gt;
+E     
+E             &lt;div class="cf-error-footer cf-wrapper w-240 lg:w-full py-10 sm:py-4 sm:px-8 mx-auto text-center sm:text-left border-solid border-0 border-t border-gray-300"&gt;
+E         &lt;p class="text-13"&gt;
+E           &lt;span class="cf-footer-item sm:block sm:mb-1"&gt;Cloudflare Ray ID: &lt;strong class="font-semibold"&gt;a11be1731f6c844d&lt;/strong&gt;&lt;/span&gt;
+E           &lt;span class="cf-footer-separator sm:hidden"&gt;&amp;bull;&lt;/span&gt;
+E           &lt;span id="cf-footer-item-ip" class="cf-footer-item hidden sm:block sm:mb-1"&gt;
+E             Your IP:
+E             &lt;button type="button" id="cf-footer-ip-reveal" class="cf-footer-ip-reveal-btn"&gt;Click to reveal&lt;/button&gt;
+E             &lt;span class="hidden" id="cf-footer-ip"&gt;35.225.230.28&lt;/span&gt;
+E             &lt;span class="cf-footer-separator sm:hidden"&gt;&amp;bull;&lt;/span&gt;
+E           &lt;/span&gt;
+E           &lt;span class="cf-footer-item sm:block sm:mb-1"&gt;&lt;span&gt;Performance &amp;amp; security by&lt;/span&gt; &lt;a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing?utm_source=errorcode_502&amp;#38;utm_campaign=futurism-chat-ui.cluster-5.preview.emergentcf.cloud" id="brand_link" target="_blank"&gt;Cloudflare&lt;/a&gt;&lt;/span&gt;
+E           
+E         &lt;/p&gt;
+E         &lt;script&gt;(function(){function d(){var b=a.getElementById("cf-footer-item-ip"),c=a.getElementById("cf-footer-ip-reveal");b&amp;&amp;"classList"in b&amp;&amp;(b.classList.remove("hidden"),c.addEventListener("click",function(){c.classList.add("hidden");a.getElementById("cf-footer-ip").classList.remove("hidden")}))}var a=document;document.addEventListener&amp;&amp;a.addEventListener("DOMContentLoaded",d)})();&lt;/script&gt;
+E       &lt;/div&gt;&lt;!-- /.error-footer --&gt;
+E     
+E         &lt;/div&gt;
+E     &lt;/div&gt;
+E     &lt;script&gt;(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a11be172fa05844d',t:'MTc4MjQ3MzQzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&amp;&amp;(document.onreadystatechange=e,c())}}}})();&lt;/script&gt;&lt;/body&gt;
+E     &lt;/html&gt;
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_llm_cost" name="test_llm_cost_without_auth_returns_401" time="1.623" /><testcase classname="backend.tests.test_llm_cost" name="test_llm_cost_without_instance_header_returns_400" time="0.096" /><testcase classname="backend.tests.test_llm_cost" name="test_llm_cost_shape_empty_instance" time="3.999" /><testcase classname="backend.tests.test_llm_cost" name="test_llm_cost_with_seeded_records" time="5.577" /><testcase classname="backend.tests.test_scripted_ai_router.TestAiPickVariantParser" name="test_parser[option 2-2]" time="0.001" /><testcase classname="backend.tests.test_scripted_ai_router.TestAiPickVariantParser" name="test_parser[Pick: 1-1]" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestAiPickVariantParser" name="test_parser[-1-0]" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestAiPickVariantParser" name="test_parser[garbage-0]" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestAiPickVariantParser" name="test_parser[-0]" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestFixedReply1And2" name="test_case1_count0_any_intent_returns_primary_no_pick" time="0.001"><failure message="RuntimeError: Task &lt;Task pending name='Task-12' coro=&lt;build_scripted_response() running at /app/backend/server.py:618&gt; cb=[_run_until_complete_cb() at /usr/local/lib/python3.11/asyncio/base_events.py:181]&gt; got Future &lt;Future pending cb=[_chain_future.&lt;locals&gt;._call_check_cancel() at /usr/local/lib/python3.11/asyncio/futures.py:387]&gt; attached to a different loop">backend/tests/test_scripted_ai_router.py:148: in test_case1_count0_any_intent_returns_primary_no_pick
+    out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "thanks!"))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/server.py:618: in build_scripted_response
+    existing = await db.scripted_counters.find_one(key) or {}
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RuntimeError: Task &lt;Task pending name='Task-12' coro=&lt;build_scripted_response() running at /app/backend/server.py:618&gt; cb=[_run_until_complete_cb() at /usr/local/lib/python3.11/asyncio/base_events.py:181]&gt; got Future &lt;Future pending cb=[_chain_future.&lt;locals&gt;._call_check_cancel() at /usr/local/lib/python3.11/asyncio/futures.py:387]&gt; attached to a different loop</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestFixedReply1And2" name="test_case1_count0_any_intent_returns_primary_no_pick" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestFixedReply1And2" name="test_case2_count1_update_set_returns_update_no_pick" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:160: in test_case2_count1_update_set_returns_update_no_pick
+    _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestFixedReply1And2" name="test_case2_count1_update_set_returns_update_no_pick" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case3_count2_question_variants_only_pool" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:180: in test_case3_count2_question_variants_only_pool
+    _seed(iid, cid, uid, count=2, used_replies=[cfg["primary_message"], cfg["update_message"]])
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case3_count2_question_variants_only_pool" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case4_count2_ack_intent_uses_ack_pool_not_tracked" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:197: in test_case4_count2_ack_intent_uses_ack_pool_not_tracked
+    _seed(iid, cid, uid, count=2, used_replies=[cfg["primary_message"], cfg["update_message"]])
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case4_count2_ack_intent_uses_ack_pool_not_tracked" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case5_count3_question_used_replies_filters_pool" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:215: in test_case5_count3_question_used_replies_filters_pool
+    _seed(iid, cid, uid, count=3,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case5_count3_question_used_replies_filters_pool" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case6_variants_exhausted_returns_fallback" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:227: in test_case6_variants_exhausted_returns_fallback
+    _seed(iid, cid, uid, count=3,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case6_variants_exhausted_returns_fallback" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case7_variants_exhausted_fallback_already_used_silent" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:239: in test_case7_variants_exhausted_fallback_already_used_silent
+    _seed(iid, cid, uid, count=4,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case7_variants_exhausted_fallback_already_used_silent" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case8_variants_exhausted_no_fallback_silent" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:250: in test_case8_variants_exhausted_no_fallback_silent
+    _seed(iid, cid, uid, count=4,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestMsg3PlusRouter" name="test_case8_variants_exhausted_no_fallback_silent" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestUpdateBlankEdgeCase" name="test_case9_count1_update_blank_engages_router" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:267: in test_case9_count1_update_blank_engages_router
+    _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestUpdateBlankEdgeCase" name="test_case9_count1_update_blank_engages_router" time="0.001"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case10_max_attempts_cap_no_pick_call" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:289: in test_case10_max_attempts_cap_no_pick_call
+    _seed(iid, cid, uid, count=10, used_replies=["x"] * 10)
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case10_max_attempts_cap_no_pick_call" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case11_speculation_silent_no_count_bump_no_pick" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:301: in test_case11_speculation_silent_no_count_bump_no_pick
+    _seed(iid, cid, uid, count=2,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case11_speculation_silent_no_count_bump_no_pick" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case12_idle_reset_wipes_count_and_used_replies" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:316: in test_case12_idle_reset_wipes_count_and_used_replies
+    _seed(iid, cid, uid, count=5, used_replies=["x", "y"], last_at=stale)
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestCapAndGates" name="test_case12_idle_reset_wipes_count_and_used_replies" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case13_manual_count0_returns_primary_no_llm" time="0.001"><failure message="RuntimeError: Task &lt;Task pending name='Task-13' coro=&lt;build_scripted_response() running at /app/backend/server.py:618&gt; cb=[_run_until_complete_cb() at /usr/local/lib/python3.11/asyncio/base_events.py:181]&gt; got Future &lt;Future pending cb=[_chain_future.&lt;locals&gt;._call_check_cancel() at /usr/local/lib/python3.11/asyncio/futures.py:387]&gt; attached to a different loop">backend/tests/test_scripted_ai_router.py:336: in test_case13_manual_count0_returns_primary_no_llm
+    out = _run(server.build_scripted_response(iid, cid, uid, cfg, sid, "is it down?"))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/server.py:618: in build_scripted_response
+    existing = await db.scripted_counters.find_one(key) or {}
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RuntimeError: Task &lt;Task pending name='Task-13' coro=&lt;build_scripted_response() running at /app/backend/server.py:618&gt; cb=[_run_until_complete_cb() at /usr/local/lib/python3.11/asyncio/base_events.py:181]&gt; got Future &lt;Future pending cb=[_chain_future.&lt;locals&gt;._call_check_cancel() at /usr/local/lib/python3.11/asyncio/futures.py:387]&gt; attached to a different loop</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case13_manual_count0_returns_primary_no_llm" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case14_manual_count1_update_set_returns_update" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:348: in test_case14_manual_count1_update_set_returns_update
+    _seed(iid, cid, uid, count=1, used_replies=[cfg["primary_message"]])
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case14_manual_count1_update_set_returns_update" time="0.000"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case15_manual_count2_silent" time="0.001"><failure message="ValueError: The future belongs to a different loop than the one specified as the loop argument">backend/tests/test_scripted_ai_router.py:358: in test_case15_manual_count2_silent
+    _seed(iid, cid, uid, count=2,
+backend/tests/test_scripted_ai_router.py:107: in _seed
+    _run(server.db.scripted_counters.insert_one({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</failure></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestManualMode" name="test_case15_manual_count2_silent" time="0.006"><error message="failed on teardown with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_ai_router.py:61: in new_ids
+    _run(server.db.scripted_counters.delete_many({
+backend/tests/test_scripted_ai_router.py:44: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_pool_primary_at_count0" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_pool_update_at_count1_with_update_msg" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_pool_variant_at_count2_question" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_pool_ack_at_count2_with_ack_intent" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_pool_fallback_when_variants_exhausted" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_skip_max_attempts" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_skip_speculation" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_skip_exhausted" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_skip_no_primary" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDecideScriptedReplyPureHelper" name="test_skip_manual_silent_at_count2" time="0.000" /><testcase classname="backend.tests.test_scripted_ai_router.TestDiscordConfigPersistence" name="test_put_scripted_mode_full_payload_round_trip" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_ai_router.py:489: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_ai_router.TestResetCountersClearsUsedReplies" name="test_reset_endpoint_clears_count_and_used_replies" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_ai_router.py:517: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersAuth" name="test_count_requires_auth" time="0.088"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersAuth" name="test_reset_requires_auth" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersAuth" name="test_count_requires_instance_header" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersAuth" name="test_reset_requires_instance_header" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersCount" name="test_count_returns_zero_after_reset" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersCount" name="test_count_reflects_seeded_counters" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersCount" name="test_count_does_not_include_other_instance" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersReset" name="test_reset_when_empty_is_idempotent" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersReset" name="test_reset_clears_all_counters_for_instance" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersReset" name="test_reset_does_not_touch_other_instance" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_counters.TestScriptedCountersReset" name="test_reset_does_not_clear_scripted_skips" time="0.000"><error message="failed on setup with &quot;requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?&quot;">backend/tests/test_scripted_counters.py:29: in auth_token
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:575: in request
+    prep = self.prepare_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:484: in prepare_request
+    p.prepare(
+/root/.venv/lib/python3.11/site-packages/requests/models.py:367: in prepare
+    self.prepare_url(url, params)
+/root/.venv/lib/python3.11/site-packages/requests/models.py:438: in prepare_url
+    raise MissingSchema(
+E   requests.exceptions.MissingSchema: Invalid URL '/api/auth/login': No scheme supplied. Perhaps you meant https:///api/auth/login?</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedCountersCount" name="test_a_empty_db_all_zeros" time="0.900"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedCountersCount" name="test_b_seed_active_row" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedCountersCount" name="test_c_seed_stale_row" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedCountersCount" name="test_d_reset_hours_reflects_instance_config" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedSandboxValidation" name="test_a_empty_messages_400" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedSandboxValidation" name="test_b_too_many_messages_400" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedSandboxBehavior" name="test_c_three_message_sequence_shape" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedSandboxBehavior" name="test_d_sandbox_does_not_write_counters" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestScriptedSandboxBehavior" name="test_e_uses_saved_config_when_no_override" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestSandboxStateProgression" name="test_turn0_primary" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestSandboxStateProgression" name="test_turn1_update_when_update_set" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestSandboxStateProgression" name="test_exhausted_after_pool_drained" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_sandbox_http.TestSandboxStateProgression" name="test_manual_mode_silent_at_count2" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_sandbox_http.py:69: in clean_counters
+    _run(server.db.scripted_counters.delete_many({"instance_id": instance_id}))
+backend/tests/test_scripted_sandbox_http.py:21: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestCompareAgainstGolden" name="test_identical_turns_returns_empty" time="0.000" /><testcase classname="backend.tests.test_scripted_scenarios.TestCompareAgainstGolden" name="test_turn_count_mismatch" time="0.000" /><testcase classname="backend.tests.test_scripted_scenarios.TestCompareAgainstGolden" name="test_pool_name_mismatch_per_turn" time="0.000" /><testcase classname="backend.tests.test_scripted_scenarios.TestCompareAgainstGolden" name="test_intent_mismatch_when_golden_has_intent" time="0.000" /><testcase classname="backend.tests.test_scripted_scenarios.TestCompareAgainstGolden" name="test_intent_comparison_skipped_when_golden_none" time="0.000" /><testcase classname="backend.tests.test_scripted_scenarios.TestRunScenarioDoc" name="test_first_run_captures_golden" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_scenarios.py:159: in fresh_scenario
+    _run(server.db.scripted_scenarios.insert_one(dict(doc)))
+backend/tests/test_scripted_scenarios.py:35: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestRunScenarioDoc" name="test_second_run_matching_golden_passes" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_scenarios.py:159: in fresh_scenario
+    _run(server.db.scripted_scenarios.insert_one(dict(doc)))
+backend/tests/test_scripted_scenarios.py:35: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestRunScenarioDoc" name="test_diverging_cfg_fails_with_failures_list" time="0.001"><error message="failed on setup with &quot;ValueError: The future belongs to a different loop than the one specified as the loop argument&quot;">backend/tests/test_scripted_scenarios.py:159: in fresh_scenario
+    _run(server.db.scripted_scenarios.insert_one(dict(doc)))
+backend/tests/test_scripted_scenarios.py:35: in _run
+    return asyncio.get_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:633: in run_until_complete
+    future = tasks.ensure_future(future, loop=self)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:659: in ensure_future
+    return _ensure_future(coro_or_future, loop=loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/tasks.py:665: in _ensure_future
+    raise ValueError('The future belongs to a different loop than '
+E   ValueError: The future belongs to a different loop than the one specified as the loop argument</error></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_create_empty_name_returns_400" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:241: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_create_empty_messages_returns_400" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:246: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_create_over_25_messages_returns_400" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:251: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_create_valid_returns_scenario_shape_and_persists" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:257: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_list_returns_only_this_instance" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:274: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_delete_404_when_not_found" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:297: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_delete_scoped_by_instance" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:302: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_run_first_captures_then_passes_with_override" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:321: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_save_golden_400_if_no_last_run" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:348: REACT_APP_BACKEND_URL not set</skipped></testcase><testcase classname="backend.tests.test_scripted_scenarios.TestScenarioHTTP" name="test_run_all_empty_list_returns_zeros" time="0.000"><skipped type="pytest.skip" message="REACT_APP_BACKEND_URL not set">/app/backend/tests/test_scripted_scenarios.py:358: REACT_APP_BACKEND_URL not set</skipped></testcase></testsuite></testsuites>

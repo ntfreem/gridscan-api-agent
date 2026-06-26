@@ -1,0 +1,46 @@
+{
+  "summary": "All 5 LLM Model-field bug fixes verified end-to-end. New test file test_llm_apikey_validation.py adds 18 cases: constant verification (allowlist date suffixes, DEFAULT_EMERGENT_MODEL=claude-sonnet-4-6, LLM_PRICING extended), emergent Test Connection returns success:true with 'pong' (both with null model and with model='claude-sonnet-4-5'), PUT /llm-config rejects 5 API-key-shaped values (sk-emergent, sk-ant, case-mix, bbk_, bbk_TEST) with 400 + detail mentioning 'API key' / 'model name', anthropic Test Connection with sk-ant-fake returns 200 success:false (does NOT raise), 5 allowed anthropic short names accepted, bogus anthropic rejected. test_llm_provider.py constants test updated for new 5-entry allowlist + GET defaults length check loosened to >=3. Full backend regression: 49/49 LLM tests pass + 51/51 scripted regression (router + scenarios + sandbox) pass. Frontend UI verified via Playwright: Model input has autoComplete='off' name='dc-llm-model-name', warning testid='llm-model-key-warning' appears for sk- AND bbk_, disappears when cleared/normal name typed, Emergent hint text updated, Save with api-key-shaped model shows toast 'Model must be a model name (e.g. claude-sonnet-4-5), not an API key.'",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "test_scripted_counters.py", "issue": "Pre-existing test infrastructure bug — uses os.environ.get('REACT_APP_BACKEND_URL') which is empty under pytest, causing all tests to error with MissingSchema. Tests pass when BASE_URL is provided. Unrelated to current bug fixes. Should switch to reading from /app/frontend/.env like test_llm_provider.py does."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_llm_apikey_validation.py",
+    "/app/backend/tests/test_llm_provider.py",
+    "/app/test_reports/pytest/iter21_apikey.xml",
+    "/app/test_reports/pytest/iter21_llm_full.xml"
+  ],
+  "action_items": [
+    "(Optional, low priority) Fix test_scripted_counters.py to load BASE_URL from /app/frontend/.env directly (same pattern as test_llm_provider.py) so it can run without env var injection. Pre-existing — does not block the LLM provider bug fix release."
+  ],
+  "critical_code_review_comments": [
+    "Server-side regex validation `^(sk-|bbk_)` is case-insensitive (re.IGNORECASE) — correctly catches mixed-case pastes. Coverage verified for sk-emergent-*, sk-ant-*, sk-EmErGeNt-CASE-MIX, bbk_*, bbk_TEST.",
+    "Frontend regex `/^(sk-|bbk_)/i` mirrors backend exactly — single source of truth would be nicer (config endpoint exposing the pattern) but cosmetic.",
+    "DEFAULT_EMERGENT_MODEL='claude-sonnet-4-6' is a non-dated short name. The emergent client appears to accept that directly. If Emergent ever requires a dated suffix, the fallback chain in call_emergent (claude-sonnet-4-5-20250929) provides safety net. Good.",
+    "ALLOWED_ANTHROPIC_MODELS has TWO sonnet entries (4-5 + 4-6) and TWO opus entries (4-5 + 4-8) but only ONE haiku (4-5). When haiku-4-6 ships, this list will need updating — consider sourcing from /api/models endpoint.",
+    "LLM_PRICING removed 'claude-sonnet-4-5-20251101' but historical llm_usage docs may still reference it — _cost_for will silently fall back to DEFAULT_PRICING (sonnet rates) for those, which is correct. Old historical cost data remains intact (verified: Cost Dashboard row 'claude-opus-4-5-20251101' still shows $0.0452 for legacy calls).",
+    "Bug RCA: the original 'AI service temporarily unavailable' was caused by hardcoded dated suffix 'claude-sonnet-4-5-20251101' that Emergent rejected (no such model in catalog). Fix correctly switches default to 'claude-sonnet-4-6' (bare short name) with fallback to verified '-20250929' suffix. Verified live via Test Connection: now returns success:true response:'pong'.",
+    "server.py is now ~3180 lines — splitting LLM helpers + cost analytics + admin LLM endpoints into a dedicated llm_module.py would improve maintainability. Mentioned in iter20 too, still not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_llm_apikey_validation.py (NEW — 18 cases covering all 5 bug fixes + constant verification)",
+    "/app/backend/tests/test_llm_provider.py (updated 2 assertions: allowlist size 3→>=5, GET defaults length ==3→>=3 to accommodate the new entries)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 new + 31/31 original LLM tests + 51/51 scripted regression = 100/100 relevant)",
+    "frontend": "100% (all 5 UI checks pass: input attrs, sk- warning, bbk_ warning, warning-clear, hint text, server-error toast)"
+  },
+  "test_credentials": "administrator / Admin@123",
+  "seed_data_creation": "test_llm_apikey_validation operates on an existing instance (picks first from /api/admin/instances) and parameterizes through 5+ saved configs, then restores to {provider:'emergent', model:null} in the trailing test_zzz_restore_emergent_default. No new docs are created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "LLM provider bug fix release is fully validated. The Model field is now protected by both client-side (red inline warning + autoComplete='off' name='dc-llm-model-name') and server-side (regex 400 with detail mentioning 'API key' / 'model name') guards against accidental API key paste. DEFAULT_EMERGENT_MODEL='claude-sonnet-4-6', DEFAULT_ANTHROPIC_MODEL='claude-sonnet-4-6', fallback in call_emergent is 'claude-sonnet-4-5-20250929'. ALLOWED_ANTHROPIC_MODELS has 5 entries. LLM_PRICING extended with 4-6/4-7/4-8 variants and the broken -20251101 sonnet id removed. All Cost Dashboard math still works (legacy rows fall back to DEFAULT_PRICING via _cost_for). The only outstanding test infra issue is test_scripted_counters.py needing the BASE_URL fix (see action_items) — does not affect the release.",
+  "rca_of_the_issue": "User-reported bug: Test Connection returned 'AI service temporarily unavailable' AND a copy of an Emergent API key (sk-emergent-dDaA292Ef6fAa5e3aB) was visible in the Model field. Root causes: (1) Hardcoded model id 'claude-sonnet-4-5-20251101' did not exist in Emergent's catalog (correct dated id is -20250929); since the emergent client logged failure and called fallback which was ALSO the broken id, both paths failed → generic 'temporarily unavailable' surfaced. (2) Model <input> had no autoComplete prevention → browser autofill / clipboard suggested an API key string. (3) No server-side guard against API-key-shaped values reaching the dispatcher. Fixes verified live via curl + pytest + Playwright: (a) Test Connection now returns {success:true,response:'pong'} for emergent with null model and with model='claude-sonnet-4-5'. (b) PUT with sk-* or bbk_* model → 400 with detail 'Model must be a model name (e.g. claude-sonnet-4-5), not an API key.' (c) UI shows red warning + Save shows toast. Reproduction is no longer possible — both layers reject the bad input."
+}
