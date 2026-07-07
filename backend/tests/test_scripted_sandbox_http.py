@@ -12,7 +12,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 import server  # noqa: E402
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://futurism-chat-ui.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://rag-search-dev.preview.emergentagent.com").rstrip("/")
 ADMIN_USERNAME = "administrator"
 ADMIN_PASSWORD = "Admin@123"
 
