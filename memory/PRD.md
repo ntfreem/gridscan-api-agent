@@ -105,6 +105,18 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - New public landing page at `/discord/invited?guild=...&bot=...` — renders a friendly "You're all set!" success message for the third-party user (no BridgeBot login required). They never see the admin panel.
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
+
+### Global Response Defaults (DONE 2026-07-07)
+- Moved **Acknowledgment Replies** and **Fallback Message** from Scripted Mode (Discord Settings) to a new global **Response Defaults** card on the Bot Settings page
+- These are now per-instance settings stored directly on `bot_instances` (fields: `acknowledgment_replies`, `fallback_message`)
+- New endpoints:
+  - `GET /api/admin/instances/{id}/reply-defaults` — returns ack replies + fallback (with migration from scripted_mode → defaults)
+  - `PUT /api/admin/instances/{id}/reply-defaults` — saves them to bot_instances
+- `_load_scripted_cfg` merges instance-level reply defaults into the scripted config, so the AI router, sandbox, and scenario runner all read from the new global location
+- Discord message handler also injects instance-level values before calling `build_scripted_response`
+- Removed the Acknowledgment Replies block and Fallback Message field from the Scripted Mode UI on Discord Settings; replaced with a note pointing to Bot Settings
+- Tests: `test_reply_defaults.py` (6/6 pass) covering CRUD, auth gating, 404 handling, and sandbox integration
+
 ### Per-Instance Cost Dashboard (DONE 2026-02-XX)
 - Captures real input/output tokens per LLM call:
   - **Anthropic SDK**: `resp.usage.input_tokens` / `output_tokens` (exact)
@@ -231,7 +243,7 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Decision pending: single shared Discord settings across servers vs per-server overrides
 
 ### P2 — Refactor server.py
-- Split ~1550-line server.py into modular route files
+- Split ~3200-line server.py into modular route files
 
 ### P2 — Real-time Streaming
 - SSE or WebSocket for streaming chat responses
