@@ -1,0 +1,34 @@
+{
+  "summary": "Tested Response Defaults migration from Discord Settings (scripted mode section) to Bot Settings global card. All backend endpoints and frontend flows work correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_reply_defaults.py",
+    "/app/test_reports/pytest/iter22_reply_defaults.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is >3200 lines; recommend modularization into routers (admin, discord, instances) for maintainability.",
+    "GET /api/admin/instances/{id}/reply-defaults does NOT return 404 for unknown instance IDs — it silently returns default fallback content. Not a bug per current design (used as fallback loader) but consider explicit 404 for consistency with PUT which does 404.",
+    "PUT reply-defaults accepts any strings without length limits; consider max length validation on fallback_message and ack items to avoid unbounded storage."
+  ],
+  "updated_files": ["/app/backend/tests/test_reply_defaults.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100%"},
+  "test_credentials": "administrator / Admin@123 (email_or_username field on API)",
+  "seed_data_creation": "Restored Scripted Test instance reply defaults to original ack list + fallback after tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Route for Bot Settings is /admin/settings (not /bot-settings). Login API returns 'token' (not 'access_token'). Sandbox POST /api/discord/scripted-mode/sandbox requires header X-Instance-ID and body {messages:[{role,content}]}. Instance 'Scripted Test' id = 8292460c-de40-4a28-a711-640c0ecb8447. All Response Defaults testids verified: reply-defaults-card, reply-default-ack-{i}, reply-default-ack-del-{i}, reply-default-add-ack, reply-default-fallback, reply-defaults-save-btn. Toast text: 'Response defaults saved'. Discord Settings correctly shows 'managed globally on Bot Settings page' note and no scripted-ack-*/scripted-fallback testids.",
+  "test_results_detail": {
+    "backend_pytest": "6/6 passed",
+    "frontend_flows_verified": [
+      "Login as administrator",
+      "Bot Settings loads with 'Select workspace first' empty state before instance selection",
+      "After selecting 'Scripted Test' from instance-switcher, Response Defaults card renders with pre-populated 4 acks + fallback",
+      "Add acknowledgment button appends new empty row",
+      "Save button persists changes and shows 'Response defaults saved' toast",
+      "Reload confirms persistence (GET returns updated values)",
+      "Discord Settings page shows 'managed globally' note; scripted-ack-* and scripted-fallback testids removed"
+    ]
+  }
+}

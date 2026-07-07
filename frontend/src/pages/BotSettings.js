@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Trash2 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
@@ -31,12 +31,22 @@ export default function BotSettings() {
   const [llmTestResult, setLlmTestResult] = useState(null);
   const [costData, setCostData] = useState(null);
 
+  // Reply defaults — global ack replies + fallback message
+  const [replyDefaults, setReplyDefaults] = useState({ acknowledgment_replies: [], fallback_message: "" });
+  const [replyDefaultsSaving, setReplyDefaultsSaving] = useState(false);
+
   useEffect(() => {
     if (!instanceId) return;
     api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
     }).catch(() => {});
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
+    api.get(`/admin/instances/${instanceId}/reply-defaults`).then(r => {
+      if (r.data) setReplyDefaults({
+        acknowledgment_replies: Array.isArray(r.data.acknowledgment_replies) ? r.data.acknowledgment_replies : [],
+        fallback_message: r.data.fallback_message || "",
+      });
+    }).catch(() => {});
   }, [instanceId]);
 
   const saveLlm = async () => {
@@ -71,6 +81,16 @@ export default function BotSettings() {
       setLlmTestResult({ success: false, error: err });
       toast.error(`Ping failed: ${err}`);
     } finally { setLlmTesting(false); }
+  };
+
+  const saveReplyDefaults = async () => {
+    setReplyDefaultsSaving(true);
+    try {
+      await api.put(`/admin/instances/${instanceId}/reply-defaults`, replyDefaults);
+      toast.success("Response defaults saved");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save response defaults");
+    } finally { setReplyDefaultsSaving(false); }
   };
 
   useEffect(() => {
@@ -271,6 +291,71 @@ export default function BotSettings() {
             </div>
           </div>
 
+          {/* ── Response Defaults — global ack replies + fallback ── */}
+          <div data-testid="reply-defaults-card" style={{ ...T.card, marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <MessageSquare size={14} color={colors.brand.light} />
+              <p style={{ ...T.sectionTitle, margin: 0 }}>Response Defaults</p>
+            </div>
+            <p style={T.sectionSub}>Global acknowledgment replies and fallback message used across all channels. When Scripted Mode is enabled, the AI router pulls from these pools automatically.</p>
+
+            <div style={{ marginTop: "12px", padding: "14px", backgroundColor: "rgba(96,165,250,0.04)", border: `1px solid rgba(96,165,250,0.18)`, borderRadius: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <Zap size={13} color={colors.brand.light} />
+                <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                  Acknowledgment Replies
+                </p>
+              </div>
+              <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "0 0 12px", lineHeight: "1.5" }}>
+                Short replies for &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. The AI router uses these when it detects a user is acknowledging — never to answer a question. Cycles through and only repeats once exhausted.
+              </p>
+              {replyDefaults.acknowledgment_replies.map((v, i) => (
+                <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                  <input
+                    type="text"
+                    value={v}
+                    onChange={e => setReplyDefaults(p => ({ ...p, acknowledgment_replies: p.acknowledgment_replies.map((x, j) => j === i ? e.target.value : x) }))}
+                    placeholder={`Acknowledgment ${i + 1}…`}
+                    data-testid={`reply-default-ack-${i}`}
+                    onFocus={onFocus} onBlur={onBlur}
+                    style={{ ...T.input, flex: 1, padding: "8px 10px" }}
+                  />
+                  <button
+                    onClick={() => setReplyDefaults(p => ({ ...p, acknowledgment_replies: p.acknowledgment_replies.filter((_, j) => j !== i) }))}
+                    data-testid={`reply-default-ack-del-${i}`}
+                    style={{ padding: "8px 10px", backgroundColor: "rgba(244,63,94,0.06)", border: `1px solid rgba(244,63,94,0.2)`, borderRadius: "8px", color: colors.brand.error, cursor: "pointer" }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setReplyDefaults(p => ({ ...p, acknowledgment_replies: [...p.acknowledgment_replies, ""] }))}
+                data-testid="reply-default-add-ack"
+                style={{ padding: "8px 12px", backgroundColor: "rgba(96,165,250,0.06)", border: `1px solid rgba(96,165,250,0.2)`, borderRadius: "8px", color: colors.brand.light, cursor: "pointer", fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <Plus size={12} /> Add acknowledgment
+              </button>
+            </div>
+
+            <label style={{ ...T.label, marginTop: "16px" }}>Fallback Message</label>
+            <textarea
+              value={replyDefaults.fallback_message}
+              onChange={e => setReplyDefaults(p => ({ ...p, fallback_message: e.target.value }))}
+              placeholder="For urgent issues please open a ticket or email support@…"
+              data-testid="reply-default-fallback"
+              rows={3}
+              onFocus={onFocus} onBlur={onBlur}
+              style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
+            />
+            <p style={T.hint}>Sent when all variants and ack replies are exhausted, or after Max Attempts is reached. Used once per conversation.</p>
+
+            <button onClick={saveReplyDefaults} disabled={replyDefaultsSaving} data-testid="reply-defaults-save-btn"
+              style={{ ...T.btnPrimary, marginTop: "12px", opacity: replyDefaultsSaving ? 0.6 : 1 }}>
+              <Save size={13} /> {replyDefaultsSaving ? "Saving…" : "Save Response Defaults"}
+            </button>
+          </div>
+
           {/* ── Cost Dashboard — per-instance month-to-date spend + sparkline ── */}
           {costData && (
             <div data-testid="cost-dashboard-card" style={{ ...T.card, marginBottom: "20px" }}>
@@ -417,7 +502,7 @@ export default function BotSettings() {
                 </button>
               </div>
               <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, marginBottom: "12px", marginTop: 0 }}>
-                Write ideal user/bot exchanges to show Claude exactly what "good" looks like.
+                Write ideal user/bot exchanges to show Claude exactly what &ldquo;good&rdquo; looks like.
               </p>
 
               {(config.manual_tone_examples || []).map((ex, i) => (

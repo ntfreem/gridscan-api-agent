@@ -1197,8 +1197,10 @@ async def start_shared_discord_bot(token: str):
             session_id = f"discord_{message.author.id}"
             try:
                 # ─── SCRIPTED MODE check (runs BEFORE LLM, BEFORE KB lookup) ───
-                scripted_cfg = (live_cfg.get("scripted_mode") or {}) if isinstance(live_cfg.get("scripted_mode"), dict) else {}
-                if scripted_cfg.get("enabled") and scripted_cfg.get("primary_message"):
+                scripted_cfg_raw = (live_cfg.get("scripted_mode") or {}) if isinstance(live_cfg.get("scripted_mode"), dict) else {}
+                if scripted_cfg_raw.get("enabled") and scripted_cfg_raw.get("primary_message"):
+                    # Merge instance-level reply defaults (global ack_replies + fallback)
+                    scripted_cfg = await _load_scripted_cfg(instance_id, scripted_cfg_raw)
                     # Passive Mode still gates Scripted Mode (Q3=b): if passive is on, run [SKIP] gate first via Claude
                     passive_mode = bool(live_cfg.get("passive_mode", False))
                     if passive_mode and not is_mentioned and not is_dm:
@@ -1743,6 +1745,50 @@ async def test_instance_llm_config(instance_id: str, current_user: dict = Depend
         return {"success": False, "error": str(e.detail), "status_code": e.status_code}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@api_router.get("/admin/instances/{instance_id}/reply-defaults")
+async def get_reply_defaults(instance_id: str, current_user: dict = Depends(require_admin)):
+    """Return the instance-level acknowledgment replies and fallback message."""
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"acknowledgment_replies": 1, "fallback_message": 1}) or {}
+    ack_raw = inst.get("acknowledgment_replies")
+    fallback = inst.get("fallback_message")
+    # Migrate from scripted_mode if instance-level values are missing
+    needs_discord_fallback = (
+        (not isinstance(ack_raw, list) or not any(isinstance(x, str) and x.strip() for x in ack_raw))
+        or (not isinstance(fallback, str) or not fallback.strip())
+    )
+    if needs_discord_fallback:
+        dc = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+        sm = dc.get("scripted_mode") if isinstance(dc.get("scripted_mode"), dict) else {}
+        if not isinstance(ack_raw, list) or not any(isinstance(x, str) and x.strip() for x in ack_raw):
+            sm_acks = (sm or {}).get("acknowledgment_replies")
+            ack_raw = sm_acks if isinstance(sm_acks, list) and any(isinstance(x, str) and x.strip() for x in sm_acks) else list(DEFAULT_ACK_REPLIES)
+        if not isinstance(fallback, str) or not fallback.strip():
+            fallback = (sm or {}).get("fallback_message") or ""
+    return {
+        "acknowledgment_replies": ack_raw,
+        "fallback_message": fallback,
+    }
+
+
+@api_router.put("/admin/instances/{instance_id}/reply-defaults")
+async def update_reply_defaults(instance_id: str, body: dict, current_user: dict = Depends(require_admin)):
+    """Save instance-level acknowledgment replies and fallback message."""
+    inst = await db.bot_instances.find_one({"id": instance_id})
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    update_fields = {}
+    if "acknowledgment_replies" in body:
+        acks = body["acknowledgment_replies"]
+        if isinstance(acks, list):
+            update_fields["acknowledgment_replies"] = [a for a in acks if isinstance(a, str)]
+    if "fallback_message" in body:
+        update_fields["fallback_message"] = str(body["fallback_message"] or "")
+    if update_fields:
+        update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.bot_instances.update_one({"id": instance_id}, {"$set": update_fields})
+    return {"success": True}
 
 
 @api_router.post("/admin/instances/{instance_id}/assign-user")
@@ -2672,13 +2718,6 @@ async def get_discord_config(instance_id: str = Depends(get_instance_access)):
     else:
         config = {"is_active": False, "has_bot_token": bool(app_creds["bot_token"]), "oauth_connected": False}
     config["oauth_enabled"] = bool(app_creds["client_id"])
-    # Auto-seed acknowledgment_replies with defaults so admins see them pre-populated
-    sm = config.get("scripted_mode") or {}
-    if isinstance(sm, dict):
-        acks = sm.get("acknowledgment_replies")
-        if not isinstance(acks, list) or not any(isinstance(x, str) and x.strip() for x in acks):
-            sm["acknowledgment_replies"] = list(DEFAULT_ACK_REPLIES)
-            config["scripted_mode"] = sm
     return config
 
 
@@ -2888,10 +2927,21 @@ async def _run_scenario_doc(scenario: dict, scripted_cfg: dict, instance_id: str
 
 
 async def _load_scripted_cfg(instance_id: str, override: Optional[dict] = None) -> dict:
+    """Load scripted config and merge in instance-level reply defaults (ack_replies + fallback)."""
     if isinstance(override, dict):
-        return override
-    cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
-    return cfg.get("scripted_mode") or {}
+        scripted_cfg = dict(override)
+    else:
+        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+        scripted_cfg = dict(cfg.get("scripted_mode") or {})
+    # Inject instance-level reply defaults (global ack_replies + fallback from bot_instances)
+    inst = await db.bot_instances.find_one({"id": instance_id}, {"acknowledgment_replies": 1, "fallback_message": 1}) or {}
+    inst_acks = inst.get("acknowledgment_replies")
+    inst_fallback = inst.get("fallback_message")
+    if isinstance(inst_acks, list) and any(isinstance(x, str) and x.strip() for x in inst_acks):
+        scripted_cfg["acknowledgment_replies"] = inst_acks
+    if isinstance(inst_fallback, str) and inst_fallback.strip():
+        scripted_cfg["fallback_message"] = inst_fallback
+    return scripted_cfg
 
 
 @api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/run")
