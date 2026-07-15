@@ -309,23 +309,45 @@ async def get_instance_access(
 
 async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
     try:
-        # Load ALL active sources for this instance, sorted by priority
-        all_sources = await db.knowledge_sources.find(
-            {"is_active": True, "instance_id": instance_id}, {"_id": 0}
-        ).sort([("priority", -1), ("created_at", -1)]).to_list(100)
+        # ── Step 1: Try MongoDB text search for relevance ──
+        text_results = []
+        if query and query.strip():
+            try:
+                text_results = await db.knowledge_sources.find(
+                    {"$text": {"$search": query}, "is_active": True, "instance_id": instance_id},
+                    {"_id": 0, "score": {"$meta": "textScore"}},
+                ).sort([("score", {"$meta": "textScore"})]).to_list(limit)
+            except Exception:
+                pass  # text index may not exist yet; fall through to brute-force
+
+        # ── Step 2: Fallback — load all active sources sorted by priority ──
+        if not text_results:
+            all_sources = await db.knowledge_sources.find(
+                {"is_active": True, "instance_id": instance_id}, {"_id": 0}
+            ).sort([("priority", -1), ("created_at", -1)]).to_list(100)
+        else:
+            all_sources = text_results
 
         if not all_sources:
             return "__NO_KB__"  # Signal: no knowledge base configured at all
 
+        # ── Step 3: Extract relevant content windows per source ──
+        query_lower = (query or "").lower().split()
         chunks = []
         total_chars = 0
         for r in all_sources:
             title = r.get("title", "Unknown")
-            content = r.get("content", "")[:1200]
+            full_content = r.get("content", "")
             pri = r.get("priority", 0)
             pri_label = " [PRIORITY: HIGH]" if pri >= 2 else (" [PRIORITY: MEDIUM]" if pri == 1 else "")
+
+            # For large content (>2K), find the best matching window around query terms
+            if len(full_content) > 2000 and query_lower:
+                content = _extract_relevant_window(full_content, query_lower, window_size=2500)
+            else:
+                content = full_content[:2500]
+
             chunk = f"[{title}]{pri_label}\n{content}"
-            # Stay within ~30K chars to leave room for the rest of the prompt
             if total_chars + len(chunk) > 30000:
                 break
             chunks.append(chunk)
@@ -334,6 +356,41 @@ async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
     except Exception as e:
         logger.warning(f"Knowledge search: {e}")
         return ""
+
+
+def _extract_relevant_window(content: str, query_words: list, window_size: int = 2500) -> str:
+    """Find the section of content most relevant to the query and return a window around it."""
+    content_lower = content.lower()
+    best_pos = 0
+    best_score = -1
+    # Filter out very short/common words for better matching
+    meaningful_words = [w for w in query_words if len(w) > 2]
+    if not meaningful_words:
+        meaningful_words = query_words
+
+    # Score positions by frequency of query words (not just presence)
+    step = 200
+    for pos in range(0, max(1, len(content) - window_size), step):
+        window = content_lower[pos:pos + window_size]
+        score = sum(window.count(w) for w in meaningful_words)
+        if score > best_score:
+            best_score = score
+            best_pos = pos
+
+    # If no matches found, return the start
+    if best_score <= 0:
+        return content[:window_size]
+
+    # Expand to nearest paragraph boundaries
+    start = max(0, best_pos)
+    # Try to start at a paragraph/Q&A break
+    for sep in ["\nQ: ", "\n\n##", "\n\n"]:
+        break_pos = content.rfind(sep, max(0, start - 300), start)
+        if break_pos > 0:
+            start = break_pos + 1
+            break
+    end = min(len(content), start + window_size)
+    return content[start:end].strip()
 
 
 async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> str:
@@ -1888,6 +1945,97 @@ async def add_faq(entry: FAQEntry, instance_id: str = Depends(get_instance_acces
     return doc
 
 
+
+def _split_into_chunks(text: str, max_chunk: int = 8000) -> list:
+    """Split large text into chunks, preferring section/Q&A boundaries."""
+    if len(text) <= max_chunk:
+        return [text]
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= max_chunk:
+            chunks.append(remaining)
+            break
+        # Find the best split point near the max_chunk boundary
+        candidate = remaining[:max_chunk]
+        split_at = max_chunk
+        # Prefer splitting at section headers or Q&A boundaries
+        for sep in ["\n\n## ", "\n\nQ: ", "\n\n"]:
+            pos = candidate.rfind(sep, max_chunk // 2)
+            if pos > 0:
+                split_at = pos
+                break
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+    return [c for c in chunks if c]
+
+
+
+def _extract_nextjs_content(html: str) -> str:
+    """Extract readable text from Next.js __NEXT_DATA__ embedded JSON.
+    Handles Sanity portable text blocks (common in Next.js/Sanity CMS sites)."""
+    import json as _json
+    idx = html.index("__NEXT_DATA__")
+    json_start = html.index("{", idx)
+    depth = 0
+    for i, c in enumerate(html[json_start:json_start + 2_000_000]):
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        if depth == 0:
+            data = _json.loads(html[json_start:json_start + i + 1])
+            break
+    else:
+        return ""
+
+    # Walk the JSON tree and extract all readable text
+    parts = []
+
+    def _extract_text_from_blocks(blocks):
+        """Extract text from Sanity portable text blocks."""
+        texts = []
+        if not isinstance(blocks, list):
+            return ""
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            children = block.get("children", [])
+            for child in children if isinstance(children, list) else []:
+                if isinstance(child, dict) and child.get("text"):
+                    texts.append(child["text"])
+            # Handle list items
+            if block.get("listItem"):
+                texts.append("")  # line break for list items
+        return " ".join(t for t in texts if t).strip()
+
+    def _walk(obj, depth=0):
+        """Recursively walk the JSON and extract Q&A, titles, and text."""
+        if depth > 15:
+            return
+        if isinstance(obj, dict):
+            # FAQ-style item with question + answer
+            question = obj.get("question") or obj.get("title") or ""
+            answer_blocks = obj.get("answer") or obj.get("body") or obj.get("content")
+            if question and isinstance(answer_blocks, list) and answer_blocks:
+                answer_text = _extract_text_from_blocks(answer_blocks)
+                if answer_text:
+                    parts.append(f"Q: {question}\nA: {answer_text}")
+                    return  # don't recurse further into this item
+            # Group with title
+            if obj.get("_type") in ("faqGroup", "group", "section") and obj.get("title"):
+                parts.append(f"\n## {obj['title']}")
+            for v in obj.values():
+                _walk(v, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item, depth + 1)
+
+    page_props = data.get("props", {}).get("pageProps", {})
+    _walk(page_props)
+    return "\n\n".join(parts)
+
+
 @api_router.post("/knowledge/sources/url")
 async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
     try:
@@ -1920,22 +2068,62 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                 raise
         if resp is None or resp.status_code == 429:
             raise HTTPException(status_code=429, detail="Website is rate limiting requests. Try again in a few minutes.")
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
-            tag.decompose()
-        text = soup.get_text(separator="\n", strip=True)
-        text = re.sub(r'\n{3,}', '\n\n', text).strip()[:6000]
-        title = entry.title or (soup.title.string.strip() if soup.title and soup.title.string else entry.url)
-        doc = {
-            "id": str(uuid.uuid4()), "type": "url", "title": str(title)[:150],
-            "content": text, "url": entry.url, "instance_id": instance_id,
-            "priority": entry.priority or 0,
-            "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.knowledge_sources.insert_one(doc)
-        doc.pop("_id", None)
-        return doc
+
+        html_text = resp.text
+        text = ""
+
+        # ── Strategy 1: Extract structured data from Next.js __NEXT_DATA__ ──
+        if "__NEXT_DATA__" in html_text:
+            try:
+                text = _extract_nextjs_content(html_text)
+                if text:
+                    logger.info(f"[SCRAPE] Extracted {len(text)} chars from __NEXT_DATA__ for {entry.url}")
+            except Exception as e:
+                logger.warning(f"[SCRAPE] __NEXT_DATA__ extraction failed: {e}")
+
+        # ── Strategy 2: Standard BeautifulSoup extraction ──
+        if not text or len(text) < 200:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+
+        text = re.sub(r'\n{3,}', '\n\n', text).strip()
+        from bs4 import BeautifulSoup as BS2
+        soup2 = BS2(html_text, "html.parser")
+        title = entry.title or (soup2.title.string.strip() if soup2.title and soup2.title.string else entry.url)
+
+        # ── Chunk large content into multiple KB entries ──
+        CHUNK_SIZE = 8000
+        docs = []
+        if len(text) <= CHUNK_SIZE:
+            doc = {
+                "id": str(uuid.uuid4()), "type": "url", "title": str(title)[:150],
+                "content": text, "url": entry.url, "instance_id": instance_id,
+                "priority": entry.priority or 0,
+                "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.knowledge_sources.insert_one(doc)
+            doc.pop("_id", None)
+            docs.append(doc)
+        else:
+            chunks = _split_into_chunks(text, CHUNK_SIZE)
+            now = datetime.now(timezone.utc).isoformat()
+            for idx_c, chunk in enumerate(chunks):
+                chunk_title = f"{str(title)[:120]} (part {idx_c + 1}/{len(chunks)})"
+                doc = {
+                    "id": str(uuid.uuid4()), "type": "url", "title": chunk_title,
+                    "content": chunk, "url": entry.url, "instance_id": instance_id,
+                    "priority": entry.priority or 0,
+                    "is_active": True, "created_at": now,
+                }
+                await db.knowledge_sources.insert_one(doc)
+                doc.pop("_id", None)
+                docs.append(doc)
+            logger.info(f"[SCRAPE] Split {len(text)} chars into {len(chunks)} chunks for {entry.url}")
+
+        return docs[0] if len(docs) == 1 else {"chunks": len(docs), "total_chars": len(text), "sources": docs}
     except HTTPException:
         raise
     except Exception as e:
@@ -1968,7 +2156,7 @@ async def upload_document(
                 raise HTTPException(status_code=400, detail=f"PDF parse error: {str(e)}")
         else:
             raise HTTPException(status_code=400, detail="Only .txt and .pdf files are supported")
-        text = re.sub(r'\n{3,}', '\n\n', text).strip()[:6000]
+        text = re.sub(r'\n{3,}', '\n\n', text).strip()[:50000]
         doc = {
             "id": str(uuid.uuid4()), "type": "document", "title": title or filename,
             "content": text, "filename": filename, "instance_id": instance_id,

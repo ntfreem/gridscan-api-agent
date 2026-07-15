@@ -1,0 +1,32 @@
+{
+  "summary": "Verified Lace FAQ RAG improvements (Next.js __NEXT_DATA__ extraction, 8K chunking, MongoDB text-search + sliding-window relevance). All 7 pytest tests passed against Preview instance 5adabbd3-d173-478a-887e-9f8fd8de8d19.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_lace_faq_rag.py",
+    "/app/test_reports/pytest/iter23_lace_faq.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py exceeds 3400 lines; strong candidate for router modularization (chat, knowledge, admin).",
+    "_extract_nextjs_content walks JSON up to depth 15 and 2MB — reasonable, but consider guarding against pathological pages (log size + early bail).",
+    "search_knowledge silently swallows text-index errors; ensure a MongoDB text index on knowledge_sources.content/title exists in production (verify with db.knowledge_sources.getIndexes())."
+  ],
+  "updated_files": ["/app/backend/tests/test_lace_faq_rag.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "N/A - backend only"},
+  "test_credentials": "administrator / Admin@123 (email_or_username field on API)",
+  "seed_data_creation": "None (used pre-existing 13 Lace FAQ chunks on instance 5adabbd3-d173-478a-887e-9f8fd8de8d19).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Instance 5adabbd3-d173-478a-887e-9f8fd8de8d19 (Preview - Cardano USDCx) has 13 Lace FAQ chunks totalling 84,768 chars, all titled 'Lace FAQ (part N/13)'. Chat responses are LLM-driven (Claude) and take ~5-8s per call. Use unique session_id per call to bypass conversation-history caching.",
+  "test_results_detail": {
+    "knowledge_chunks_found": 13,
+    "total_content_chars": 84768,
+    "chat_responses_verified": [
+      "Staking: mentions delegation, Cardano, stake pool",
+      "Hardware wallet: lists Ledger Nano S/X/Flex/Stax and Trezor Model T/Safe 3/5",
+      "Midnight: identifies as blockchain with NIGHT/DUST dual-token system",
+      "Token swap: correct in-Lace exchange explanation"
+    ]
+  }
+}
