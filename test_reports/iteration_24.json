@@ -1,0 +1,29 @@
+{
+  "summary": "Verified the Discord Scripted-Mode sandbox now uses instance-level Response Defaults (bot_instances.acknowledgment_replies + fallback_message) via _load_scripted_cfg. 5/5 pytest tests passed against Preview instance 8292460c-de40-4a28-a711-640c0ecb8447.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_reply_defaults_sandbox.py",
+    "/app/test_reports/pytest/iter24_reply_defaults.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 3417 lines — reiterate previous recommendation to modularize into routers (chat/knowledge/admin/discord).",
+    "_load_scripted_cfg performs an extra bot_instances lookup on every scripted-mode reply; consider caching per-instance reply defaults if throughput becomes a concern.",
+    "GET /api/admin/instances/{id}/reply-defaults has a 'migrate from scripted_mode' fallback path that reads discord_config; once all instances are migrated, this dead branch should be removed."
+  ],
+  "updated_files": ["/app/backend/tests/test_reply_defaults_sandbox.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "N/A - backend only"},
+  "test_credentials": "administrator / Admin@123 (login field: email_or_username)",
+  "seed_data_creation": "None. Tests preserve/restore original saved reply-defaults (Glad to help!/No worries!/Anytime!/You got it! + 'Please contact support for further help.').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Instance 8292460c-de40-4a28-a711-640c0ecb8447 has scripted_mode.rephrase_mode=ai, primary_message='P', update_message='U'. bot_instances holds custom ack_replies=['Glad to help!','No worries!','Anytime!','You got it!'] and fallback='Please contact support for further help.'. Sandbox turn 3 for messages=['question','question','thanks!'] returns pool_name='ack' with intent='ack' and pool_considered subset of the custom acks. Clearing ack_replies via PUT /api/admin/instances/{id}/reply-defaults with [] causes fallback to DEFAULT_ACK_REPLIES.",
+  "test_results_detail": {
+    "get_reply_defaults": "returns saved custom acks + fallback",
+    "put_reply_defaults": "persists new values, verified via subsequent GET",
+    "sandbox_custom_acks": "turn3 pool_considered ⊆ CUSTOM_ACKS, bot_reply ∈ CUSTOM_ACKS",
+    "sandbox_fallback_defaults": "with empty acks saved, turn3 pool_considered ⊆ DEFAULT_ACK_REPLIES",
+    "cleanup_restore": "original acks and fallback restored"
+  }
+}

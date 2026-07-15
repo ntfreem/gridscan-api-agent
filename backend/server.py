@@ -3025,10 +3025,9 @@ async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_insta
         raise HTTPException(status_code=400, detail="Sandbox is capped at 25 messages per run")
     override = body.get("scripted_config")
     if isinstance(override, dict):
-        scripted_cfg = override
+        scripted_cfg = await _load_scripted_cfg(instance_id, override)
     else:
-        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
-        scripted_cfg = cfg.get("scripted_mode") or {}
+        scripted_cfg = await _load_scripted_cfg(instance_id)
     turns = await _run_sandbox_simulation(scripted_cfg, messages, instance_id)
     return {"turns": turns}
 
