@@ -117,6 +117,15 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Removed the Acknowledgment Replies block and Fallback Message field from the Scripted Mode UI on Discord Settings; replaced with a note pointing to Bot Settings
 - Tests: `test_reply_defaults.py` (6/6 pass) covering CRUD, auth gating, 404 handling, and sandbox integration
 
+
+### Smart URL Scraper + Knowledge Search (DONE 2026-07-15)
+- **Bug**: URL scraper only stored 6,000 chars and couldn't extract content from JavaScript-rendered pages (Next.js, React SPAs). The Lace FAQ page (141 Q&As, 85K chars) returned only 25 chars.
+- **Fix 1 — Next.js extraction**: Added `_extract_nextjs_content()` that detects and parses `__NEXT_DATA__` JSON embedded in Next.js pages, extracting structured Q&A from Sanity CMS portable text blocks.
+- **Fix 2 — Content chunking**: Large scraped content is automatically split into ~8K chunks at section/Q&A boundaries via `_split_into_chunks()`. Each chunk becomes a separate searchable KB entry (e.g., "Lace FAQ (part 1/13)").
+- **Fix 3 — Smart knowledge search**: `search_knowledge()` now uses MongoDB `$text` search for relevance-based retrieval. For large documents, `_extract_relevant_window()` scores content positions by query word frequency and extracts the most relevant ~2,500 char window.
+- Storage limits increased from 6K to 50K per document (for non-chunked sources).
+- Tests: 7/7 backend pytest covering chunked scraping, chat Q&A accuracy across staking, hardware wallets, Midnight, and swap topics.
+
 ### Per-Instance Cost Dashboard (DONE 2026-02-XX)
 - Captures real input/output tokens per LLM call:
   - **Anthropic SDK**: `resp.usage.input_tokens` / `output_tokens` (exact)
@@ -243,7 +252,7 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Decision pending: single shared Discord settings across servers vs per-server overrides
 
 ### P2 — Refactor server.py
-- Split ~3200-line server.py into modular route files
+- Split ~3400-line server.py into modular route files
 
 ### P2 — Real-time Streaming
 - SSE or WebSocket for streaming chat responses
