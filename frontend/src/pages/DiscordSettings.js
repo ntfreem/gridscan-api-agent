@@ -380,6 +380,8 @@ export default function DiscordSettings() {
     primary_message: "",
     update_message: "",
     variants: [],
+    acknowledgment_replies: [],
+    fallback_message: "",
     max_attempts: 10,
     reset_hours: 24,
     rephrase_mode: "hybrid",
@@ -434,11 +436,16 @@ export default function DiscordSettings() {
       setHandoffFollowup(r.data?.handoff_followup_message || "Is there anything else I can help with?");
       setPassiveMode(r.data?.passive_mode || false);
       const sc = r.data?.scripted_mode || {};
+      const DEFAULT_ACKS = ["You're welcome!", "Anytime — happy to help!", "No problem!", "Glad I could help."];
       setScripted({
         enabled: !!sc.enabled,
         primary_message: sc.primary_message || "",
         update_message: sc.update_message || "",
         variants: Array.isArray(sc.variants) ? sc.variants : [],
+        acknowledgment_replies: (Array.isArray(sc.acknowledgment_replies) && sc.acknowledgment_replies.length > 0)
+          ? sc.acknowledgment_replies
+          : DEFAULT_ACKS,
+        fallback_message: sc.fallback_message || "",
         max_attempts: sc.max_attempts || 10,
         reset_hours: sc.reset_hours || 24,
         rephrase_mode: sc.rephrase_mode || "hybrid",
@@ -1117,6 +1124,60 @@ export default function DiscordSettings() {
                   </div>
                 )}
 
+                {/* ── AI Conversation Router (msg3+) — Acknowledgment Replies ── */}
+                {(scripted.rephrase_mode === "ai" || scripted.rephrase_mode === "hybrid") && (
+                  <div
+                    data-testid="scripted-acks-block"
+                    style={{
+                      marginTop: "20px",
+                      padding: "14px",
+                      backgroundColor: "rgba(96,165,250,0.04)",
+                      border: `1px solid rgba(96,165,250,0.18)`,
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                      <Zap size={13} color={colors.brand.light} />
+                      <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                        Acknowledgment Replies
+                      </p>
+                      <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.light, backgroundColor: "rgba(96,165,250,0.12)", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase", letterSpacing: "0.05em", marginLeft: "auto" }}>
+                        Msg 3+ AI Router
+                      </span>
+                    </div>
+                    <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "0 0 12px", lineHeight: "1.5" }}>
+                      Short replies for &ldquo;thanks&rdquo;, &ldquo;ok&rdquo;, &ldquo;got it&rdquo;, etc. After Reply 1 and Reply 2 are sent, the AI router uses these whenever it detects a user is just acknowledging — never to answer a question. If a user keeps thanking you, the router cycles through these and only repeats once the list is exhausted.
+                    </p>
+                    {scripted.acknowledgment_replies.map((v, i) => (
+                      <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                        <input
+                          type="text"
+                          value={v}
+                          onChange={e => setScripted(p => ({ ...p, acknowledgment_replies: p.acknowledgment_replies.map((x, j) => j === i ? e.target.value : x) }))}
+                          placeholder={`Acknowledgment ${i + 1}…`}
+                          data-testid={`scripted-ack-${i}`}
+                          onFocus={onFocus} onBlur={onBlur}
+                          style={{ ...T.input, flex: 1, padding: "8px 10px" }}
+                        />
+                        <button
+                          onClick={() => setScripted(p => ({ ...p, acknowledgment_replies: p.acknowledgment_replies.filter((_, j) => j !== i) }))}
+                          data-testid={`scripted-ack-del-${i}`}
+                          style={{ padding: "8px 10px", backgroundColor: "rgba(244,63,94,0.06)", border: `1px solid rgba(244,63,94,0.2)`, borderRadius: "8px", color: colors.brand.error, cursor: "pointer" }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setScripted(p => ({ ...p, acknowledgment_replies: [...p.acknowledgment_replies, ""] }))}
+                      data-testid="scripted-add-ack"
+                      style={{ padding: "8px 12px", backgroundColor: "rgba(96,165,250,0.06)", border: `1px solid rgba(96,165,250,0.2)`, borderRadius: "8px", color: colors.brand.light, cursor: "pointer", fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}
+                    >
+                      <Plus size={12} /> Add acknowledgment
+                    </button>
+                  </div>
+                )}
+
                 {/* Max attempts + Reset hours */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "16px" }}>
                   <div>
@@ -1141,9 +1202,18 @@ export default function DiscordSettings() {
                   </div>
                 </div>
 
-                <p style={{ ...T.hint, marginTop: "12px", fontStyle: "italic" }}>
-                  Acknowledgment Replies and Fallback Message are now managed globally on the <strong>Bot Settings</strong> page under <strong>Response Defaults</strong>.
-                </p>
+                {/* Fallback */}
+                <label style={{ ...T.label, marginTop: "16px" }}>Fallback Message</label>
+                <textarea
+                  value={scripted.fallback_message}
+                  onChange={e => setScripted(p => ({ ...p, fallback_message: e.target.value }))}
+                  placeholder="For urgent issues please open a ticket or email support@…"
+                  data-testid="scripted-fallback"
+                  rows={3}
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={{ ...T.input, resize: "vertical", fontFamily: fonts.body, padding: "10px 12px" }}
+                />
+                <p style={T.hint}>Sent after Max Attempts is reached, instead of another rephrase.</p>
 
                 {/* Reset Counters — admin debug helper */}
                 <div

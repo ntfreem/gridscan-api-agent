@@ -106,16 +106,11 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - The host admin sees the newly invited guild auto-linked to their instance and can configure it as usual
 
 
-### Global Response Defaults (DONE 2026-07-07)
-- Moved **Acknowledgment Replies** and **Fallback Message** from Scripted Mode (Discord Settings) to a new global **Response Defaults** card on the Bot Settings page
-- These are now per-instance settings stored directly on `bot_instances` (fields: `acknowledgment_replies`, `fallback_message`)
-- New endpoints:
-  - `GET /api/admin/instances/{id}/reply-defaults` — returns ack replies + fallback (with migration from scripted_mode → defaults)
-  - `PUT /api/admin/instances/{id}/reply-defaults` — saves them to bot_instances
-- `_load_scripted_cfg` merges instance-level reply defaults into the scripted config, so the AI router, sandbox, and scenario runner all read from the new global location
-- Discord message handler also injects instance-level values before calling `build_scripted_response`
-- Removed the Acknowledgment Replies block and Fallback Message field from the Scripted Mode UI on Discord Settings; replaced with a note pointing to Bot Settings
-- Tests: `test_reply_defaults.py` (6/6 pass) covering CRUD, auth gating, 404 handling, and sandbox integration
+### Global Response Defaults (REVERTED 2026-07-15)
+- Originally moved Acknowledgment Replies and Fallback Message to Bot Settings as global per-instance settings
+- **Reverted**: User found the AI router works better when these are directly in the Scripted Mode config on Discord Settings
+- Ack replies and fallback are back in `discord_config.scripted_mode` where the AI router reads them directly
+- The `reply-defaults` API endpoints on bot_instances remain but are no longer the primary source
 
 
 ### Smart URL Scraper + Knowledge Search (DONE 2026-07-15)

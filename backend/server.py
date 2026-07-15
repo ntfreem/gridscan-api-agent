@@ -1254,10 +1254,8 @@ async def start_shared_discord_bot(token: str):
             session_id = f"discord_{message.author.id}"
             try:
                 # ─── SCRIPTED MODE check (runs BEFORE LLM, BEFORE KB lookup) ───
-                scripted_cfg_raw = (live_cfg.get("scripted_mode") or {}) if isinstance(live_cfg.get("scripted_mode"), dict) else {}
-                if scripted_cfg_raw.get("enabled") and scripted_cfg_raw.get("primary_message"):
-                    # Merge instance-level reply defaults (global ack_replies + fallback)
-                    scripted_cfg = await _load_scripted_cfg(instance_id, scripted_cfg_raw)
+                scripted_cfg = (live_cfg.get("scripted_mode") or {}) if isinstance(live_cfg.get("scripted_mode"), dict) else {}
+                if scripted_cfg.get("enabled") and scripted_cfg.get("primary_message"):
                     # Passive Mode still gates Scripted Mode (Q3=b): if passive is on, run [SKIP] gate first via Claude
                     passive_mode = bool(live_cfg.get("passive_mode", False))
                     if passive_mode and not is_mentioned and not is_dm:
@@ -2906,6 +2904,13 @@ async def get_discord_config(instance_id: str = Depends(get_instance_access)):
     else:
         config = {"is_active": False, "has_bot_token": bool(app_creds["bot_token"]), "oauth_connected": False}
     config["oauth_enabled"] = bool(app_creds["client_id"])
+    # Auto-seed acknowledgment_replies with defaults so admins see them pre-populated
+    sm = config.get("scripted_mode") or {}
+    if isinstance(sm, dict):
+        acks = sm.get("acknowledgment_replies")
+        if not isinstance(acks, list) or not any(isinstance(x, str) and x.strip() for x in acks):
+            sm["acknowledgment_replies"] = list(DEFAULT_ACK_REPLIES)
+            config["scripted_mode"] = sm
     return config
 
 
@@ -3025,9 +3030,10 @@ async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_insta
         raise HTTPException(status_code=400, detail="Sandbox is capped at 25 messages per run")
     override = body.get("scripted_config")
     if isinstance(override, dict):
-        scripted_cfg = await _load_scripted_cfg(instance_id, override)
+        scripted_cfg = override
     else:
-        scripted_cfg = await _load_scripted_cfg(instance_id)
+        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+        scripted_cfg = cfg.get("scripted_mode") or {}
     turns = await _run_sandbox_simulation(scripted_cfg, messages, instance_id)
     return {"turns": turns}
 
@@ -3114,21 +3120,10 @@ async def _run_scenario_doc(scenario: dict, scripted_cfg: dict, instance_id: str
 
 
 async def _load_scripted_cfg(instance_id: str, override: Optional[dict] = None) -> dict:
-    """Load scripted config and merge in instance-level reply defaults (ack_replies + fallback)."""
     if isinstance(override, dict):
-        scripted_cfg = dict(override)
-    else:
-        cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
-        scripted_cfg = dict(cfg.get("scripted_mode") or {})
-    # Inject instance-level reply defaults (global ack_replies + fallback from bot_instances)
-    inst = await db.bot_instances.find_one({"id": instance_id}, {"acknowledgment_replies": 1, "fallback_message": 1}) or {}
-    inst_acks = inst.get("acknowledgment_replies")
-    inst_fallback = inst.get("fallback_message")
-    if isinstance(inst_acks, list) and any(isinstance(x, str) and x.strip() for x in inst_acks):
-        scripted_cfg["acknowledgment_replies"] = inst_acks
-    if isinstance(inst_fallback, str) and inst_fallback.strip():
-        scripted_cfg["fallback_message"] = inst_fallback
-    return scripted_cfg
+        return override
+    cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
+    return cfg.get("scripted_mode") or {}
 
 
 @api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/run")
