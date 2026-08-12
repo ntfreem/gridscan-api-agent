@@ -2034,6 +2034,49 @@ def _extract_nextjs_content(html: str) -> str:
     return "\n\n".join(parts)
 
 
+
+async def _try_zendesk_api(url: str) -> tuple:
+    """Try Zendesk Help Center API for /hc/ article URLs. Returns (text, title)."""
+    # Extract article ID from URL like /hc/en-us/articles/360000776490-Title
+    match = re.search(r'/hc/([^/]+)/articles/(\d+)', url)
+    if not match:
+        return ("", "")
+    locale, article_id = match.group(1), match.group(2)
+    api_url = re.sub(r'/hc/.*', f'/api/v2/help_center/{locale}/articles/{article_id}.json', url)
+    async with httpx.AsyncClient(timeout=20.0) as http:
+        resp = await http.get(api_url, headers={"Accept": "application/json"})
+        if resp.status_code != 200:
+            return ("", "")
+        data = resp.json()
+        article = data.get("article", {})
+        title = article.get("title", "")
+        body_html = article.get("body", "")
+        if not body_html:
+            return ("", title)
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(body_html, "html.parser")
+        text = soup.get_text(separator="\n", strip=True)
+        return (text, title)
+
+
+async def _try_cloudscraper(url: str) -> tuple:
+    """Try cloudscraper to bypass Cloudflare challenges. Returns (html, text)."""
+    import asyncio
+    def _scrape():
+        import cloudscraper
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(url, timeout=30)
+        resp.raise_for_status()
+        return resp.text
+    html = await asyncio.get_event_loop().run_in_executor(None, _scrape)
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    return (html, text)
+
+
 @api_router.post("/knowledge/sources/url")
 async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
     try:
@@ -2042,10 +2085,17 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             auth = httpx.BasicAuth(entry.auth_username, entry.auth_password)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
         }
         resp = None
+        got_403 = False
         for attempt in range(3):
             try:
                 async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, auth=auth) as http:
@@ -2056,6 +2106,9 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                         import asyncio
                         await asyncio.sleep(wait)
                         continue
+                    if resp.status_code == 403:
+                        got_403 = True
+                        break  # don't retry 403s, try fallback strategies instead
                     resp.raise_for_status()
                     break
             except httpx.HTTPStatusError as e:
@@ -2063,15 +2116,41 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                     import asyncio
                     await asyncio.sleep(5 * (attempt + 1))
                     continue
+                if e.response.status_code == 403:
+                    got_403 = True
+                    break
                 raise
         if resp is None or resp.status_code == 429:
             raise HTTPException(status_code=429, detail="Website is rate limiting requests. Try again in a few minutes.")
 
-        html_text = resp.text
+        html_text = resp.text if resp and resp.status_code == 200 else ""
         text = ""
+        page_title = ""
+
+        # ── Fallback A: Zendesk Help Center API (for /hc/ URLs returning 403) ──
+        if (got_403 or not html_text) and "/hc/" in entry.url and "/articles/" in entry.url:
+            try:
+                text, page_title = await _try_zendesk_api(entry.url)
+                if text:
+                    logger.info(f"[SCRAPE] Zendesk API extracted {len(text)} chars for {entry.url}")
+            except Exception as e:
+                logger.warning(f"[SCRAPE] Zendesk API fallback failed: {e}")
+
+        # ── Fallback B: cloudscraper for Cloudflare-protected sites ──
+        if (got_403 or not html_text) and not text:
+            try:
+                html_text, text = await _try_cloudscraper(entry.url)
+                if text:
+                    logger.info(f"[SCRAPE] cloudscraper extracted {len(text)} chars for {entry.url}")
+            except Exception as e:
+                logger.warning(f"[SCRAPE] cloudscraper fallback failed: {e}")
+
+        # If still 403 with no content, raise clear error
+        if got_403 and not text and not html_text:
+            raise HTTPException(status_code=403, detail="This website blocks automated scraping (Cloudflare/bot protection). Try adding the content manually as an FAQ entry instead.")
 
         # ── Strategy 1: Extract structured data from Next.js __NEXT_DATA__ ──
-        if "__NEXT_DATA__" in html_text:
+        if not text and html_text and "__NEXT_DATA__" in html_text:
             try:
                 text = _extract_nextjs_content(html_text)
                 if text:
@@ -2080,7 +2159,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                 logger.warning(f"[SCRAPE] __NEXT_DATA__ extraction failed: {e}")
 
         # ── Strategy 2: Standard BeautifulSoup extraction ──
-        if not text or len(text) < 200:
+        if (not text or len(text) < 200) and html_text:
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html_text, "html.parser")
             for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
@@ -2088,16 +2167,19 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             text = soup.get_text(separator="\n", strip=True)
 
         text = re.sub(r'\n{3,}', '\n\n', text).strip()
-        from bs4 import BeautifulSoup as BS2
-        soup2 = BS2(html_text, "html.parser")
-        title = entry.title or (soup2.title.string.strip() if soup2.title and soup2.title.string else entry.url)
+        if not page_title:
+            from bs4 import BeautifulSoup as BS2
+            soup2 = BS2(html_text or "", "html.parser")
+            page_title = entry.title or (soup2.title.string.strip() if soup2.title and soup2.title.string else entry.url)
+        else:
+            page_title = entry.title or page_title
 
         # ── Chunk large content into multiple KB entries ──
         CHUNK_SIZE = 8000
         docs = []
         if len(text) <= CHUNK_SIZE:
             doc = {
-                "id": str(uuid.uuid4()), "type": "url", "title": str(title)[:150],
+                "id": str(uuid.uuid4()), "type": "url", "title": str(page_title)[:150],
                 "content": text, "url": entry.url, "instance_id": instance_id,
                 "priority": entry.priority or 0,
                 "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()
@@ -2109,7 +2191,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             chunks = _split_into_chunks(text, CHUNK_SIZE)
             now = datetime.now(timezone.utc).isoformat()
             for idx_c, chunk in enumerate(chunks):
-                chunk_title = f"{str(title)[:120]} (part {idx_c + 1}/{len(chunks)})"
+                chunk_title = f"{str(page_title)[:120]} (part {idx_c + 1}/{len(chunks)})"
                 doc = {
                     "id": str(uuid.uuid4()), "type": "url", "title": chunk_title,
                     "content": chunk, "url": entry.url, "instance_id": instance_id,
