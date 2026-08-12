@@ -1,0 +1,49 @@
+{
+  "summary": "Frontend-only testing completed on the public Preview workspace. All 7 requested desktop bulk-category behaviors passed: select-all and independent checkbox states, indeterminate state, 3-selected action bar, autocomplete wiring, Cancel, six successful PATCH integrations for assign/cleanup, success toast, updated badges, and category filtering. Extended testing found stale hidden selections when the category filter changes and severe mobile horizontal overflow that puts all bulk controls off-screen.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "KnowledgeBase bulk selection",
+        "issue": "Changing the category filter does not reconcile selection. Reproduced by selecting both Music Production rows, then filtering to TEST_FILTER_EDGE: the only visible row was unchecked while the bulk bar incorrectly showed '2 selected'; select-all was neither checked nor indeterminate.",
+        "selector": "[data-testid='bulk-action-bar'], [data-testid='select-all-checkbox'], [data-testid='source-checkbox']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Knowledge Base bulk actions at 390x844",
+        "issues": [
+          "The document is 1085px wide in a 390px viewport (695px horizontal overflow). The bulk bar starts at x=291 and is 753px wide; category input, Assign, and Cancel start at x=411, x=577, and x=665, so all controls are outside the initial viewport and require horizontal scrolling."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Clear selection when categoryFilter changes, or consistently scope selected count, select-all state, and bulk assignment to visible filtered rows.",
+    "Make the admin layout responsive and stack/wrap the source row and bulk action controls within the mobile viewport."
+  ],
+  "critical_code_review_comments": [
+    "selected is global while select-all state and bulkAssignCategory operate on filteredSources. This mismatch causes stale counts and can produce a success toast for 0 visible matching sources after a filter change.",
+    "bulkAssignCategory silently resolves unsupported source shapes with Promise.resolve(), which can report success without making a PATCH; every selectable source should resolve to a valid mutation target or produce an explicit error.",
+    "KnowledgeBase.js is 783 lines, above the 700-line review threshold; extract source-list, bulk-actions, editor, and source-row components."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_27.json"
+  ],
+  "success_rate": {
+    "backend": "Not tested (frontend-only request)",
+    "frontend": "80% (8/10 checks; all 7 requested desktop behaviors and API integration passed, cross-filter selection and mobile layout failed)"
+  },
+  "seed_data_creation": "Temporarily assigned TEST_BULK_QA to all 3 sources and TEST_FILTER_EDGE to one source. Both were removed by restoring every source to Music Production; final seeded data matched its initial state.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Loaded administrator credentials from /app/memory/test_credentials.md; public Preview login succeeded.",
+  "context_for_next_testing_agent": "Core desktop bulk assignment is healthy. Re-test filter changes while selections are active: create a one-row temporary category, select rows in another category, then switch filters and verify count/checkbox state. Also remeasure document width and bulk-control bounding boxes at 390x844. Final workspace state has 3 sources, all categorized Music Production.",
+  "rca_of_the_issue": "KnowledgeBase stores selected keys independently of categoryFilter. The action-bar count renders selected.size, select-all compares selected.size to filteredSources.length, and bulkAssignCategory intersects selected with filteredSources. After switching filters, hidden keys remain selected while visible checkbox state and operations use a different set. Mobile overflow is caused by the fixed 250px sidebar plus desktop-width content/source rows and an uncontained 753px bulk bar."
+}

@@ -215,6 +215,9 @@ export default function KnowledgeBase() {
   const [editing, setEditing] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryInput, setCategoryInput] = useState("");
+  const [selected, setSelected] = useState(new Set());
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const fileRef = useRef(null);
 
   const loadSources = useCallback(() => {
@@ -338,9 +341,50 @@ export default function KnowledgeBase() {
     setEditing(null);
   };
 
+  const toggleSelect = (key) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selected.size === filteredSources.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filteredSources.map(s => s.group_id || s.id || s.parts?.[0])));
+    }
+  };
+
+  const bulkAssignCategory = async () => {
+    if (!bulkCategory.trim() && !window.confirm("Remove category from all selected sources?")) return;
+    setBulkAssigning(true);
+    try {
+      const selectedSources = filteredSources.filter(s => selected.has(s.group_id || s.id || s.parts?.[0]));
+      const promises = selectedSources.map(source => {
+        if (source.total_parts > 1 && source.group_id) {
+          return api.patch(`/knowledge/sources/group/${source.group_id}/category`, { category: bulkCategory.trim() });
+        } else if (source.parts?.length === 1) {
+          return api.patch(`/knowledge/sources/${source.parts[0]}/category`, { category: bulkCategory.trim() });
+        }
+        return Promise.resolve();
+      });
+      await Promise.all(promises);
+      toast.success(`Category ${bulkCategory.trim() ? `"${bulkCategory.trim()}"` : "removed"} applied to ${selectedSources.length} source${selectedSources.length > 1 ? "s" : ""}`);
+      setSelected(new Set());
+      setBulkCategory("");
+      loadSources();
+    } catch { toast.error("Failed to assign category"); }
+    finally { setBulkAssigning(false); }
+  };
+
   const filteredSources = categoryFilter
     ? sources.filter(s => (s.category || "") === categoryFilter)
     : sources;
+
+  // Clear selection when filter changes to avoid stale hidden selections
+  useEffect(() => { setSelected(new Set()); }, [categoryFilter]);
 
   const tabs = [
     { id: "faq", label: "FAQ", icon: HelpCircle },
@@ -485,10 +529,22 @@ export default function KnowledgeBase() {
       {/* Sources List */}
       <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden", marginTop: "24px" }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${colors.border.default}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-          <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
-            All Sources
-            <span style={{ marginLeft: "10px", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{filteredSources.length}</span>
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {filteredSources.length > 0 && (
+              <input
+                type="checkbox"
+                checked={selected.size > 0 && selected.size === filteredSources.length}
+                ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filteredSources.length; }}
+                onChange={selectAll}
+                data-testid="select-all-checkbox"
+                style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: colors.brand.cyan }}
+              />
+            )}
+            <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+              All Sources
+              <span style={{ marginLeft: "10px", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{filteredSources.length}</span>
+            </p>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {categories.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -513,6 +569,54 @@ export default function KnowledgeBase() {
             </p>
           </div>
         </div>
+
+        {/* Bulk action bar */}
+        {selected.size > 0 && (
+          <div data-testid="bulk-action-bar" style={{
+            padding: "10px 20px", borderBottom: `1px solid ${colors.border.default}`,
+            backgroundColor: "rgba(96,165,250,0.06)",
+            display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+          }}>
+            <span style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.brand.light, fontWeight: "600" }}>
+              {selected.size} selected
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Tag size={12} color={colors.text.secondary} />
+              <input
+                value={bulkCategory}
+                onChange={e => setBulkCategory(e.target.value)}
+                placeholder="Category name"
+                list="bulk-category-suggestions"
+                data-testid="bulk-category-input"
+                onKeyDown={e => { if (e.key === "Enter") bulkAssignCategory(); }}
+                style={{ ...T.input, padding: "5px 10px", fontSize: "12px", width: "160px" }}
+              />
+              <datalist id="bulk-category-suggestions">
+                {categories.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <button
+                onClick={bulkAssignCategory}
+                disabled={bulkAssigning}
+                data-testid="bulk-assign-btn"
+                style={{
+                  padding: "5px 14px", borderRadius: "8px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "600",
+                  backgroundColor: colors.brand.cyan, border: "none", color: "#000", cursor: "pointer",
+                  opacity: bulkAssigning ? 0.6 : 1, display: "flex", alignItems: "center", gap: "5px",
+                }}
+              >
+                {bulkAssigning ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}
+                {bulkAssigning ? "Applying..." : "Assign"}
+              </button>
+              <button
+                onClick={() => { setSelected(new Set()); setBulkCategory(""); }}
+                data-testid="bulk-cancel-btn"
+                style={{ padding: "5px 10px", borderRadius: "8px", fontSize: "12px", fontFamily: fonts.body, backgroundColor: "transparent", border: `1px solid ${colors.border.default}`, color: colors.text.secondary, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {filteredSources.length === 0 ? (
           <div style={{ padding: "48px", textAlign: "center" }}>
             <p style={{ fontFamily: fonts.body, color: colors.text.secondary, fontSize: "14px" }}>
@@ -538,6 +642,15 @@ export default function KnowledgeBase() {
                   }}
                   onMouseEnter={rowEnter} onMouseLeave={rowLeave}
                 >
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={selected.has(sourceKey)}
+                    onChange={() => toggleSelect(sourceKey)}
+                    data-testid="source-checkbox"
+                    style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: colors.brand.cyan, flexShrink: 0 }}
+                  />
+
                   {/* Type */}
                   <div style={{ minWidth: "70px" }}>
                     <TypeBadge type={source.type} />
