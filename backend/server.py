@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
 import os
@@ -1924,10 +1924,50 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
 
 @api_router.get("/knowledge/sources")
 async def get_knowledge_sources(instance_id: str = Depends(get_instance_access)):
+    # Include content only for char-count calculation; project to minimize transfer
     sources = await db.knowledge_sources.find(
         {"instance_id": instance_id}, {"_id": 0}
-    ).sort([("priority", -1), ("created_at", -1)]).to_list(200)
-    return sources
+    ).sort([("priority", -1), ("created_at", -1)]).to_list(500)
+
+    # Group chunked URL sources by group_id or url
+    groups = {}
+    ungrouped = []
+    for s in sources:
+        content_len = len(s.get("content", "") or "")
+        gid = s.get("group_id") or (s.get("url") if s.get("type") == "url" and "(part " in (s.get("title") or "") else None)
+        if gid:
+            if gid not in groups:
+                groups[gid] = {
+                    "group_id": s.get("group_id") or gid,
+                    "type": s["type"],
+                    "title": re.sub(r'\s*\(part \d+/\d+\)$', '', s.get("title", "")),
+                    "url": s.get("url", ""),
+                    "priority": s.get("priority", 0),
+                    "category": s.get("category", ""),
+                    "is_active": s.get("is_active", True),
+                    "created_at": s.get("created_at", ""),
+                    "parts": [],
+                    "total_chars": 0,
+                }
+            groups[gid]["parts"].append(s["id"])
+            groups[gid]["total_chars"] += content_len
+            if not s.get("is_active"):
+                groups[gid]["is_active"] = False
+        else:
+            s.pop("content", None)  # strip content from response for ungrouped
+            ungrouped.append({
+                **s,
+                "parts": [s["id"]],
+                "total_parts": 1,
+                "total_chars": content_len,
+            })
+
+    grouped_list = []
+    for g in groups.values():
+        g["total_parts"] = len(g["parts"])
+        grouped_list.append(g)
+    result = sorted(grouped_list + ungrouped, key=lambda x: (-x.get("priority", 0), x.get("created_at", "") or ""))
+    return result
 
 
 @api_router.post("/knowledge/sources/faq")
@@ -2176,26 +2216,27 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
 
         # ── Chunk large content into multiple KB entries ──
         CHUNK_SIZE = 8000
+        group_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
         docs = []
         if len(text) <= CHUNK_SIZE:
             doc = {
                 "id": str(uuid.uuid4()), "type": "url", "title": str(page_title)[:150],
                 "content": text, "url": entry.url, "instance_id": instance_id,
-                "priority": entry.priority or 0,
-                "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()
+                "priority": entry.priority or 0, "group_id": group_id, "total_parts": 1,
+                "is_active": True, "created_at": now,
             }
             await db.knowledge_sources.insert_one(doc)
             doc.pop("_id", None)
             docs.append(doc)
         else:
             chunks = _split_into_chunks(text, CHUNK_SIZE)
-            now = datetime.now(timezone.utc).isoformat()
             for idx_c, chunk in enumerate(chunks):
                 chunk_title = f"{str(page_title)[:120]} (part {idx_c + 1}/{len(chunks)})"
                 doc = {
                     "id": str(uuid.uuid4()), "type": "url", "title": chunk_title,
                     "content": chunk, "url": entry.url, "instance_id": instance_id,
-                    "priority": entry.priority or 0,
+                    "priority": entry.priority or 0, "group_id": group_id, "total_parts": len(chunks),
                     "is_active": True, "created_at": now,
                 }
                 await db.knowledge_sources.insert_one(doc)
@@ -2252,12 +2293,85 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PriorityUpdate(BaseModel):
+    priority: int = Field(ge=0, le=2)
+
+
 @api_router.delete("/knowledge/sources/{source_id}")
 async def delete_source(source_id: str, instance_id: str = Depends(get_instance_access)):
     result = await db.knowledge_sources.delete_one({"id": source_id, "instance_id": instance_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Source not found")
     return {"success": True}
+
+
+@api_router.delete("/knowledge/sources/group/{group_id}")
+async def delete_source_group(group_id: str, instance_id: str = Depends(get_instance_access)):
+    """Delete all chunks in a group (all parts of a URL scrape)."""
+    result = await db.knowledge_sources.delete_many({"group_id": group_id, "instance_id": instance_id})
+    if result.deleted_count == 0:
+        # Fallback: try matching by URL for legacy ungrouped sources
+        result = await db.knowledge_sources.delete_many({"url": group_id, "instance_id": instance_id})
+    return {"success": True, "deleted": result.deleted_count}
+
+
+@api_router.patch("/knowledge/sources/group/{group_id}/category")
+async def update_group_category(group_id: str, body: dict, instance_id: str = Depends(get_instance_access)):
+    """Update category for all chunks in a group."""
+    category = (body.get("category") or "").strip()
+    result = await db.knowledge_sources.update_many(
+        {"group_id": group_id, "instance_id": instance_id},
+        {"$set": {"category": category}}
+    )
+    if result.matched_count == 0:
+        result = await db.knowledge_sources.update_many(
+            {"url": group_id, "instance_id": instance_id},
+            {"$set": {"category": category}}
+        )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"success": True, "category": category}
+
+
+@api_router.patch("/knowledge/sources/group/{group_id}/toggle")
+async def toggle_source_group(group_id: str, instance_id: str = Depends(get_instance_access)):
+    """Toggle active state for all chunks in a group."""
+    sample = await db.knowledge_sources.find_one(
+        {"$or": [{"group_id": group_id}, {"url": group_id}], "instance_id": instance_id}
+    )
+    if not sample:
+        raise HTTPException(status_code=404, detail="Group not found")
+    new_status = not sample.get("is_active", True)
+    await db.knowledge_sources.update_many(
+        {"$or": [{"group_id": group_id}, {"url": group_id}], "instance_id": instance_id},
+        {"$set": {"is_active": new_status}}
+    )
+    return {"is_active": new_status}
+
+
+@api_router.patch("/knowledge/sources/group/{group_id}/priority")
+async def update_group_priority(group_id: str, body: PriorityUpdate, instance_id: str = Depends(get_instance_access)):
+    """Update priority for all chunks in a group."""
+    result = await db.knowledge_sources.update_many(
+        {"$or": [{"group_id": group_id}, {"url": group_id}], "instance_id": instance_id},
+        {"$set": {"priority": body.priority}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"success": True, "priority": body.priority}
+
+
+@api_router.patch("/knowledge/sources/{source_id}/category")
+async def update_source_category(source_id: str, body: dict, instance_id: str = Depends(get_instance_access)):
+    """Update category for a single source."""
+    category = (body.get("category") or "").strip()
+    result = await db.knowledge_sources.update_one(
+        {"id": source_id, "instance_id": instance_id},
+        {"$set": {"category": category}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {"success": True, "category": category}
 
 
 @api_router.patch("/knowledge/sources/{source_id}/toggle")
@@ -2269,9 +2383,6 @@ async def toggle_source(source_id: str, instance_id: str = Depends(get_instance_
     await db.knowledge_sources.update_one({"id": source_id}, {"$set": {"is_active": new_status}})
     return {"is_active": new_status}
 
-
-class PriorityUpdate(BaseModel):
-    priority: int
 
 class SourceUpdate(BaseModel):
     title: Optional[str] = None
@@ -2303,6 +2414,13 @@ async def update_source(source_id: str, body: SourceUpdate, instance_id: str = D
     await db.knowledge_sources.update_one({"id": source_id, "instance_id": instance_id}, {"$set": update})
     updated = await db.knowledge_sources.find_one({"id": source_id}, {"_id": 0})
     return updated
+
+
+@api_router.get("/knowledge/categories")
+async def get_knowledge_categories(instance_id: str = Depends(get_instance_access)):
+    """Return all unique categories used by knowledge sources in this instance."""
+    cats = await db.knowledge_sources.distinct("category", {"instance_id": instance_id})
+    return [c for c in cats if c and isinstance(c, str) and c.strip()]
 
 
 # ==================== CONVERSATIONS (PROTECTED) ====================

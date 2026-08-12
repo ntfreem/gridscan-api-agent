@@ -128,6 +128,23 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
   - **Emergent** path: heuristic estimate via `_estimate_tokens` (~4 chars/token) since the library doesn't expose usage
 - New `LLM_PRICING` table covering Anthropic 4-series (Haiku $1/$5, Sonnet $3/$15, Opus $15/$75 per 1M tokens) + legacy 3.5 + Ollama=$0 + Sonnet-fallback for unknown.
 - `_cost_for(model, in_tok, out_tok)` — handles provider-prefixed and bare model ids.
+
+### KB Grouped Sources + Categories + Metadata (DONE 2026-08-12)
+- **URL scrapes are now grouped** — chunked sources (e.g., 10-part Lace FAQ) appear as a single row with a "10 parts" badge instead of 10 individual rows
+- **Categories** — each KB source/group can be tagged with a category (inline editor, autocomplete from existing categories, filter dropdown)
+- **Rich metadata** — each row shows: type badge (URL/FAQ/Document), title, URL, scraped date, char count, parts count, category, priority with up/down controls
+- **Group operations** — delete, toggle, category, priority all apply to the entire group at once
+- New endpoints:
+  - `DELETE /api/knowledge/sources/group/{group_id}` — delete all chunks in a group
+  - `PATCH /api/knowledge/sources/group/{group_id}/category` — set category for group
+  - `PATCH /api/knowledge/sources/group/{group_id}/toggle` — toggle active for group
+  - `PATCH /api/knowledge/sources/group/{group_id}/priority` — set priority for group
+  - `PATCH /api/knowledge/sources/{source_id}/category` — set category for single source
+  - `GET /api/knowledge/categories` — list unique categories
+- Validation: 404 for nonexistent groups/sources, priority constrained to 0-2
+- Frontend: Complete KnowledgeBase.js rewrite with grouped display, inline category editor, filter
+- Tests: 11/11 backend + full desktop E2E pass
+
 - New endpoint `GET /api/analytics/llm-cost`: returns `{month_to_date: {cost_usd, input_tokens, output_tokens, calls, day_of_month, days_in_month}, by_model: [...], daily: [30 days], forecast_month_end_usd, last_30d_cost_usd}`.
 - Forecast = `(mtd_cost / day_of_month) * days_in_month` (simple linear projection).
 - UI: new Cost Dashboard card on Bot Settings page **directly below the LLM Provider card**:

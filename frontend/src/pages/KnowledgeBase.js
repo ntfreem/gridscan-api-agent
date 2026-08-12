@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
@@ -64,6 +64,40 @@ function PrioritySelector({ value, onChange, style }) {
       ))}
     </div>
   );
+}
+
+function CategoryBadge({ category }) {
+  if (!category) return null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "10px",
+      fontSize: "10px", fontFamily: fonts.mono, letterSpacing: "0.03em",
+      backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(139,92,246,0.9)",
+    }}>
+      <Tag size={9} />{category}
+    </span>
+  );
+}
+
+function PartsBadge({ parts }) {
+  if (!parts || parts <= 1) return null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 8px", borderRadius: "10px",
+      fontSize: "10px", fontFamily: fonts.mono, letterSpacing: "0.03em",
+      backgroundColor: "rgba(96,165,250,0.1)", color: colors.brand.light,
+    }}>
+      <Layers size={9} />{parts} parts
+    </span>
+  );
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return ""; }
 }
 
 function EditModal({ source, onClose, onSaved }) {
@@ -169,6 +203,8 @@ export default function KnowledgeBase() {
   const instanceId = selectedInstance?.id;
   const [activeTab, setActiveTab] = useState("faq");
   const [sources, setSources] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [faq, setFaq] = useState({ title: "", content: "", priority: 0 });
   const [urlEntry, setUrlEntry] = useState({ url: "", title: "", priority: 0, auth_username: "", auth_password: "" });
@@ -177,10 +213,13 @@ export default function KnowledgeBase() {
   const [scraping, setScraping] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryInput, setCategoryInput] = useState("");
   const fileRef = useRef(null);
 
   const loadSources = useCallback(() => {
     api.get(`/knowledge/sources`).then(r => setSources(r.data)).catch(() => {});
+    api.get(`/knowledge/categories`).then(r => setCategories(r.data || [])).catch(() => {});
   }, [instanceId]);
 
   useEffect(() => { loadSources(); }, [loadSources, instanceId]);
@@ -232,40 +271,76 @@ export default function KnowledgeBase() {
     finally { setUploading(false); }
   };
 
-  const deleteSource = async (id) => {
+  const deleteSource = async (source) => {
     try {
-      await api.delete(`/knowledge/sources/${id}`);
-      toast.success("Source deleted");
-      setSources(prev => prev.filter(s => s.id !== id));
+      if (source.total_parts > 1 && source.group_id) {
+        await api.delete(`/knowledge/sources/group/${source.group_id}`);
+        toast.success(`Deleted ${source.total_parts} parts`);
+      } else if (source.parts?.length === 1) {
+        await api.delete(`/knowledge/sources/${source.parts[0]}`);
+        toast.success("Source deleted");
+      } else {
+        await api.delete(`/knowledge/sources/${source.id}`);
+        toast.success("Source deleted");
+      }
+      loadSources();
     } catch { toast.error("Failed to delete"); }
   };
 
-  const toggleSource = async (id) => {
+  const toggleSource = async (source) => {
     try {
-      const r = await api.patch(`/knowledge/sources/${id}/toggle`);
-      setSources(prev => prev.map(s => s.id === id ? { ...s, is_active: r.data.is_active } : s));
+      if (source.total_parts > 1 && source.group_id) {
+        const r = await api.patch(`/knowledge/sources/group/${source.group_id}/toggle`);
+        setSources(prev => prev.map(s => s.group_id === source.group_id ? { ...s, is_active: r.data.is_active } : s));
+      } else if (source.parts?.length === 1) {
+        const r = await api.patch(`/knowledge/sources/${source.parts[0]}/toggle`);
+        setSources(prev => prev.map(s => (s.parts?.[0] === source.parts?.[0] || s.id === source.parts?.[0]) ? { ...s, is_active: r.data.is_active } : s));
+      } else {
+        const r = await api.patch(`/knowledge/sources/${source.id}/toggle`);
+        setSources(prev => prev.map(s => s.id === source.id ? { ...s, is_active: r.data.is_active } : s));
+      }
     } catch { toast.error("Failed to toggle"); }
   };
 
-  const updatePriority = async (id, newPriority) => {
+  const updatePriority = async (source, newPriority) => {
     try {
-      await api.patch(`/knowledge/sources/${id}/priority`, { priority: newPriority });
-      setSources(prev => {
-        const updated = prev.map(s => s.id === id ? { ...s, priority: newPriority } : s);
-        return updated.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      });
+      if (source.total_parts > 1 && source.group_id) {
+        await api.patch(`/knowledge/sources/group/${source.group_id}/priority`, { priority: newPriority });
+      } else if (source.parts?.length === 1) {
+        await api.patch(`/knowledge/sources/${source.parts[0]}/priority`, { priority: newPriority });
+      } else {
+        await api.patch(`/knowledge/sources/${source.id}/priority`, { priority: newPriority });
+      }
+      loadSources();
       const label = PRIORITY_LEVELS.find(p => p.value === newPriority)?.label || "Normal";
       toast.success(`Priority set to ${label}`);
     } catch { toast.error("Failed to update priority"); }
   };
 
+  const saveCategory = async (source) => {
+    try {
+      if (source.total_parts > 1 && source.group_id) {
+        await api.patch(`/knowledge/sources/group/${source.group_id}/category`, { category: categoryInput });
+      } else if (source.parts?.length === 1) {
+        await api.patch(`/knowledge/sources/${source.parts[0]}/category`, { category: categoryInput });
+      } else {
+        await api.patch(`/knowledge/sources/${source.id}/category`, { category: categoryInput });
+      }
+      toast.success(categoryInput ? `Category: ${categoryInput}` : "Category removed");
+      setEditingCategory(null);
+      setCategoryInput("");
+      loadSources();
+    } catch { toast.error("Failed to update category"); }
+  };
+
   const handleEditSaved = (updated) => {
-    setSources(prev => {
-      const list = prev.map(s => s.id === updated.id ? updated : s);
-      return list.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    });
+    loadSources();
     setEditing(null);
   };
+
+  const filteredSources = categoryFilter
+    ? sources.filter(s => (s.category || "") === categoryFilter)
+    : sources;
 
   const tabs = [
     { id: "faq", label: "FAQ", icon: HelpCircle },
@@ -331,7 +406,7 @@ export default function KnowledgeBase() {
         <div style={T.card}>
           <p style={T.sectionTitle}>Scrape URL</p>
           <p style={{ ...T.sectionSub, marginTop: "4px" }}>
-            Enter a URL and we'll automatically extract and index its content for your bot to learn from.
+            Enter a URL and we&apos;ll automatically extract and index its content. Large pages are split into searchable chunks automatically.
           </p>
           <div style={{ display: "grid", gap: "14px" }}>
             <div>
@@ -347,15 +422,13 @@ export default function KnowledgeBase() {
             <div>
               <label style={T.label}>Priority</label>
               <PrioritySelector value={urlEntry.priority} onChange={v => setUrlEntry(p => ({ ...p, priority: v }))} />
-              <p style={T.hint}>High priority sources are checked first when answering questions.</p>
             </div>
-            {/* Auth credentials for protected URLs */}
             <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
                 <Lock size={12} color={colors.text.muted} />
                 <label style={{ ...T.label, margin: 0, fontSize: "12px" }}>Authentication (optional)</label>
               </div>
-              <p style={{ ...T.hint, marginTop: 0, marginBottom: "10px" }}>If the URL requires login, enter credentials below. Uses HTTP Basic Auth.</p>
+              <p style={{ ...T.hint, marginTop: 0, marginBottom: "10px" }}>If the URL requires login, enter credentials below.</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <div>
                   <label style={{ ...T.label, fontSize: "11px" }}>Username / Email</label>
@@ -383,7 +456,7 @@ export default function KnowledgeBase() {
       {activeTab === "document" && (
         <div style={T.card}>
           <p style={T.sectionTitle}>Upload Document</p>
-          <p style={{ ...T.sectionSub, marginTop: "4px" }}>Upload .txt or .pdf files. Content will be extracted and indexed for your bot.</p>
+          <p style={{ ...T.sectionSub, marginTop: "4px" }}>Upload .txt or .pdf files. Content will be extracted and indexed.</p>
           <div style={{ display: "grid", gap: "14px" }}>
             <div>
               <label style={T.label}>Title *</label>
@@ -398,7 +471,6 @@ export default function KnowledgeBase() {
             <div>
               <label style={T.label}>Priority</label>
               <PrioritySelector value={docPriority} onChange={setDocPriority} />
-              <p style={T.hint}>High priority sources are checked first when answering questions.</p>
             </div>
             <div>
               <button onClick={uploadFile} disabled={uploading} data-testid="doc-upload-btn" style={{ ...T.btnPrimary, opacity: uploading ? 0.6 : 1 }}>
@@ -412,94 +484,182 @@ export default function KnowledgeBase() {
 
       {/* Sources List */}
       <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden", marginTop: "24px" }}>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${colors.border.default}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${colors.border.default}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
             All Sources
-            <span style={{ marginLeft: "10px", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{sources.length}</span>
+            <span style={{ marginLeft: "10px", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{filteredSources.length}</span>
           </p>
-          <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0 }}>
-            Sorted by priority (highest first)
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {categories.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <Filter size={11} color={colors.text.muted} />
+                <select
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                  data-testid="category-filter"
+                  style={{
+                    padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontFamily: fonts.mono,
+                    backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+                    color: colors.text.primary, cursor: "pointer",
+                  }}
+                >
+                  <option value="">All categories</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+            <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0 }}>
+              Sorted by priority
+            </p>
+          </div>
         </div>
-        {sources.length === 0 ? (
+        {filteredSources.length === 0 ? (
           <div style={{ padding: "48px", textAlign: "center" }}>
-            <p style={{ fontFamily: fonts.body, color: colors.text.secondary, fontSize: "14px" }}>No knowledge sources yet. Add your first source above.</p>
+            <p style={{ fontFamily: fonts.body, color: colors.text.secondary, fontSize: "14px" }}>
+              {categoryFilter ? "No sources in this category." : "No knowledge sources yet. Add your first source above."}
+            </p>
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${colors.border.subtle}` }}>
-                {["Type", "Title", "Priority", "Active", "Actions"].map(h => (
-                  <th key={h} style={T.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sources.map(source => (
-                <tr key={source.id} style={{ borderBottom: `1px solid ${colors.border.faint}`, transition: "background-color 0.2s ease" }}
-                  onMouseEnter={rowEnter} onMouseLeave={rowLeave} data-testid="knowledge-source-row">
-                  <td style={{ padding: "12px 20px" }}><TypeBadge type={source.type} /></td>
-                  <td style={{ padding: "12px 20px", fontFamily: fonts.body, fontSize: "13px", color: colors.text.primary, maxWidth: "300px" }}>
-                    <div style={{ fontWeight: 500 }}>{source.title}</div>
-                    {source.url && <div style={{ fontSize: "11px", color: colors.text.secondary, marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{source.url}</div>}
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <PriorityBadge priority={source.priority || 0} />
-                      <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
-                        <button
-                          onClick={() => updatePriority(source.id, Math.min((source.priority || 0) + 1, 2))}
-                          disabled={(source.priority || 0) >= 2}
-                          data-testid="priority-up-btn"
-                          style={{
-                            background: "none", border: "none", cursor: (source.priority || 0) >= 2 ? "default" : "pointer",
-                            color: (source.priority || 0) >= 2 ? colors.border.subtle : colors.text.secondary,
-                            padding: "0", lineHeight: 1,
-                          }}
-                        >
-                          <ChevronUp size={14} />
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {filteredSources.map((source, idx) => {
+              const sourceKey = source.group_id || source.id || source.parts?.[0] || idx;
+              const isGroup = (source.total_parts || 1) > 1;
+              const totalChars = source.total_chars || 0;
+
+              return (
+                <div
+                  key={sourceKey}
+                  data-testid="knowledge-source-row"
+                  style={{
+                    padding: "14px 20px",
+                    borderBottom: `1px solid ${colors.border.faint}`,
+                    display: "flex", alignItems: "center", gap: "14px",
+                    transition: "background-color 0.15s",
+                  }}
+                  onMouseEnter={rowEnter} onMouseLeave={rowLeave}
+                >
+                  {/* Type */}
+                  <div style={{ minWidth: "70px" }}>
+                    <TypeBadge type={source.type} />
+                  </div>
+
+                  {/* Title + metadata */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: 500, color: colors.text.primary }}>
+                        {source.title}
+                      </span>
+                      <PartsBadge parts={source.total_parts} />
+                      <CategoryBadge category={source.category} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "3px", flexWrap: "wrap" }}>
+                      {source.url && (
+                        <span style={{ fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>
+                          {source.url}
+                        </span>
+                      )}
+                      {source.created_at && (
+                        <span style={{ fontSize: "10px", color: colors.text.muted, fontFamily: fonts.mono, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                          <Calendar size={9} />{formatDate(source.created_at)}
+                        </span>
+                      )}
+                      {totalChars > 0 && (
+                        <span style={{ fontSize: "10px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                          {totalChars > 1000 ? `${(totalChars / 1000).toFixed(1)}k` : totalChars} chars
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category edit */}
+                  <div style={{ minWidth: "90px" }}>
+                    {editingCategory === sourceKey ? (
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        <input
+                          value={categoryInput}
+                          onChange={e => setCategoryInput(e.target.value)}
+                          placeholder="Category"
+                          list="category-suggestions"
+                          data-testid="category-input"
+                          onKeyDown={e => { if (e.key === "Enter") saveCategory(source); if (e.key === "Escape") setEditingCategory(null); }}
+                          autoFocus
+                          style={{ ...T.input, padding: "4px 6px", fontSize: "11px", width: "90px" }}
+                        />
+                        <datalist id="category-suggestions">
+                          {categories.map(c => <option key={c} value={c} />)}
+                        </datalist>
+                        <button onClick={() => saveCategory(source)} data-testid="save-category-btn" style={{ background: "none", border: "none", cursor: "pointer", color: colors.brand.success, padding: "2px" }}>
+                          <Save size={12} />
                         </button>
-                        <button
-                          onClick={() => updatePriority(source.id, Math.max((source.priority || 0) - 1, 0))}
-                          disabled={(source.priority || 0) <= 0}
-                          data-testid="priority-down-btn"
-                          style={{
-                            background: "none", border: "none", cursor: (source.priority || 0) <= 0 ? "default" : "pointer",
-                            color: (source.priority || 0) <= 0 ? colors.border.subtle : colors.text.secondary,
-                            padding: "0", lineHeight: 1,
-                          }}
-                        >
-                          <ChevronDown size={14} />
+                        <button onClick={() => setEditingCategory(null)} data-testid="cancel-category-btn" style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "2px" }}>
+                          <X size={12} />
                         </button>
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingCategory(sourceKey); setCategoryInput(source.category || ""); }}
+                        data-testid="set-category-btn"
+                        style={{
+                          background: "none", border: `1px dashed ${colors.border.default}`, borderRadius: "6px",
+                          cursor: "pointer", color: colors.text.muted, padding: "3px 8px", fontSize: "10px",
+                          fontFamily: fonts.mono, display: "flex", alignItems: "center", gap: "4px",
+                        }}
+                      >
+                        <Tag size={9} />{source.category || "Set category"}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Priority */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <PriorityBadge priority={source.priority || 0} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                      <button
+                        onClick={() => updatePriority(source, Math.min((source.priority || 0) + 1, 2))}
+                        disabled={(source.priority || 0) >= 2}
+                        data-testid="priority-up-btn"
+                        style={{ background: "none", border: "none", cursor: (source.priority || 0) >= 2 ? "default" : "pointer", color: (source.priority || 0) >= 2 ? colors.border.subtle : colors.text.secondary, padding: "0", lineHeight: 1 }}
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                      <button
+                        onClick={() => updatePriority(source, Math.max((source.priority || 0) - 1, 0))}
+                        disabled={(source.priority || 0) <= 0}
+                        data-testid="priority-down-btn"
+                        style={{ background: "none", border: "none", cursor: (source.priority || 0) <= 0 ? "default" : "pointer", color: (source.priority || 0) <= 0 ? colors.border.subtle : colors.text.secondary, padding: "0", lineHeight: 1 }}
+                      >
+                        <ChevronDown size={14} />
+                      </button>
                     </div>
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <button onClick={() => toggleSource(source.id)} data-testid="toggle-source-btn"
-                      style={{ background: "none", border: "none", cursor: "pointer", color: source.is_active ? colors.brand.success : colors.text.muted, padding: 0 }}>
-                      {source.is_active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
-                    </button>
-                  </td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <button onClick={() => setEditing(source)} data-testid="edit-source-btn"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s ease" }}
+                  </div>
+
+                  {/* Active */}
+                  <button onClick={() => toggleSource(source)} data-testid="toggle-source-btn"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: source.is_active ? colors.brand.success : colors.text.muted, padding: 0 }}>
+                    {source.is_active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                  </button>
+
+                  {/* Actions */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {!isGroup && source.parts?.length === 1 && (
+                      <button onClick={() => setEditing({ ...source, id: source.parts[0] })} data-testid="edit-source-btn"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s" }}
                         onMouseEnter={e => e.currentTarget.style.color = colors.brand.cyan}
                         onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}>
                         <Pencil size={14} />
                       </button>
-                      <button onClick={() => deleteSource(source.id)} data-testid="delete-source-btn"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s ease" }}
-                        onMouseEnter={e => e.currentTarget.style.color = colors.brand.error}
-                        onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}>
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    )}
+                    <button onClick={() => deleteSource(source)} data-testid="delete-source-btn"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.color = colors.brand.error}
+                      onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
