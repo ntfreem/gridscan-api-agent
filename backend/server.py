@@ -1932,13 +1932,21 @@ async def get_knowledge_sources(instance_id: str = Depends(get_instance_access))
     # Group chunked URL sources by group_id or url
     groups = {}
     ungrouped = []
+    backfill_groups = {}  # url -> new_group_id for legacy sources without group_id
     for s in sources:
         content_len = len(s.get("content", "") or "")
-        gid = s.get("group_id") or (s.get("url") if s.get("type") == "url" and "(part " in (s.get("title") or "") else None)
+        existing_gid = s.get("group_id")
+        legacy_url_group = s.get("url") if not existing_gid and s.get("type") == "url" and "(part " in (s.get("title") or "") else None
+        gid = existing_gid or legacy_url_group
         if gid:
+            # For legacy sources grouped by URL, generate a stable group_id
+            if legacy_url_group and not existing_gid:
+                if legacy_url_group not in backfill_groups:
+                    backfill_groups[legacy_url_group] = str(uuid.uuid4())
+                gid = backfill_groups[legacy_url_group]
             if gid not in groups:
                 groups[gid] = {
-                    "group_id": s.get("group_id") or gid,
+                    "group_id": gid,
                     "type": s["type"],
                     "title": re.sub(r'\s*\(part \d+/\d+\)$', '', s.get("title", "")),
                     "url": s.get("url", ""),
@@ -1961,6 +1969,15 @@ async def get_knowledge_sources(instance_id: str = Depends(get_instance_access))
                 "total_parts": 1,
                 "total_chars": content_len,
             })
+
+    # Backfill group_id on legacy sources (fire-and-forget)
+    for url, new_gid in backfill_groups.items():
+        parts_in_group = groups.get(new_gid, {}).get("parts", [])
+        if parts_in_group:
+            await db.knowledge_sources.update_many(
+                {"id": {"$in": parts_in_group}, "instance_id": instance_id},
+                {"$set": {"group_id": new_gid}}
+            )
 
     grouped_list = []
     for g in groups.values():

@@ -277,7 +277,7 @@ export default function KnowledgeBase() {
   const deleteSource = async (source) => {
     try {
       if (source.total_parts > 1 && source.group_id) {
-        await api.delete(`/knowledge/sources/group/${source.group_id}`);
+        await api.delete(`/knowledge/sources/group/${encodeURIComponent(source.group_id)}`);
         toast.success(`Deleted ${source.total_parts} parts`);
       } else if (source.parts?.length === 1) {
         await api.delete(`/knowledge/sources/${source.parts[0]}`);
@@ -293,7 +293,7 @@ export default function KnowledgeBase() {
   const toggleSource = async (source) => {
     try {
       if (source.total_parts > 1 && source.group_id) {
-        const r = await api.patch(`/knowledge/sources/group/${source.group_id}/toggle`);
+        const r = await api.patch(`/knowledge/sources/group/${encodeURIComponent(source.group_id)}/toggle`);
         setSources(prev => prev.map(s => s.group_id === source.group_id ? { ...s, is_active: r.data.is_active } : s));
       } else if (source.parts?.length === 1) {
         const r = await api.patch(`/knowledge/sources/${source.parts[0]}/toggle`);
@@ -308,7 +308,7 @@ export default function KnowledgeBase() {
   const updatePriority = async (source, newPriority) => {
     try {
       if (source.total_parts > 1 && source.group_id) {
-        await api.patch(`/knowledge/sources/group/${source.group_id}/priority`, { priority: newPriority });
+        await api.patch(`/knowledge/sources/group/${encodeURIComponent(source.group_id)}/priority`, { priority: newPriority });
       } else if (source.parts?.length === 1) {
         await api.patch(`/knowledge/sources/${source.parts[0]}/priority`, { priority: newPriority });
       } else {
@@ -323,7 +323,7 @@ export default function KnowledgeBase() {
   const saveCategory = async (source) => {
     try {
       if (source.total_parts > 1 && source.group_id) {
-        await api.patch(`/knowledge/sources/group/${source.group_id}/category`, { category: categoryInput });
+        await api.patch(`/knowledge/sources/group/${encodeURIComponent(source.group_id)}/category`, { category: categoryInput });
       } else if (source.parts?.length === 1) {
         await api.patch(`/knowledge/sources/${source.parts[0]}/category`, { category: categoryInput });
       } else {
@@ -364,7 +364,7 @@ export default function KnowledgeBase() {
       const selectedSources = filteredSources.filter(s => selected.has(s.group_id || s.id || s.parts?.[0]));
       const promises = selectedSources.map(source => {
         if (source.total_parts > 1 && source.group_id) {
-          return api.patch(`/knowledge/sources/group/${source.group_id}/category`, { category: bulkCategory.trim() });
+          return api.patch(`/knowledge/sources/group/${encodeURIComponent(source.group_id)}/category`, { category: bulkCategory.trim() });
         } else if (source.parts?.length === 1) {
           return api.patch(`/knowledge/sources/${source.parts[0]}/category`, { category: bulkCategory.trim() });
         }

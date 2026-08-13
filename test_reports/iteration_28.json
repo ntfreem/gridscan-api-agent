@@ -1,0 +1,47 @@
+{
+  "summary": "Verified the legacy Knowledge Base category fix against the public Preview environment. All 5 backend regression tests passed: three directly inserted legacy URL parts were grouped under a generated UUID, the UUID persisted across a second GET and in MongoDB, legacy-group category PATCH updated all three parts, and both regular single-source and existing proper-group category updates remained healthy. The frontend grouped-source category flow also passed end to end with a success toast, updated badge, observed PATCH request, and restoration of original data. One unrelated unselected-workspace error-state issue was reproduced.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Open Knowledge Base before selecting a workspace",
+        "issue": "The page immediately calls sources and categories without X-Instance-ID, producing four HTTP 400 console errors under React development rendering, while swallowed catches misleadingly show an empty knowledge base. The requested category flow works after selecting a workspace.",
+        "affected_selectors": [
+          "[data-testid='instance-switcher']",
+          "[data-testid='knowledge-source-row']"
+        ]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_legacy_group_backfill.py",
+    "/app/test_reports/pytest/iteration_28_legacy_group_backfill.xml"
+  ],
+  "action_items": [
+    "Guard KnowledgeBase.loadSources when instanceId is absent and show a clear select-workspace state instead of issuing failing requests and silently rendering an empty list."
+  ],
+  "critical_code_review_comments": [
+    "KnowledgeBase.loadSources unconditionally issues both protected API calls and suppresses both failures with empty catch handlers; guard on instanceId and expose a visible load error.",
+    "server.py is 3,629 lines and KnowledgeBase.js is 785 lines, both above the review threshold; isolate the Knowledge Base router/grouping service and source-list/category editor components for safer maintenance.",
+    "frontend/src/utils/api.js uses a relative /api baseURL rather than process.env.REACT_APP_BACKEND_URL, contrary to the environment configuration requirement and reducing portability outside same-origin ingress."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_legacy_group_backfill.py",
+    "/app/test_reports/iteration_28.json"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 requested regression tests passed)",
+    "frontend": "100% for the requested category-save workflow; one separate unselected-workspace error-state defect"
+  },
+  "seed_data_creation": "Inserted three TEST_Legacy_Backfill URL parts directly into Preview MongoDB without group_id; fixture verified all three were deleted. Temporarily set test categories on the legacy group, Lace FAQ, and How to reset password; existing-source categories were restored and legacy rows were removed.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Loaded administrator credentials from /app/memory/test_credentials.md; public Preview login succeeded.",
+  "context_for_next_testing_agent": "The target regression is healthy on Preview. The generated legacy UUID was persisted to all three MongoDB documents before the second GET, and the category PATCH updated all three. UI test used the Lace FAQ grouped row and restored its original Music Production category. No TEST_Legacy_Backfill records remain.",
+  "rca_of_the_issue": "The original production failure came from using a slash-containing legacy URL as a path parameter. The fix now detects legacy chunk titles without group_id during GET, generates one UUID per URL, awaits update_many to persist it to every part, and returns the UUID immediately. Frontend group mutations apply encodeURIComponent. The remaining unselected-workspace issue is caused by loadSources running without an instanceId and suppressing both resulting 400 responses."
+}
