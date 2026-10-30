@@ -417,18 +417,6 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
 
     parts = [f"You are {name}. {persona}"]
 
-    # Tell bot about its API capability when enabled
-    if api_enabled:
-        parts.append(
-            "LIVE API ACCESS:\n"
-            "You have the ability to query external APIs in real-time. When a user asks for live data "
-            "(balances, transactions, staking info, network status, etc.), the system will automatically "
-            "call the appropriate API endpoint and provide the results for you to explain.\n"
-            "Do NOT tell users you cannot make API calls — you CAN, and the system handles it automatically.\n"
-            "If a user asks for live data that you don't have in this response, suggest they rephrase "
-            "their question with specific details (like a stake address or transaction hash)."
-        )
-
     if knowledge_context == "__NO_KB__":
         parts.append(
             "IMPORTANT — NO KNOWLEDGE BASE CONFIGURED:\n"
@@ -508,6 +496,17 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
 
     if custom_instructions:
         parts.append(f"ADDITIONAL INSTRUCTIONS:\n{custom_instructions}")
+
+    # Anti-fabrication rule — always included
+    parts.append(
+        "CRITICAL RULE — NEVER FABRICATE:\n"
+        "NEVER pretend to make API calls, HTTP requests, or database queries. "
+        "NEVER generate fake API responses, JSON data, or transaction/block data. "
+        "If a user asks you to query an API or fetch live data, tell them: "
+        "\"Let me try to look that up for you.\" If you don't have real data in this conversation, "
+        "say: \"I wasn't able to fetch that data. You can query it directly using the endpoints in the documentation.\" "
+        "NEVER invent realistic-looking data. This is a zero-tolerance rule."
+    )
 
     if passive_mode and allow_skip:
         parts.append(
@@ -1872,11 +1871,17 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
             clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         # Fix smart quotes that LLMs sometimes produce
         clean = clean.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        # Try to extract JSON from the response if it contains extra text
+        json_start = clean.find("{")
+        json_end = clean.rfind("}") + 1
+        if json_start >= 0 and json_end > json_start:
+            clean = clean[json_start:json_end]
         route = _json.loads(clean)
         if not isinstance(route, dict):
             return None
+        logger.info(f"[API_QUERY] Route decision: {route.get('action')} — {route.get('reason', '')[:80]}")
     except Exception as e:
-        logger.debug(f"[API_QUERY] Route parsing failed: {e}")
+        logger.warning(f"[API_QUERY] Route parsing failed: {e} | raw: {route_response[:200] if 'route_response' in dir() else 'N/A'}")
         return None
 
     if route.get("action") != "call_api":
