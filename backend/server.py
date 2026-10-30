@@ -531,14 +531,20 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         parts.append(f"ADDITIONAL INSTRUCTIONS:\n{custom_instructions}")
 
     # Anti-fabrication rule — always included
-    parts.append(
-        "CRITICAL RULE — NEVER FABRICATE DATA:\n"
-        "NEVER generate fake JSON, API responses, transaction data, block numbers, balances, or any data "
-        "that looks like it came from a database or API call. "
-        "NEVER prefix responses with 'Calling: GET' or pretend to execute HTTP requests. "
-        "If you don't have specific data, help the user with the correct endpoint and curl command instead. "
-        "Only present data that is explicitly provided to you in this conversation."
-    )
+    if bot_config.get("api_query_enabled"):
+        parts.append(
+            "IMPORTANT — LIVE API CAPABILITY:\n"
+            "You can query the configured API to get live data. When a user asks you to look up "
+            "a transaction, account, block, or any live data, ask them for the specific identifier "
+            "(hash, address, etc.) if they haven't provided one, and the system will make the API call for you.\n"
+            "NEVER fabricate or invent data. If you present data, it must come from an actual API response "
+            "provided to you. NEVER generate fake JSON, made-up hashes, or invented numbers."
+        )
+    else:
+        parts.append(
+            "RULE: NEVER fabricate data. NEVER generate fake JSON, API responses, or made-up numbers. "
+            "If you don't have specific data, help the user with documentation and curl commands instead."
+        )
 
     if passive_mode and allow_skip:
         parts.append(
