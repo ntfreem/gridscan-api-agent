@@ -186,6 +186,7 @@ class BotConfigUpdate(BaseModel):
     custom_instructions: Optional[str] = None
     tone_instructions: Optional[str] = None
     manual_tone_examples: Optional[List[dict]] = None
+    knowledge_gate: Optional[str] = None  # "strict" | "flexible"
 
 
 class LLMProviderConfig(BaseModel):
@@ -418,7 +419,7 @@ async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> s
     return "\n\n---\n\n".join(parts[:5])
 
 
-def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False) -> str:
+def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict") -> str:
     name = bot_config.get("name", "Assistant")
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
     custom_instructions = bot_config.get("custom_instructions", "")
@@ -437,33 +438,59 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
             "Be polite and brief. Do not attempt to answer the question."
         )
     elif knowledge_context:
-        parts.append(
-            "KNOWLEDGE BASE — YOUR ONLY SOURCE OF TRUTH:\n"
-            "The following information is your ONLY source for answering questions. "
-            "When a user's question is answered by this knowledge base, respond with full confidence. "
-            "State facts directly. DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', "
-            "'you may want to verify', or 'I cannot confirm' when the answer is present here.\n\n"
-            "KNOWLEDGE GATE — STRICT RULE:\n"
-            "You MUST ONLY answer using the knowledge base content provided below. "
-            "NEVER supplement, expand, or fill gaps with your general AI training knowledge. "
-            "If the user asks about something NOT covered in the knowledge base below, say:\n"
-            "\"I don't have information about that in my knowledge base.\"\n"
-            "Do NOT offer information from your training data. Do NOT mention other tools, APIs, "
-            "services, or resources unless they are explicitly mentioned in the knowledge base below. "
-            "If you don't find it below, you don't know it.\n\n"
-            f"{knowledge_context}"
-        )
+        if knowledge_gate == "strict":
+            parts.append(
+                "KNOWLEDGE BASE — YOUR ONLY SOURCE OF TRUTH:\n"
+                "The following information is your ONLY source for answering questions. "
+                "When a user's question is answered by this knowledge base, respond with full confidence. "
+                "State facts directly. DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', "
+                "'you may want to verify', or 'I cannot confirm' when the answer is present here.\n\n"
+                "KNOWLEDGE GATE — STRICT RULE:\n"
+                "You MUST ONLY answer using the knowledge base content provided below. "
+                "NEVER supplement, expand, or fill gaps with your general AI training knowledge. "
+                "If the user asks about something NOT covered in the knowledge base below, say:\n"
+                "\"I don't have information about that in my knowledge base.\"\n"
+                "Do NOT offer information from your training data. Do NOT mention other tools, APIs, "
+                "services, or resources unless they are explicitly mentioned in the knowledge base below. "
+                "If you don't find it below, you don't know it.\n\n"
+                f"{knowledge_context}"
+            )
+        else:
+            # Flexible mode: KB-first, but can use general knowledge with clear labeling
+            parts.append(
+                "KNOWLEDGE BASE — PRIMARY SOURCE:\n"
+                "The following information is verified and accurate. When a user's question is answered by "
+                "this knowledge base, respond with full confidence. State facts directly. "
+                "DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure' when the answer is present here.\n\n"
+                "KNOWLEDGE GATE — FLEXIBLE RULE:\n"
+                "Always check the knowledge base FIRST. If the answer is there, use it with confidence.\n"
+                "If the user asks about something NOT in the knowledge base, you MAY answer from your general "
+                "knowledge BUT you MUST clearly label it. Prefix your answer with:\n"
+                "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
+                "Never mix KB facts with general knowledge in the same answer without labeling which is which.\n\n"
+                f"{knowledge_context}"
+            )
     else:
-        parts.append(
-            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
-            "KNOWLEDGE GATE — STRICT RULE:\n"
-            "You MUST NOT answer the question using your general AI training knowledge.\n"
-            "Respond with something like:\n"
-            "\"I don't have information about that in my knowledge base. "
-            "Is there something else I can help you with?\"\n"
-            "Be polite and brief. Do NOT offer to search elsewhere, expand your search, "
-            "or answer from general knowledge. Simply acknowledge you don't have the information."
-        )
+        if knowledge_gate == "strict":
+            parts.append(
+                "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+                "KNOWLEDGE GATE — STRICT RULE:\n"
+                "You MUST NOT answer the question using your general AI training knowledge.\n"
+                "Respond with something like:\n"
+                "\"I don't have information about that in my knowledge base. "
+                "Is there something else I can help you with?\"\n"
+                "Be polite and brief. Do NOT offer to search elsewhere, expand your search, "
+                "or answer from general knowledge. Simply acknowledge you don't have the information."
+            )
+        else:
+            parts.append(
+                "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+                "KNOWLEDGE GATE — FLEXIBLE RULE:\n"
+                "No results were found in the knowledge base. You MAY answer from your general knowledge, "
+                "but you MUST clearly tell the user the answer is NOT from the knowledge base. Prefix with:\n"
+                "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
+                "Keep it honest and transparent."
+            )
 
     if tone_examples:
         tone_header = "COMMUNICATION STYLE — MATCH THIS PRECISELY"
@@ -1308,7 +1335,7 @@ async def start_shared_discord_bot(token: str):
                     passive_mode = bool(live_cfg.get("passive_mode", False))
                     # In passive mode, allow the LLM to skip unless the user @mentioned the bot or DM'd it
                     allow_skip = passive_mode and not is_mentioned and not is_dm
-                    system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip)
+                    system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
                     async with message.channel.typing():
                         response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
                     # Passive mode: detect [SKIP] sentinel and stay silent
@@ -1889,7 +1916,7 @@ async def send_chat_message(body: ChatMessage):
         response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
     else:
         tone = await get_tone_examples_text(instance_id, bot_config)
-        system_prompt = build_system_prompt(bot_config, knowledge, tone)
+        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
         response = await call_claude(session_id, body.message, system_prompt,
                                     instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
@@ -1921,6 +1948,127 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
     return await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+
+
+
+# ==================== EXTERNAL API (PUBLIC — authenticated via bbk_ keys) ====================
+
+def _generate_api_key() -> str:
+    """Generate a bbk_ prefixed API key."""
+    import secrets as _secrets
+    return f"bbk_{_secrets.token_hex(24)}"
+
+
+@api_router.post("/admin/api-keys")
+async def create_api_key(body: dict, current_user: dict = Depends(require_admin)):
+    """Create a new API key for an instance."""
+    instance_id = body.get("instance_id")
+    label = body.get("label", "")
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="instance_id is required")
+    inst = await db.bot_instances.find_one({"id": instance_id})
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    key = _generate_api_key()
+    import hashlib
+    key_hash = hashlib.sha256(key.encode()).hexdigest()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "instance_id": instance_id,
+        "key_hash": key_hash,
+        "key_prefix": key[:12],
+        "label": label.strip()[:100] if label else "",
+        "created_by": current_user.get("email", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_active": True,
+        "last_used_at": None,
+        "usage_count": 0,
+    }
+    await db.api_keys.insert_one(doc)
+    doc.pop("_id", None)
+    doc["key"] = key  # Return the full key only on creation
+    return doc
+
+
+@api_router.get("/admin/api-keys")
+async def list_api_keys(instance_id: str = Depends(get_instance_access)):
+    """List API keys for an instance (never returns the full key)."""
+    keys = await db.api_keys.find(
+        {"instance_id": instance_id}, {"_id": 0, "key_hash": 0}
+    ).sort("created_at", -1).to_list(50)
+    return keys
+
+
+@api_router.delete("/admin/api-keys/{key_id}")
+async def revoke_api_key(key_id: str, current_user: dict = Depends(require_admin)):
+    result = await db.api_keys.delete_one({"id": key_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"success": True}
+
+
+@api_router.patch("/admin/api-keys/{key_id}/toggle")
+async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin)):
+    doc = await db.api_keys.find_one({"id": key_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="API key not found")
+    new_status = not doc.get("is_active", True)
+    await db.api_keys.update_one({"id": key_id}, {"$set": {"is_active": new_status}})
+    return {"is_active": new_status}
+
+
+async def _authenticate_api_key(request: Request) -> dict:
+    """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer bbk_"):
+        raise HTTPException(status_code=401, detail="Invalid API key. Must be a Bearer bbk_... token.")
+    key = auth.replace("Bearer ", "").strip()
+    import hashlib
+    key_hash = hashlib.sha256(key.encode()).hexdigest()
+    doc = await db.api_keys.find_one({"key_hash": key_hash})
+    if not doc:
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    if not doc.get("is_active", True):
+        raise HTTPException(status_code=403, detail="API key is disabled.")
+    # Update usage stats
+    await db.api_keys.update_one(
+        {"key_hash": key_hash},
+        {"$set": {"last_used_at": datetime.now(timezone.utc).isoformat()}, "$inc": {"usage_count": 1}}
+    )
+    return {"instance_id": doc["instance_id"], "key_id": doc["id"]}
+
+
+class ExternalChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+
+@api_router.post("/v1/chat")
+async def external_chat(body: ExternalChatRequest, request: Request):
+    """Public chat endpoint authenticated via bbk_ API key.
+    Send messages to a bot instance's knowledge base and get AI responses."""
+    auth_info = await _authenticate_api_key(request)
+    instance_id = auth_info["instance_id"]
+    session_id = body.session_id or str(uuid.uuid4())
+
+    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    knowledge = await search_knowledge(body.message, instance_id)
+
+    if knowledge == "__NO_KB__":
+        response = "I don't have any knowledge base configured yet."
+    else:
+        tone = await get_tone_examples_text(instance_id, bot_config)
+        gate = bot_config.get("knowledge_gate", "strict")
+        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate)
+        response = await call_claude(session_id, body.message, system_prompt,
+                                    instance_id=instance_id, platform="api")
+
+    await save_conversation(session_id, body.message, response, platform="api", instance_id=instance_id)
+    return {
+        "response": response,
+        "session_id": session_id,
+        "instance_id": instance_id,
+    }
 
 
 # ==================== KNOWLEDGE SOURCES (PROTECTED) ====================

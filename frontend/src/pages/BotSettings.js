@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
   const { selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
-  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [] });
+  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict" });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -31,12 +31,19 @@ export default function BotSettings() {
   const [llmTestResult, setLlmTestResult] = useState(null);
   const [costData, setCostData] = useState(null);
 
+  // API Keys
+  const [apiKeys, setApiKeys] = useState([]);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [newKeyRevealed, setNewKeyRevealed] = useState(null);
+
   useEffect(() => {
     if (!instanceId) return;
     api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
     }).catch(() => {});
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
+    api.get(`/admin/api-keys`).then(r => setApiKeys(r.data || [])).catch(() => {});
   }, [instanceId]);
 
   const saveLlm = async () => {
@@ -73,9 +80,40 @@ export default function BotSettings() {
     } finally { setLlmTesting(false); }
   };
 
+  const createApiKey = async () => {
+    setCreatingKey(true);
+    try {
+      const r = await api.post(`/admin/api-keys`, { instance_id: instanceId, label: newKeyLabel.trim() });
+      setNewKeyRevealed(r.data.key);
+      setNewKeyLabel("");
+      api.get(`/admin/api-keys`).then(r2 => setApiKeys(r2.data || [])).catch(() => {});
+      toast.success("API key created");
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to create key"); }
+    finally { setCreatingKey(false); }
+  };
+
+  const revokeApiKey = async (keyId) => {
+    try {
+      await api.delete(`/admin/api-keys/${keyId}`);
+      setApiKeys(prev => prev.filter(k => k.id !== keyId));
+      toast.success("API key revoked");
+    } catch { toast.error("Failed to revoke key"); }
+  };
+
+  const toggleApiKey = async (keyId) => {
+    try {
+      const r = await api.patch(`/admin/api-keys/${keyId}/toggle`);
+      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, is_active: r.data.is_active } : k));
+    } catch { toast.error("Failed to toggle key"); }
+  };
+
+  const copyKey = (key) => {
+    navigator.clipboard.writeText(key).then(() => toast.success("Copied to clipboard"));
+  };
+
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [] });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict" });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -268,6 +306,118 @@ export default function BotSettings() {
                   {llmTestResult.success ? `✓ ${(llmTestResult.response || "").slice(0, 60)}` : `✗ ${(llmTestResult.error || "").slice(0, 60)}`}
                 </span>
               )}
+            </div>
+          </div>
+
+          {/* ── Knowledge Gate — strict vs flexible ── */}
+          <div data-testid="knowledge-gate-card" style={{ ...T.card, marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <Shield size={14} color={config.knowledge_gate === "strict" ? colors.brand.error : colors.brand.warning} />
+              <p style={{ ...T.sectionTitle, margin: 0 }}>Knowledge Gate</p>
+            </div>
+            <p style={T.sectionSub}>Controls whether the bot can use general AI knowledge when the answer isn&apos;t in the knowledge base.</p>
+            <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+              {[
+                { value: "strict", label: "Strict", icon: Shield, color: colors.brand.error, desc: "KB only — refuses questions not in the knowledge base" },
+                { value: "flexible", label: "Flexible", icon: ShieldOff, color: colors.brand.warning, desc: "KB first — falls back to general knowledge with a disclaimer" },
+              ].map(({ value, label, icon: Icon, color, desc }) => (
+                <button
+                  key={value}
+                  onClick={() => setConfig(p => ({ ...p, knowledge_gate: value }))}
+                  data-testid={`gate-${value}`}
+                  style={{
+                    flex: 1, padding: "12px 14px", borderRadius: "10px", cursor: "pointer",
+                    backgroundColor: config.knowledge_gate === value ? `${color}10` : colors.bg.base,
+                    border: `1.5px solid ${config.knowledge_gate === value ? color : colors.border.default}`,
+                    textAlign: "left", transition: "all 0.2s",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                    <Icon size={13} color={config.knowledge_gate === value ? color : colors.text.muted} />
+                    <span style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: config.knowledge_gate === value ? color : colors.text.secondary }}>{label}</span>
+                  </div>
+                  <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.4" }}>{desc}</p>
+                </button>
+              ))}
+            </div>
+            <p style={{ ...T.hint, marginTop: "8px" }}>This is saved with your bot config. Click &ldquo;Save Settings&rdquo; in the left panel to apply.</p>
+          </div>
+
+          {/* ── External API Keys ── */}
+          <div data-testid="api-keys-card" style={{ ...T.card, marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <Key size={14} color={colors.brand.cyan} />
+              <p style={{ ...T.sectionTitle, margin: 0 }}>External API Keys</p>
+            </div>
+            <p style={T.sectionSub}>
+              Generate <code style={{ fontFamily: fonts.mono, fontSize: "11px", backgroundColor: "rgba(96,165,250,0.1)", padding: "1px 5px", borderRadius: "4px" }}>bbk_...</code> API keys for external integrations. Use with <code style={{ fontFamily: fonts.mono, fontSize: "11px", backgroundColor: "rgba(96,165,250,0.1)", padding: "1px 5px", borderRadius: "4px" }}>POST /api/v1/chat</code>.
+            </p>
+
+            {/* New key revealed banner */}
+            {newKeyRevealed && (
+              <div data-testid="new-key-banner" style={{ margin: "12px 0", padding: "12px 14px", backgroundColor: "rgba(34,197,94,0.06)", border: `1px solid rgba(34,197,94,0.25)`, borderRadius: "10px" }}>
+                <p style={{ margin: "0 0 6px", fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: "#22c55e" }}>New API key created — copy it now, it won&apos;t be shown again</p>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <code data-testid="new-key-value" style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.text.primary, backgroundColor: colors.bg.base, padding: "6px 10px", borderRadius: "6px", border: `1px solid ${colors.border.default}`, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{newKeyRevealed}</code>
+                  <button onClick={() => copyKey(newKeyRevealed)} style={{ ...T.btnSecondary, padding: "6px 12px" }}><Copy size={13} /> Copy</button>
+                  <button onClick={() => setNewKeyRevealed(null)} style={{ ...T.btnGhost, padding: "6px 10px" }}><X size={13} /></button>
+                </div>
+              </div>
+            )}
+
+            {/* Create new key */}
+            <div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
+              <input
+                value={newKeyLabel}
+                onChange={e => setNewKeyLabel(e.target.value)}
+                placeholder="Key label (e.g. Website Widget)"
+                data-testid="api-key-label-input"
+                onFocus={onFocus} onBlur={onBlur}
+                style={{ ...T.input, flex: 1, padding: "8px 12px" }}
+              />
+              <button onClick={createApiKey} disabled={creatingKey} data-testid="create-api-key-btn"
+                style={{ ...T.btnPrimary, padding: "8px 16px", whiteSpace: "nowrap", opacity: creatingKey ? 0.6 : 1 }}>
+                <Key size={13} /> {creatingKey ? "Creating..." : "Generate Key"}
+              </button>
+            </div>
+
+            {/* Existing keys */}
+            {apiKeys.length > 0 && (
+              <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {apiKeys.map(k => (
+                  <div key={k.id} data-testid="api-key-row" style={{
+                    display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px",
+                    backgroundColor: colors.bg.base, borderRadius: "8px", border: `1px solid ${colors.border.subtle}`,
+                  }}>
+                    <code style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{k.key_prefix}...</code>
+                    {k.label && <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.primary, fontWeight: 500 }}>{k.label}</span>}
+                    <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                      {k.usage_count || 0} calls
+                    </span>
+                    <button onClick={() => toggleApiKey(k.id)} data-testid="toggle-api-key-btn"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: k.is_active ? colors.brand.success : colors.text.muted, padding: 0 }}>
+                      {k.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                    </button>
+                    <button onClick={() => revokeApiKey(k.id)} data-testid="revoke-api-key-btn"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "2px", transition: "color 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.color = colors.brand.error}
+                      onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Usage example */}
+            <div style={{ marginTop: "14px", padding: "12px", backgroundColor: colors.bg.base, borderRadius: "8px", border: `1px solid ${colors.border.subtle}` }}>
+              <p style={{ margin: "0 0 6px", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Usage Example</p>
+              <code style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.6", whiteSpace: "pre-wrap", display: "block" }}>
+{`curl -X POST ${window.location.origin}/api/v1/chat \\
+  -H "Authorization: Bearer bbk_your_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "Hello", "session_id": "optional-id"}'`}
+              </code>
             </div>
           </div>
 
