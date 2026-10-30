@@ -36,6 +36,9 @@ export default function BotSettings() {
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeyRevealed, setNewKeyRevealed] = useState(null);
+  const [testPath, setTestPath] = useState("");
+  const [testResult, setTestResult] = useState(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     if (!instanceId) return;
@@ -109,6 +112,18 @@ export default function BotSettings() {
 
   const copyKey = (key) => {
     navigator.clipboard.writeText(key).then(() => toast.success("Copied to clipboard"));
+  };
+
+  const runApiTest = async () => {
+    if (!testPath.trim()) { toast.error("Enter an endpoint path"); return; }
+    setTesting(true); setTestResult(null);
+    try {
+      const r = await api.post(`/admin/api-test`, { path: testPath.trim() });
+      setTestResult(r.data);
+      if (r.data.status === 200) toast.success(`API returned ${r.data.status}`);
+      else toast.error(`API returned ${r.data.status}`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Test failed"); setTestResult({ error: e.message }); }
+    finally { setTesting(false); }
   };
 
   useEffect(() => {
@@ -392,6 +407,54 @@ export default function BotSettings() {
                   </div>
                 </div>
                 <p style={T.hint}>The bot uses AI to decide which endpoint to call based on the user&apos;s question. Only GET requests are allowed. Save Settings to apply.</p>
+
+                {/* API Test Dashboard */}
+                <div style={{ marginTop: "16px", padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
+                  <p style={{ margin: "0 0 8px", fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>Test Endpoint</p>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, whiteSpace: "nowrap" }}>GET</span>
+                    <input
+                      value={testPath}
+                      onChange={e => setTestPath(e.target.value)}
+                      placeholder="/api/txs/{hash} or /api/health"
+                      data-testid="api-test-path"
+                      onKeyDown={e => { if (e.key === "Enter") runApiTest(); }}
+                      onFocus={onFocus} onBlur={onBlur}
+                      style={{ ...T.input, flex: 1, padding: "8px 10px", fontFamily: fonts.mono, fontSize: "12px" }}
+                    />
+                    <button onClick={runApiTest} disabled={testing} data-testid="api-test-run-btn"
+                      style={{ ...T.btnPrimary, padding: "8px 16px", whiteSpace: "nowrap", opacity: testing ? 0.6 : 1 }}>
+                      {testing ? "Querying..." : "Run"}
+                    </button>
+                  </div>
+                  <p style={{ ...T.hint, marginTop: "4px" }}>Enter an endpoint path with real values — e.g. <code style={{ fontFamily: fonts.mono, fontSize: "10px" }}>/api/txs/ad9daf9a...</code> or <code style={{ fontFamily: fonts.mono, fontSize: "10px" }}>/api/health</code></p>
+
+                  {testResult && (
+                    <div data-testid="api-test-result" style={{ marginTop: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{
+                          fontFamily: fonts.mono, fontSize: "11px", fontWeight: "600",
+                          color: testResult.status === 200 ? colors.brand.success : colors.brand.error,
+                          backgroundColor: testResult.status === 200 ? "rgba(34,197,94,0.1)" : "rgba(244,63,94,0.1)",
+                          padding: "2px 8px", borderRadius: "6px"
+                        }}>
+                          {testResult.status || "ERR"}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {testResult.url}
+                        </span>
+                      </div>
+                      <pre style={{
+                        fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary,
+                        backgroundColor: "rgba(0,0,0,0.3)", borderRadius: "8px", padding: "12px",
+                        maxHeight: "300px", overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",
+                        border: `1px solid ${colors.border.subtle}`, margin: 0,
+                      }}>
+                        {testResult.error || (typeof testResult.data === "string" ? testResult.data : JSON.stringify(testResult.data, null, 2))}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

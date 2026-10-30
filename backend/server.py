@@ -283,6 +283,39 @@ async def get_instance_access(
     current_user: dict = Depends(get_current_user)
 ) -> str:
     return await _verify_instance_access(x_instance_id, current_user)
+@api_router.post("/admin/api-test")
+async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
+    """Admin tool to test an API endpoint directly. Returns raw JSON response."""
+    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    if not bot_config.get("api_query_enabled"):
+        raise HTTPException(status_code=400, detail="Live API queries are not enabled for this instance")
+    base_url = (bot_config.get("api_base_url") or "").strip().rstrip("/")
+    api_key_header = (bot_config.get("api_key_header") or "").strip()
+    api_key_value = (bot_config.get("api_key_value") or "").strip()
+    if not base_url:
+        raise HTTPException(status_code=400, detail="API base URL is not configured")
+
+    path = (body.get("path") or "").strip()
+    if not path.startswith("/api/"):
+        path = f"/api/{path.lstrip('/')}"
+
+    full_url = f"{base_url}{path}"
+    headers = {"Accept": "application/json"}
+    if api_key_header and api_key_value:
+        headers[api_key_header] = api_key_value
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            resp = await http.get(full_url, headers=headers)
+        try:
+            data = resp.json()
+        except Exception:
+            data = resp.text[:5000]
+        return {"status": resp.status_code, "url": full_url, "data": data}
+    except Exception as e:
+        return {"status": 0, "url": full_url, "error": str(e)}
+
+
 # ==================== KNOWLEDGE / TONE HELPERS ====================
 
 async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
@@ -1295,9 +1328,14 @@ async def start_shared_discord_bot(token: str):
                     passive_mode = bool(live_cfg.get("passive_mode", False))
                     # In passive mode, allow the LLM to skip unless the user @mentioned the bot or DM'd it
                     allow_skip = passive_mode and not is_mentioned and not is_dm
-                    system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
-                    async with message.channel.typing():
-                        response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
+                    # Try live API query first
+                    api_response = await _try_api_query(user_text, bot_config, knowledge, instance_id, session_id)
+                    if api_response:
+                        response = api_response
+                    else:
+                        system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
+                        async with message.channel.typing():
+                            response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
                     # Passive mode: detect [SKIP] sentinel and stay silent
                     if allow_skip and response and response.strip().upper().startswith("[SKIP]"):
                         logger.info(f"[PASSIVE] instance={instance_id[:12]} channel={channel_id} — skipped (no confident answer)")
