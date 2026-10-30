@@ -413,8 +413,21 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
     custom_instructions = bot_config.get("custom_instructions", "")
     tone_instructions = bot_config.get("tone_instructions", "")
+    api_enabled = bot_config.get("api_query_enabled", False)
 
     parts = [f"You are {name}. {persona}"]
+
+    # Tell bot about its API capability when enabled
+    if api_enabled:
+        parts.append(
+            "LIVE API ACCESS:\n"
+            "You have the ability to query external APIs in real-time. When a user asks for live data "
+            "(balances, transactions, staking info, network status, etc.), the system will automatically "
+            "call the appropriate API endpoint and provide the results for you to explain.\n"
+            "Do NOT tell users you cannot make API calls — you CAN, and the system handles it automatically.\n"
+            "If a user asks for live data that you don't have in this response, suggest they rephrase "
+            "their question with specific details (like a stake address or transaction hash)."
+        )
 
     if knowledge_context == "__NO_KB__":
         parts.append(
