@@ -330,18 +330,17 @@ async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
             pri = r.get("priority", 0)
             pri_label = " [PRIORITY: HIGH]" if pri >= 2 else (" [PRIORITY: MEDIUM]" if pri == 1 else "")
 
-            # For grouped chunks (multi-part sources), include more content per chunk
+            # For grouped chunks (multi-part sources), include FULL content
             is_grouped = bool(r.get("group_id"))
-            window = 4000 if is_grouped else 2500
-
-            # For large content, find the best matching window around query terms
-            if len(full_content) > window and query_lower:
-                content = _extract_relevant_window(full_content, query_lower, window_size=window)
+            if is_grouped:
+                content = full_content  # Include everything — chunks are pre-sized at ~8K
+            elif len(full_content) > 2500 and query_lower:
+                content = _extract_relevant_window(full_content, query_lower, window_size=2500)
             else:
-                content = full_content[:window]
+                content = full_content[:2500]
 
             chunk = f"[{title}]{pri_label}\n{content}"
-            if total_chars + len(chunk) > 45000:
+            if total_chars + len(chunk) > 60000:
                 break
             chunks.append(chunk)
             total_chars += len(chunk)
