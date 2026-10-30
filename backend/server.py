@@ -1950,7 +1950,21 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
             resp = await http.get(full_url, headers=headers)
         if resp.status_code != 200:
             logger.warning(f"[API_QUERY] API returned {resp.status_code}: {resp.text[:200]}")
-            return f"I tried to query `{path}` but got an error (HTTP {resp.status_code}). The API may require different parameters or the resource may not exist."
+            if resp.status_code == 404:
+                return (
+                    f"I queried `GET {path}` but the resource was **not found** (404).\n\n"
+                    f"This usually means:\n"
+                    f"- The transaction hash, address, or ID doesn't exist in the database\n"
+                    f"- The identifier might be from a different network (testnet vs mainnet)\n"
+                    f"- There may be a typo in the identifier\n\n"
+                    f"Double-check the value and try again. You can also verify it on the explorer at the base URL."
+                )
+            elif resp.status_code == 401:
+                return f"I tried to query `{path}` but got **Unauthorized** (401). The API key may be missing or invalid — check the API Key Value in Bot Settings."
+            elif resp.status_code == 429:
+                return f"I tried to query `{path}` but got **rate limited** (429). Please wait a moment and try again."
+            else:
+                return f"I tried to query `{path}` but got an error (HTTP {resp.status_code}). The API may require different parameters or the resource may not exist."
         api_data = resp.text[:8000]  # Cap response size
     except Exception as e:
         logger.warning(f"[API_QUERY] HTTP error: {e}")
