@@ -47,7 +47,7 @@ def test_faq_source(api_client):
     # Cleanup
     try:
         api_client.delete(f"{BASE_URL}/api/knowledge/sources/{source['id']}")
-    except:
+    except Exception:
         pass
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_url_source(api_client):
     # Cleanup
     try:
         api_client.delete(f"{BASE_URL}/api/knowledge/sources/{source['id']}")
-    except:
+    except Exception:
         pass
 
 

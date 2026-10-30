@@ -1,0 +1,30 @@
+{
+  "summary": "Tested the Knowledge Gate Protocol through POST /api/chat/send on the public Preview URL with instance 88bfae82-2533-4235-968d-b3298fd57073. Its KB has a 132-char FAQ 'Gridscan API' plus a URL source 'Cardano Accounts API · docs' that holds only its 27-char title, so the scrape was effectively empty. Created 6 pytest LLM tests and ran the suite twice, 6/6 passing both times. The partial-topic test was run 3 more times and passed each time. KB question: confident answer citing GET /accounts/{address} with no hedging. Blockfrost/Koios: 'I don't have information about that in my knowledge base.' with no details about either service. Capital of France: refused, no 'Paris'. Transaction/NFT on Gridscan, rate limits/auth, and alternative Cardano APIs: all refused without adding general knowledge or naming other services. No response contained 'general AI training', 'training knowledge' or 'training data'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/chat/send", "issue": "Small inferences remain: (1) the KB answer once built a full URL 'https://ada.gridscan.io/accounts/{address}'. The KB only gives the path, and the docs source is ada.api.gridscan.io, so the host may be wrong. (2) One refusal listed '❌ Smart contract interaction', which was not asked about and is not in the KB. Neither added outside facts, but both go slightly beyond the KB."},
+      {"endpoint": "/api/chat/send", "issue": "Answers are inconsistent: sometimes the reply starts with 'I don't have information...', other times it starts with a markdown header and puts the refusal sentence lower down. Refusals also often restate KB content and offer help with Gridscan. This is acceptable but not strictly 'say it and stop'."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_knowledge_gate.py", "/app/test_reports/pytest/iteration_29_knowledge_gate.xml"],
+  "action_items": [
+    "Optional: add a prompt line such as 'Do not construct URLs, hosts, or examples that are not literally in the KB' to stop the host/URL guessing.",
+    "Optional: tell the model to put the refusal sentence first and keep refusals short, without markdown headers, for consistency.",
+    "Note: the 'Cardano Accounts API · docs' URL source holds only its title (27 chars). The scrape effectively failed, so consider re-scraping it."
+  ],
+  "critical_code_review_comments": [
+    "search_knowledge() falls back to loading ALL active sources when $text search finds nothing. knowledge_context is therefore never empty when a KB exists, and the 'No matching entries' branch of build_system_prompt only runs if search_knowledge raises an exception. As a result, off-topic refusals depend entirely on the LLM following the KNOWLEDGE GATE text. This works today, but it is a prompt-only guarantee.",
+    "search_knowledge() returns '' when it catches an exception. The bot then answers with a 'no info' refusal instead of showing an error, which can hide database or index failures from admins.",
+    "server.py is a single very large file (well over 700 lines). It should be split into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_knowledge_gate.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (not requested)"},
+  "test_credentials": "administrator / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Chat test conversations were saved with session_ids prefixed 'TEST_kg_'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "flaky_tests": [],
+  "context_for_next_testing_agent": "Run with: REACT_APP_BACKEND_URL=<frontend/.env> pytest backend/tests/test_knowledge_gate.py -s. The tests depend on instance 88bfae82-... keeping its Gridscan FAQ. The LLM tests are not deterministic, and the assertions use keyword checks for refusal markers and leaked terms."
+}

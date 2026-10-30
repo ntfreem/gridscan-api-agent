@@ -42,7 +42,7 @@ class TestKnowledgePriority:
         for source_id in cls.created_source_ids:
             try:
                 requests.delete(f"{BASE_URL}/api/knowledge/sources/{source_id}", headers=headers)
-            except:
+            except Exception:
                 pass
     
     def get_headers(self):
@@ -320,7 +320,7 @@ class TestUploadWithPriority:
         for source_id in cls.created_source_ids:
             try:
                 requests.delete(f"{BASE_URL}/api/knowledge/sources/{source_id}", headers=headers)
-            except:
+            except Exception:
                 pass
     
     def test_upload_document_with_priority(self):

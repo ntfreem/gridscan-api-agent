@@ -143,6 +143,13 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
   - `GET /api/knowledge/categories` — list unique categories
 - Validation: 404 for nonexistent groups/sources, priority constrained to 0-2
 - Frontend: Complete KnowledgeBase.js rewrite with grouped display, inline category editor, filter
+
+### Knowledge Gate Protocol (DONE 2026-10-30)
+- Bot now ONLY answers from knowledge base content — never supplements with general AI training knowledge
+- Three modes: (1) No KB configured → refuses all questions, (2) KB has content → answers strictly from KB, refuses anything not in KB, (3) KB exists but no matching results → refuses without offering general knowledge
+- System prompt includes "KNOWLEDGE GATE — STRICT RULE" that forbids the LLM from using training data
+- Tests: 6/6 backend LLM tests passed (KB answers, Blockfrost/Koios refusal, off-topic refusal, partial-topic refusal, no leaked phrases)
+
 - Tests: 11/11 backend + full desktop E2E pass
 
 - New endpoint `GET /api/analytics/llm-cost`: returns `{month_to_date: {cost_usd, input_tokens, output_tokens, calls, day_of_month, days_in_month}, by_model: [...], daily: [30 days], forecast_month_end_usd, last_30d_cost_usd}`.
