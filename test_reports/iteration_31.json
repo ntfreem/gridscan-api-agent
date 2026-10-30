@@ -1,0 +1,38 @@
+{
+  "summary": "Live API Query feature tested end-to-end. Backend: 7/7 pytest pass (config PUT/GET persistence + auth guard, doc question not routed, 'Is the API healthy?' -> GET /api/health with real data + 'Live data from' marker, account question -> graceful HTTP 401 message, POST request never executed, api_query_enabled=false -> no API call). Extra probes: /api/signup (POST) request not executed; prompt-injection asking for '/api/../admin/secret' was NOT followed (router chose /api/health instead); unlisted '/api/internal/debug' not called. Frontend: Bot Settings shows Live API Queries card (toggle, base URL, key header, key value as password), toggle hides/shows fields, save persists across reload. Instance config restored to original values.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_try_api_query", "issue": "LLM-chosen path is not validated against the KB endpoint list, and '../' or query strings are not rejected. The probes showed the LLM refusing, but the only safeguard is the prompt. Any GET on the configured host can be sent with the instance's API key if the LLM is persuaded."},
+      {"endpoint": "GET /api/admin/bot-config", "issue": "api_key_value is returned in plaintext to the frontend. Should be masked (e.g. return api_key_value_set + preview), the same way anthropic_api_key is handled."},
+      {"endpoint": "/api/chat/send (KB fallback)", "issue": "When api_query_enabled=true but the router skips, the KB answer can say 'I cannot make live API calls' (seen in the POST/signup and disabled tests). This contradicts the feature when it is enabled. Consider telling the system prompt about live-query capability, or rephrasing."},
+      {"endpoint": "_try_api_query", "issue": "Non-200 responses (e.g. 401) return a fixed message with no 'Live data from' note and no hint about auth/API key. A 401/403-specific message ('API key invalid or missing') would help admins."},
+      {"endpoint": "_try_api_query", "issue": "Every chat message on an enabled instance costs an extra LLM routing call (latency and cost), even for obvious documentation questions. Endpoint extraction only reads lines starting with 'GET /api/' or 'POST /api/', so it is tied to the Gridscan format."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bot Settings - Live API Queries", "issues": ["The toggle button has no aria-label or visible label text (minor accessibility issue)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_live_api_query.py", "/app/backend/tests/probe_live_api.py", "/app/test_reports/pytest/pytest_live_api.xml"],
+  "action_items": [
+    "Optional hardening: allow-list the routed path against the KB endpoint templates and reject '..' segments",
+    "Mask api_key_value in GET /api/admin/bot-config",
+    "Adjust the KB fallback prompt so the bot doesn't claim it can't make live calls when api_query_enabled is true",
+    "Optional: give a specific message for 401/403 API responses"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3700+ lines; the live API query engine should be moved into its own module",
+    "'import json as _json' inside the function; move it to module level",
+    "Route parse failures are logged at debug level only, so routing failures are invisible in logs; use info or warning"
+  ],
+  "updated_files": ["/app/backend/tests/test_live_api_query.py", "/app/backend/tests/probe_live_api.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Only TEST_live_* / TEST_probe_* conversations on instance 88bfae82. Bot config restored to the original api settings.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run test_live_api_query.py (about 30s). Instance 88bfae82 has api_query_enabled=true, base https://ada.api.gridscan.io, header x-project-id, value test_key. /api/health works without auth; other endpoints return 401 as expected. The Save button is 'save-settings-btn'."
+}

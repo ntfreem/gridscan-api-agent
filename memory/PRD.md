@@ -169,6 +169,18 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - UI: API Keys card on Bot Settings page with generate, copy, toggle, revoke, and curl usage example
 - Invalid key → 401, disabled key → 403, valid key → chat response with session_id
 
+### Live API Query Engine (DONE 2026-10-30)
+- Bot can now make **live HTTP GET requests** to external APIs when users ask for real-time data
+- **AI-powered routing**: LLM analyzes the user's question against the KB endpoint list, decides if an API call is needed, picks the right endpoint and parameters
+- **Two-step flow**: Step 1 → LLM routes to endpoint. Step 2 → HTTP call made, LLM explains the response in natural language
+- **Per-instance config** in Bot Settings: toggle, base URL, API key header, API key value (masked in GET responses)
+- **Safety**: GET-only enforced, path must start with `/api/`, API key value masked in responses
+- **Source attribution**: Responses include `*Live data from GET /path*` footer
+- Doc questions are NOT routed (AI distinguishes "what endpoints exist?" from "get me the network info")
+- Works in both `/chat/send` (web/Discord) and `/v1/chat` (external API)
+- Tests: 7/7 backend + 100% frontend pass
+
+
 - Tests: 11/11 backend + full desktop E2E pass
 
 - New endpoint `GET /api/analytics/llm-cost`: returns `{month_to_date: {cost_usd, input_tokens, output_tokens, calls, day_of_month, days_in_month}, by_model: [...], daily: [30 days], forecast_month_end_usd, last_30d_cost_usd}`.

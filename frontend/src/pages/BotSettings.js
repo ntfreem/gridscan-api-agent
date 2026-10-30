@@ -113,7 +113,7 @@ export default function BotSettings() {
 
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: r.data.api_key_value || "" });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: "" });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -122,7 +122,13 @@ export default function BotSettings() {
     if (!config.name.trim()) { toast.error("Bot name is required"); return; }
     if (!config.persona.trim()) { toast.error("Persona description is required"); return; }
     setSaving(true);
-    try { await api.put(`/admin/bot-config`, config); toast.success("Settings saved"); } catch { toast.error("Failed to save settings"); }
+    try {
+      const payload = { ...config };
+      // Don't send empty api_key_value (preserve existing key on server)
+      if (!payload.api_key_value) delete payload.api_key_value;
+      await api.put(`/admin/bot-config`, payload);
+      toast.success("Settings saved");
+    } catch { toast.error("Failed to save settings"); }
     finally { setSaving(false); }
   };
 
@@ -381,7 +387,7 @@ export default function BotSettings() {
                     <label style={T.label}>API Key Value</label>
                     <input style={T.input} type="password" value={config.api_key_value}
                       onChange={e => setConfig(p => ({ ...p, api_key_value: e.target.value }))}
-                      placeholder="Your API key"
+                      placeholder={config.api_key_value_set ? "Key saved — leave blank to keep" : "Your API key"}
                       data-testid="api-key-value" onFocus={onFocus} onBlur={onBlur} />
                   </div>
                 </div>

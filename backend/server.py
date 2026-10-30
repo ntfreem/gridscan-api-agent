@@ -1945,7 +1945,13 @@ async def get_chat_history(session_id: str):
 @api_router.get("/admin/bot-config")
 async def get_bot_config(instance_id: str = Depends(get_instance_access)):
     config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
-    return config or {}
+    if not config:
+        return {}
+    # Mask sensitive API key value
+    if config.get("api_key_value"):
+        config["api_key_value_set"] = True
+        config["api_key_value"] = ""
+    return config
 @api_router.put("/admin/bot-config")
 async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(get_instance_access)):
     update_data = {}
