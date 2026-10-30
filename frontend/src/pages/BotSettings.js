@@ -8,7 +8,7 @@ import { colors, fonts, T, onFocus, onBlur } from "../theme";
 export default function BotSettings() {
   const { selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
-  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict" });
+  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", api_query_enabled: false, api_base_url: "", api_key_header: "x-project-id", api_key_value: "" });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -113,7 +113,7 @@ export default function BotSettings() {
 
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict" });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: r.data.api_key_value || "" });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -341,6 +341,53 @@ export default function BotSettings() {
               ))}
             </div>
             <p style={{ ...T.hint, marginTop: "8px" }}>This is saved with your bot config. Click &ldquo;Save Settings&rdquo; in the left panel to apply.</p>
+          </div>
+
+          {/* ── Live API Connection ── */}
+          <div data-testid="api-connection-card" style={{ ...T.card, marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Zap size={14} color={config.api_query_enabled ? colors.brand.success : colors.text.muted} />
+                <p style={{ ...T.sectionTitle, margin: 0 }}>Live API Queries</p>
+              </div>
+              <button
+                onClick={() => setConfig(p => ({ ...p, api_query_enabled: !p.api_query_enabled }))}
+                data-testid="api-query-toggle"
+                style={{ background: "none", border: "none", cursor: "pointer", color: config.api_query_enabled ? colors.brand.success : colors.text.muted }}
+              >
+                {config.api_query_enabled ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+              </button>
+            </div>
+            <p style={T.sectionSub}>When enabled, the bot can make live GET requests to an external API to fetch real-time data (balances, transactions, etc). The AI decides when to call the API based on the user&apos;s question.</p>
+
+            {config.api_query_enabled && (
+              <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
+                <div>
+                  <label style={T.label}>API Base URL</label>
+                  <input style={T.input} value={config.api_base_url}
+                    onChange={e => setConfig(p => ({ ...p, api_base_url: e.target.value }))}
+                    placeholder="https://ada.api.gridscan.io"
+                    data-testid="api-base-url" onFocus={onFocus} onBlur={onBlur} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={T.label}>API Key Header</label>
+                    <input style={T.input} value={config.api_key_header}
+                      onChange={e => setConfig(p => ({ ...p, api_key_header: e.target.value }))}
+                      placeholder="x-project-id"
+                      data-testid="api-key-header" onFocus={onFocus} onBlur={onBlur} />
+                  </div>
+                  <div>
+                    <label style={T.label}>API Key Value</label>
+                    <input style={T.input} type="password" value={config.api_key_value}
+                      onChange={e => setConfig(p => ({ ...p, api_key_value: e.target.value }))}
+                      placeholder="Your API key"
+                      data-testid="api-key-value" onFocus={onFocus} onBlur={onBlur} />
+                  </div>
+                </div>
+                <p style={T.hint}>The bot uses AI to decide which endpoint to call based on the user&apos;s question. Only GET requests are allowed. Save Settings to apply.</p>
+              </div>
+            )}
           </div>
 
           {/* ── External API Keys ── */}

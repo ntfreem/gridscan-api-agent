@@ -178,6 +178,10 @@ class BotConfigUpdate(BaseModel):
     tone_instructions: Optional[str] = None
     manual_tone_examples: Optional[List[dict]] = None
     knowledge_gate: Optional[str] = None  # "strict" | "flexible"
+    api_query_enabled: Optional[bool] = None
+    api_base_url: Optional[str] = None
+    api_key_header: Optional[str] = None
+    api_key_value: Optional[str] = None
 class LLMProviderConfig(BaseModel):
     """Per-instance LLM provider settings. Stored on bot_instances.llm_config."""
     provider: str  # "emergent" | "anthropic" | "ollama"
@@ -1797,6 +1801,119 @@ async def unassign_user(instance_id: str, user_id: str, current_user: dict = Dep
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Instance not found")
     return {"success": True}
+# ==================== LIVE API QUERY ENGINE ====================
+
+API_ROUTE_PROMPT = """You are an API routing assistant. Given a user's question and a list of available API endpoints, decide if the question requires calling an API endpoint.
+
+RULES:
+- Only route to GET endpoints (never POST/PUT/DELETE)
+- Only route if the user is asking for LIVE DATA (balances, transactions, staking info, current prices, etc.)
+- If the user is asking about HOW the API works or WHAT endpoints exist, do NOT route — that's a documentation question
+- If you can't determine the right endpoint or parameters, do NOT route
+
+Respond with ONLY valid JSON (no markdown, no explanation). Either:
+{{"action": "call_api", "method": "GET", "path": "/api/accounts/stake1abc123", "reason": "Looking up account info"}}
+OR
+{{"action": "skip", "reason": "Documentation question, not a live data request"}}
+
+Available endpoints:
+{endpoints}
+
+User question: {question}"""
+
+
+async def _try_api_query(user_message: str, bot_config: dict, knowledge_context: str, instance_id: str, session_id: str) -> Optional[str]:
+    """Attempt to route a user question to a live API call. Returns enriched response or None."""
+    # Check if API querying is enabled for this instance
+    if not bot_config.get("api_query_enabled"):
+        return None
+    base_url = (bot_config.get("api_base_url") or "").strip().rstrip("/")
+    api_key_header = (bot_config.get("api_key_header") or "").strip()
+    api_key_value = (bot_config.get("api_key_value") or "").strip()
+    if not base_url:
+        return None
+
+    # Extract endpoint list from knowledge context for the router
+    endpoint_lines = []
+    for line in knowledge_context.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("GET /api/") or stripped.startswith("POST /api/"):
+            endpoint_lines.append(stripped.split("\n")[0][:200])
+    if not endpoint_lines:
+        return None
+
+    # Step 1: Ask LLM to route the question to an endpoint
+    route_prompt = API_ROUTE_PROMPT.format(
+        endpoints="\n".join(endpoint_lines[:100]),
+        question=user_message
+    )
+    try:
+        route_response = await call_claude(
+            f"{session_id}_route", user_message, route_prompt,
+            instance_id=instance_id, platform="api_router"
+        )
+        # Parse JSON from response
+        import json as _json
+        clean = route_response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        # Fix smart quotes that LLMs sometimes produce
+        clean = clean.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
+        route = _json.loads(clean)
+        if not isinstance(route, dict):
+            return None
+    except Exception as e:
+        logger.debug(f"[API_QUERY] Route parsing failed: {e}")
+        return None
+
+    if route.get("action") != "call_api":
+        return None
+
+    path = route.get("path", "")
+    if not path.startswith("/api/"):
+        return None
+    # Safety: GET only
+    if route.get("method", "GET").upper() != "GET":
+        return None
+
+    # Step 2: Make the actual API call
+    full_url = f"{base_url}{path}"
+    headers = {"Accept": "application/json"}
+    if api_key_header and api_key_value:
+        headers[api_key_header] = api_key_value
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            resp = await http.get(full_url, headers=headers)
+        if resp.status_code != 200:
+            logger.warning(f"[API_QUERY] API returned {resp.status_code}: {resp.text[:200]}")
+            return f"I tried to query `{path}` but got an error (HTTP {resp.status_code}). The API may require different parameters or the resource may not exist."
+        api_data = resp.text[:8000]  # Cap response size
+    except Exception as e:
+        logger.warning(f"[API_QUERY] HTTP error: {e}")
+        return None
+
+    # Step 3: Ask LLM to explain the API response
+    explain_prompt = (
+        f"You queried the API endpoint `GET {path}` and received the following response data.\n"
+        f"Explain the data clearly to the user in a helpful, readable format. "
+        f"Use tables, bullet points, or sections as appropriate. "
+        f"If the data is large, summarize the key points.\n"
+        f"Do NOT make up data — only use what's in the API response below.\n\n"
+        f"API Response:\n{api_data}"
+    )
+    try:
+        explanation = await call_claude(
+            f"{session_id}_explain", user_message, explain_prompt,
+            instance_id=instance_id, platform="api_query"
+        )
+        source_note = f"\n\n---\n*Live data from `GET {path}`*"
+        return explanation + source_note
+    except Exception as e:
+        logger.warning(f"[API_QUERY] Explain failed: {e}")
+        return f"I queried `{path}` successfully but couldn't format the response. Raw data:\n```json\n{api_data[:2000]}\n```"
+
+
 # ==================== CHAT (PUBLIC) ====================
 
 @api_router.post("/chat/send")
@@ -1808,10 +1925,15 @@ async def send_chat_message(body: ChatMessage):
     if knowledge == "__NO_KB__":
         response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
     else:
-        tone = await get_tone_examples_text(instance_id, bot_config)
-        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
-        response = await call_claude(session_id, body.message, system_prompt,
-                                    instance_id=instance_id, platform="web")
+        # Try live API query first
+        api_response = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
+        if api_response:
+            response = api_response
+        else:
+            tone = await get_tone_examples_text(instance_id, bot_config)
+            system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
+            response = await call_claude(session_id, body.message, system_prompt,
+                                        instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
     return {"response": response, "session_id": session_id}
 @api_router.get("/chat/history/{session_id}")
@@ -1930,11 +2052,16 @@ async def external_chat(body: ExternalChatRequest, request: Request):
     if knowledge == "__NO_KB__":
         response = "I don't have any knowledge base configured yet."
     else:
-        tone = await get_tone_examples_text(instance_id, bot_config)
-        gate = bot_config.get("knowledge_gate", "strict")
-        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate)
-        response = await call_claude(session_id, body.message, system_prompt,
-                                    instance_id=instance_id, platform="api")
+        # Try live API query first
+        api_response = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
+        if api_response:
+            response = api_response
+        else:
+            tone = await get_tone_examples_text(instance_id, bot_config)
+            gate = bot_config.get("knowledge_gate", "strict")
+            system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate)
+            response = await call_claude(session_id, body.message, system_prompt,
+                                        instance_id=instance_id, platform="api")
 
     await save_conversation(session_id, body.message, response, platform="api", instance_id=instance_id)
     return {
