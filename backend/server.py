@@ -17,6 +17,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import httpx
+import hashlib
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
@@ -37,8 +38,6 @@ DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "")
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
 DISCORD_BOT_PERMISSIONS = 68608 | 67108864  # View Channels + Send Messages + Read Message History + Change Nickname
-
-
 async def get_discord_credentials():
     """Read Discord app credentials from DB. DB is the single source of truth —
     no .env fallback (so clearing in the UI actually clears)."""
@@ -84,8 +83,6 @@ logger = logging.getLogger(__name__)
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = "noreply@bridgebot.tech"
-
-
 async def send_verification_email(to_email: str, code: str):
     """Send verification code email via Resend. Falls back to console log if key not set."""
     if not resend.api_key:
@@ -115,8 +112,6 @@ async def send_verification_email(to_email: str, code: str):
     except Exception as e:
         logger.error(f"Resend error: {e} — falling back to log")
         print(f"\n{'='*50}\nFALLBACK EMAIL\nTo: {to_email}\nCode: {code}\n{'='*50}\n")
-
-
 async def send_reset_email(to_email: str, code: str):
     """Send password reset code via Resend. Falls back to console log if key not set."""
     if not resend.api_key:
@@ -145,10 +140,6 @@ async def send_reset_email(to_email: str, code: str):
     except Exception as e:
         logger.error(f"Resend error (reset): {e}")
         print(f"\n{'='*50}\nFALLBACK RESET EMAIL\nTo: {to_email}\nCode: {code}\n{'='*50}\n")
-
-
-
-
 class UserRegister(BaseModel):
     email: str
     password: str
@@ -187,8 +178,6 @@ class BotConfigUpdate(BaseModel):
     tone_instructions: Optional[str] = None
     manual_tone_examples: Optional[List[dict]] = None
     knowledge_gate: Optional[str] = None  # "strict" | "flexible"
-
-
 class LLMProviderConfig(BaseModel):
     """Per-instance LLM provider settings. Stored on bot_instances.llm_config."""
     provider: str  # "emergent" | "anthropic" | "ollama"
@@ -219,8 +208,6 @@ class ApproveBody(BaseModel):
 
 class ScriptedVariant(BaseModel):
     text: str
-
-
 class ScriptedModeConfig(BaseModel):
     enabled: Optional[bool] = None
     primary_message: Optional[str] = None
@@ -232,8 +219,6 @@ class ScriptedModeConfig(BaseModel):
     reset_hours: Optional[int] = None
     rephrase_mode: Optional[str] = None   # ai | manual | hybrid
     classify_intent: Optional[bool] = None  # if True, Claude classifies user intent (question/update vs speculation)
-
-
 class DiscordConfigUpdate(BaseModel):
     bot_token: Optional[str] = None
     is_active: Optional[bool] = None
@@ -245,8 +230,6 @@ class DiscordConfigUpdate(BaseModel):
     handoff_followup_message: Optional[str] = None  # message bot sends when re-engaging
     passive_mode: Optional[bool] = None        # if True, only reply when bot can answer from KB (skip small-talk)
     scripted_mode: Optional[ScriptedModeConfig] = None
-
-
 # ==================== JWT AUTH HELPERS ====================
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
@@ -257,8 +240,6 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-
 async def get_current_user(
     authorization: Optional[str] = Header(None),
     bf_access_token: Optional[str] = Cookie(None)
@@ -278,14 +259,10 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user["role"] != "superadmin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
-
-
 async def _verify_instance_access(x_instance_id: Optional[str], current_user: dict) -> str:
     if not x_instance_id:
         raise HTTPException(status_code=400, detail="X-Instance-ID header required")
@@ -297,15 +274,11 @@ async def _verify_instance_access(x_instance_id: Optional[str], current_user: di
     if current_user["id"] not in instance.get("assigned_user_ids", []):
         raise HTTPException(status_code=403, detail="Access denied to this instance")
     return x_instance_id
-
-
 async def get_instance_access(
     x_instance_id: Optional[str] = Header(None, alias="X-Instance-ID"),
     current_user: dict = Depends(get_current_user)
 ) -> str:
     return await _verify_instance_access(x_instance_id, current_user)
-
-
 # ==================== KNOWLEDGE / TONE HELPERS ====================
 
 async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
@@ -357,8 +330,6 @@ async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
     except Exception as e:
         logger.warning(f"Knowledge search: {e}")
         return ""
-
-
 def _extract_relevant_window(content: str, query_words: list, window_size: int = 2500) -> str:
     """Find the section of content most relevant to the query and return a window around it."""
     content_lower = content.lower()
@@ -392,8 +363,6 @@ def _extract_relevant_window(content: str, query_words: list, window_size: int =
             break
     end = min(len(content), start + window_size)
     return content[start:end].strip()
-
-
 async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> str:
     parts = []
     if bot_config:
@@ -417,8 +386,6 @@ async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> s
     if not parts:
         return ""
     return "\n\n---\n\n".join(parts[:5])
-
-
 def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict") -> str:
     name = bot_config.get("name", "Assistant")
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
@@ -522,8 +489,6 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         )
 
     return "\n\n".join(parts)
-
-
 async def _classify_user_intent(user_text: str, session_id: str, instance_id: str) -> str:
     """Quick Claude classification: returns one of `question`, `update`, `ack`, `speculation`, `other`.
     Used by Scripted Mode v2 to decide whether to respond or stay silent."""
@@ -550,8 +515,6 @@ async def _classify_user_intent(user_text: str, session_id: str, instance_id: st
     except Exception as e:
         logger.warning(f"Intent classify failed: {e}")
     return "other"
-
-
 async def _ai_pick_variant(user_text: str, options: List[str], session_id: str, instance_id: str) -> int:
     """Ask Claude to pick the index (1-based) of the best pre-written reply from `options`
     for the given user message. Returns the 1-based index, or 0 if nothing fits.
@@ -589,16 +552,12 @@ async def _ai_pick_variant(user_text: str, options: List[str], session_id: str, 
     except Exception as e:
         logger.warning(f"AI pick variant failed: {e}")
         return 0
-
-
 DEFAULT_ACK_REPLIES = [
     "You're welcome!",
     "Anytime — happy to help!",
     "No problem!",
     "Glad I could help.",
 ]
-
-
 async def _decide_scripted_reply(
     scripted_cfg: dict,
     current_count: int,
@@ -683,8 +642,6 @@ async def _decide_scripted_reply(
 
     # Pool exhausted, stay silent until cooldown
     return {"reply": "", "pool_name": "silent", "intent": intent, "pool_considered": unused_variants, "skip_reason": "exhausted"}
-
-
 async def build_scripted_response(
     instance_id: str,
     channel_id: str,
@@ -750,8 +707,6 @@ async def build_scripted_response(
         update_ops["$push"] = {"used_replies": decision["reply"]}
     await db.scripted_counters.update_one(key, update_ops, upsert=True)
     return decision["reply"]
-
-
 async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> str:
     """Ask Claude to rephrase the primary message slightly while keeping every key fact."""
     system = (
@@ -775,8 +730,6 @@ async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> 
     except Exception as e:
         logger.warning(f"AI rephrase failed: {e}")
         return ""
-
-
 async def _resolve_llm_config(instance_id: str) -> dict:
     """Read the per-instance LLM provider config. Falls back to {provider: 'emergent'} when absent."""
     inst = await db.bot_instances.find_one({"id": instance_id}, {"llm_config": 1}) or {}
@@ -786,8 +739,6 @@ async def _resolve_llm_config(instance_id: str) -> dict:
     cfg = dict(cfg)
     cfg.setdefault("provider", "emergent")
     return cfg
-
-
 async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
                           instance_id: str, model: str) -> tuple:
     """LLM call via emergentintegrations + Emergent Universal Key. Returns (text, in_tok, out_tok).
@@ -813,8 +764,6 @@ async def _call_emergent(session_id: str, user_message: str, system_prompt: str,
     in_tok = _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
     out_tok = _estimate_tokens(text)
     return text, in_tok, out_tok
-
-
 async def _call_anthropic(session_id: str, user_message: str, system_prompt: str,
                           instance_id: str, model_short: str, api_key: str) -> tuple:
     """LLM call via direct Anthropic SDK. Returns (text, in_tok, out_tok) using real usage."""
@@ -848,8 +797,6 @@ async def _call_anthropic(session_id: str, user_message: str, system_prompt: str
     in_tok = int(getattr(usage, "input_tokens", 0) or 0) if usage else _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
     out_tok = int(getattr(usage, "output_tokens", 0) or 0) if usage else _estimate_tokens(text)
     return text, in_tok, out_tok
-
-
 async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
                        instance_id: str, model: str, base_url: str) -> tuple:
     """LLM call via Ollama. Returns (text, in_tok, out_tok). Ollama returns eval counts directly."""
@@ -874,8 +821,6 @@ async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
     in_tok = int(data.get("prompt_eval_count") or 0) or _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
     out_tok = int(data.get("eval_count") or 0) or _estimate_tokens(text)
     return text, in_tok, out_tok
-
-
 async def call_claude(session_id: str, user_message: str, system_prompt: str,
                       instance_id: str = "default", platform: str = "web") -> str:
     """Multi-provider LLM dispatcher. Routes to Emergent / Anthropic-direct / Ollama based on
@@ -961,8 +906,6 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
         await _log_llm_usage(instance_id, session_id, platform, fallback_model,
                              primary_model, False, retry_count, True, error_type)
         raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
-
-
 async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
                           model_used: str, model_attempted: str, success: bool,
                           retry_count: int, used_fallback: bool, error_type: str,
@@ -985,8 +928,6 @@ async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
         })
     except Exception as e:
         logger.warning(f"Failed to log LLM usage: {e}")
-
-
 # Anthropic published pricing per 1M tokens (Feb 2026). Used to estimate cost on the
 # admin dashboard. Ollama (self-hosted) is treated as $0. For unknown models we
 # fall back to Sonnet pricing as a conservative estimate.
@@ -1008,14 +949,10 @@ LLM_PRICING = {
     "claude-3-5-sonnet-20241022":  {"in": 3.00,  "out": 15.00},
 }
 DEFAULT_PRICING = {"in": 3.00, "out": 15.00}  # Sonnet-equivalent
-
-
 def _estimate_tokens(text: str) -> int:
     """Cheap heuristic for tokens when the provider doesn't return real usage.
     Anthropic averages ~3.6 chars per token in English; we use 4 to be conservative."""
     return max(1, len(text or "") // 4)
-
-
 def _cost_for(model: str, input_tokens: int, output_tokens: int) -> float:
     """Compute USD cost from token counts. Provider-prefixed model strings
     (e.g. 'anthropic:claude-sonnet-4-5', 'ollama:llama3.1') are stripped before lookup.
@@ -1028,8 +965,6 @@ def _cost_for(model: str, input_tokens: int, output_tokens: int) -> float:
     price = LLM_PRICING.get(m, DEFAULT_PRICING)
     return round(((input_tokens or 0) / 1_000_000) * price["in"] +
                  ((output_tokens or 0) / 1_000_000) * price["out"], 6)
-
-
 async def save_conversation(session_id: str, user_message: str, bot_response: str,
                             platform: str = "web", metadata: dict = None, instance_id: str = "default"):
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -1051,16 +986,12 @@ async def save_conversation(session_id: str, user_message: str, bot_response: st
             "created_at": timestamp, "updated_at": timestamp,
             "metadata": metadata or {}
         })
-
-
 # ==================== DISCORD BOT ====================
 
 # Shared client and handoff state
 _shared_discord_client = None
 _shared_discord_task = None
 _handoff_channels: Dict[str, datetime] = {}  # {channel_id: last_staff_timestamp}
-
-
 async def _resolve_instance_for_guild(guild_id: str) -> Optional[str]:
     """Find which instance owns this guild."""
     if guild_id in guild_instance_map:
@@ -1071,8 +1002,6 @@ async def _resolve_instance_for_guild(guild_id: str) -> Optional[str]:
         guild_instance_map[guild_id] = iid
         return iid
     return None
-
-
 async def _sync_guild_nickname(token: str, guild_id: str, name: str):
     """Set bot nickname in a specific guild. Safe — never raises."""
     try:
@@ -1092,8 +1021,6 @@ async def _sync_guild_nickname(token: str, guild_id: str, name: str):
                     logger.warning(f"Nickname sync failed in guild {guild_id} ({resp.status}): {body}")
     except Exception as e:
         logger.warning(f"Nickname sync exception for guild {guild_id}: {e}")
-
-
 async def start_shared_discord_bot(token: str):
     """Start a single shared Discord client that routes messages to the correct instance."""
     global _shared_discord_client
@@ -1379,8 +1306,6 @@ async def start_shared_discord_bot(token: str):
         logger.error(f"Discord bot startup error: {e}")
     finally:
         _shared_discord_client = None
-
-
 # ==================== STARTUP / SHUTDOWN ====================
 
 @app.on_event("startup")
@@ -1450,8 +1375,6 @@ async def startup_event():
     if bot_token:
         _shared_discord_task = asyncio.create_task(start_shared_discord_bot(bot_token))
         logger.info(f"Starting shared Discord bot ({len(active_configs)} active instances)")
-
-
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task
@@ -1463,15 +1386,11 @@ async def shutdown_event():
     if _shared_discord_task:
         _shared_discord_task.cancel()
     mongo_client.close()
-
-
 # ==================== AUTH ROUTES ====================
 
 @api_router.get("/")
 async def root():
     return {"message": "BridgeBot API", "version": "2.0.0"}
-
-
 @api_router.post("/auth/register")
 async def register(body: UserRegister):
     if not body.email or not body.password or not body.username:
@@ -1502,8 +1421,6 @@ async def register(body: UserRegister):
     })
     await send_verification_email(body.email, code)
     return {"message": "Verification code sent to your email."}
-
-
 @api_router.post("/auth/resend-code")
 async def resend_code(body: ResendCodeBody):
     user = await db.users.find_one({"email": body.email.lower()})
@@ -1517,8 +1434,6 @@ async def resend_code(body: ResendCodeBody):
     )
     await send_verification_email(body.email, code)
     return {"message": "New verification code sent"}
-
-
 @api_router.post("/auth/verify")
 async def verify_email(body: VerifyEmailBody):
     user = await db.users.find_one({"email": body.email.lower()})
@@ -1536,8 +1451,6 @@ async def verify_email(body: VerifyEmailBody):
         {"$set": {"is_verified": True, "verification_code": None, "verification_code_expiry": None}}
     )
     return {"message": "Email verified successfully"}
-
-
 @api_router.post("/auth/login")
 async def login(body: UserLogin, response: Response):
     identifier = body.email_or_username.strip().lower()
@@ -1576,14 +1489,10 @@ async def login(body: UserLogin, response: Response):
         "user": {"id": user["id"], "email": user["email"], "role": user["role"], "username": user.get("username", "")},
         "instances": instances
     }
-
-
 @api_router.post("/auth/logout")
 async def logout_user(response: Response):
     response.delete_cookie(key="bf_access_token", path="/")
     return {"success": True}
-
-
 @api_router.post("/auth/forgot-password")
 async def forgot_password(body: ForgotPasswordBody):
     email = body.email.lower().strip()
@@ -1598,8 +1507,6 @@ async def forgot_password(body: ForgotPasswordBody):
         )
         await send_reset_email(email, code)
     return {"message": "If that email is registered, a reset code has been sent."}
-
-
 @api_router.post("/auth/reset-password")
 async def reset_password(body: ResetPasswordBody):
     email = body.email.lower().strip()
@@ -1617,8 +1524,6 @@ async def reset_password(body: ResetPasswordBody):
         {"$set": {"hashed_password": hashed}, "$unset": {"reset_code": "", "reset_code_expires": ""}}
     )
     return {"message": "Password reset successful. You can now log in."}
-
-
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     user = await db.users.find_one(
@@ -1635,8 +1540,6 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             {"assigned_user_ids": current_user["id"]}, {"_id": 0, "id": 1, "name": 1}
         ).to_list(100)
     return {**user, "instances": instances}
-
-
 # ==================== INSTANCE MANAGEMENT (SUPERADMIN) ====================
 
 @api_router.get("/admin/users")
@@ -1657,8 +1560,6 @@ async def list_all_users(current_user: dict = Depends(require_admin)):
     for user in users:
         user["assigned_instances"] = user_instance_map.get(user["id"], [])
     return users
-
-
 @api_router.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
     """Delete a user (admin only). Cannot delete yourself."""
@@ -1677,8 +1578,6 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin))
     # Delete user
     await db.users.delete_one({"id": user_id})
     return {"success": True, "message": f"User {user.get('email', '')} deleted"}
-
-
 @api_router.get("/admin/instances")
 async def list_instances(current_user: dict = Depends(require_admin)):
     instances = await db.bot_instances.find({}, {"_id": 0}).to_list(100)
@@ -1699,8 +1598,6 @@ async def list_instances(current_user: dict = Depends(require_admin)):
             user_map[uid] for uid in inst.get("assigned_user_ids", []) if uid in user_map
         ]
     return instances
-
-
 @api_router.post("/admin/instances")
 async def create_instance(body: BotInstanceCreate, current_user: dict = Depends(require_admin)):
     instance_id = str(uuid.uuid4())
@@ -1725,8 +1622,6 @@ async def create_instance(body: BotInstanceCreate, current_user: dict = Depends(
         "created_at": now
     })
     return instance
-
-
 @api_router.put("/admin/instances/{instance_id}")
 async def update_instance(instance_id: str, body: BotInstanceCreate, current_user: dict = Depends(require_admin)):
     result = await db.bot_instances.update_one(
@@ -1737,8 +1632,6 @@ async def update_instance(instance_id: str, body: BotInstanceCreate, current_use
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Instance not found")
     return {"success": True}
-
-
 @api_router.delete("/admin/instances/{instance_id}")
 async def delete_instance(instance_id: str, current_user: dict = Depends(require_admin)):
     result = await db.bot_instances.delete_one({"id": instance_id})
@@ -1747,8 +1640,6 @@ async def delete_instance(instance_id: str, current_user: dict = Depends(require
     for col in [db.bot_config, db.knowledge_sources, db.conversations, db.discord_config]:
         await col.delete_many({"instance_id": instance_id})
     return {"success": True}
-
-
 # ── Per-instance LLM provider configuration ─────────────────────────────────────
 
 @api_router.get("/admin/instances/{instance_id}/llm-config")
@@ -1773,8 +1664,6 @@ async def get_instance_llm_config(instance_id: str, current_user: dict = Depends
             "ollama": DEFAULT_OLLAMA_MODEL,
         },
     }
-
-
 @api_router.put("/admin/instances/{instance_id}/llm-config")
 async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, current_user: dict = Depends(require_admin)):
     """Save per-instance LLM provider. When `anthropic_api_key` is empty in the body, the existing
@@ -1812,8 +1701,6 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
             llm_history.pop(k, None)
     logger.info(f"[LLM] instance={instance_id} provider={provider} model={model}")
     return {"success": True}
-
-
 @api_router.post("/admin/instances/{instance_id}/llm-config/test")
 async def test_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
     """Send a one-shot 'ping' through the configured provider to verify credentials work."""
@@ -1830,8 +1717,6 @@ async def test_instance_llm_config(instance_id: str, current_user: dict = Depend
         return {"success": False, "error": str(e.detail), "status_code": e.status_code}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
 @api_router.get("/admin/instances/{instance_id}/reply-defaults")
 async def get_reply_defaults(instance_id: str, current_user: dict = Depends(require_admin)):
     """Return the instance-level acknowledgment replies and fallback message."""
@@ -1855,8 +1740,6 @@ async def get_reply_defaults(instance_id: str, current_user: dict = Depends(requ
         "acknowledgment_replies": ack_raw,
         "fallback_message": fallback,
     }
-
-
 @api_router.put("/admin/instances/{instance_id}/reply-defaults")
 async def update_reply_defaults(instance_id: str, body: dict, current_user: dict = Depends(require_admin)):
     """Save instance-level acknowledgment replies and fallback message."""
@@ -1874,8 +1757,6 @@ async def update_reply_defaults(instance_id: str, body: dict, current_user: dict
         update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.bot_instances.update_one({"id": instance_id}, {"$set": update_fields})
     return {"success": True}
-
-
 @api_router.post("/admin/instances/{instance_id}/assign-user")
 async def assign_user(instance_id: str, body: AssignUser, current_user: dict = Depends(require_admin)):
     instance = await db.bot_instances.find_one({"id": instance_id})
@@ -1889,8 +1770,6 @@ async def assign_user(instance_id: str, body: AssignUser, current_user: dict = D
         {"$addToSet": {"assigned_user_ids": user["id"]}}
     )
     return {"success": True, "user": {"id": user["id"], "email": user["email"]}}
-
-
 @api_router.delete("/admin/instances/{instance_id}/unassign-user/{user_id}")
 async def unassign_user(instance_id: str, user_id: str, current_user: dict = Depends(require_admin)):
     result = await db.bot_instances.update_one(
@@ -1900,10 +1779,6 @@ async def unassign_user(instance_id: str, user_id: str, current_user: dict = Dep
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Instance not found")
     return {"success": True}
-
-
-
-
 # ==================== CHAT (PUBLIC) ====================
 
 @api_router.post("/chat/send")
@@ -1921,22 +1796,16 @@ async def send_chat_message(body: ChatMessage):
                                     instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
     return {"response": response, "session_id": session_id}
-
-
 @api_router.get("/chat/history/{session_id}")
 async def get_chat_history(session_id: str):
     conv = await db.conversations.find_one({"session_id": session_id}, {"_id": 0})
     return conv or {"messages": [], "session_id": session_id}
-
-
 # ==================== BOT CONFIG (PROTECTED) ====================
 
 @api_router.get("/admin/bot-config")
 async def get_bot_config(instance_id: str = Depends(get_instance_access)):
     config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
     return config or {}
-
-
 @api_router.put("/admin/bot-config")
 async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(get_instance_access)):
     update_data = {}
@@ -1945,11 +1814,11 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
             update_data[k] = v
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided")
+    if update_data.get("knowledge_gate") and update_data["knowledge_gate"] not in ("strict", "flexible"):
+        raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict' or 'flexible'")
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
     return await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
-
-
 
 # ==================== EXTERNAL API (PUBLIC — authenticated via bbk_ keys) ====================
 
@@ -1957,8 +1826,6 @@ def _generate_api_key() -> str:
     """Generate a bbk_ prefixed API key."""
     import secrets as _secrets
     return f"bbk_{_secrets.token_hex(24)}"
-
-
 @api_router.post("/admin/api-keys")
 async def create_api_key(body: dict, current_user: dict = Depends(require_admin)):
     """Create a new API key for an instance."""
@@ -1970,7 +1837,7 @@ async def create_api_key(body: dict, current_user: dict = Depends(require_admin)
     if not inst:
         raise HTTPException(status_code=404, detail="Instance not found")
     key = _generate_api_key()
-    import hashlib
+
     key_hash = hashlib.sha256(key.encode()).hexdigest()
     doc = {
         "id": str(uuid.uuid4()),
@@ -1988,8 +1855,6 @@ async def create_api_key(body: dict, current_user: dict = Depends(require_admin)
     doc.pop("_id", None)
     doc["key"] = key  # Return the full key only on creation
     return doc
-
-
 @api_router.get("/admin/api-keys")
 async def list_api_keys(instance_id: str = Depends(get_instance_access)):
     """List API keys for an instance (never returns the full key)."""
@@ -1997,16 +1862,12 @@ async def list_api_keys(instance_id: str = Depends(get_instance_access)):
         {"instance_id": instance_id}, {"_id": 0, "key_hash": 0}
     ).sort("created_at", -1).to_list(50)
     return keys
-
-
 @api_router.delete("/admin/api-keys/{key_id}")
 async def revoke_api_key(key_id: str, current_user: dict = Depends(require_admin)):
     result = await db.api_keys.delete_one({"id": key_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="API key not found")
     return {"success": True}
-
-
 @api_router.patch("/admin/api-keys/{key_id}/toggle")
 async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin)):
     doc = await db.api_keys.find_one({"id": key_id})
@@ -2015,15 +1876,13 @@ async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin
     new_status = not doc.get("is_active", True)
     await db.api_keys.update_one({"id": key_id}, {"$set": {"is_active": new_status}})
     return {"is_active": new_status}
-
-
 async def _authenticate_api_key(request: Request) -> dict:
     """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer bbk_"):
         raise HTTPException(status_code=401, detail="Invalid API key. Must be a Bearer bbk_... token.")
     key = auth.replace("Bearer ", "").strip()
-    import hashlib
+
     key_hash = hashlib.sha256(key.encode()).hexdigest()
     doc = await db.api_keys.find_one({"key_hash": key_hash})
     if not doc:
@@ -2036,13 +1895,9 @@ async def _authenticate_api_key(request: Request) -> dict:
         {"$set": {"last_used_at": datetime.now(timezone.utc).isoformat()}, "$inc": {"usage_count": 1}}
     )
     return {"instance_id": doc["instance_id"], "key_id": doc["id"]}
-
-
 class ExternalChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
-
-
 @api_router.post("/v1/chat")
 async def external_chat(body: ExternalChatRequest, request: Request):
     """Public chat endpoint authenticated via bbk_ API key.
@@ -2069,8 +1924,6 @@ async def external_chat(body: ExternalChatRequest, request: Request):
         "session_id": session_id,
         "instance_id": instance_id,
     }
-
-
 # ==================== KNOWLEDGE SOURCES (PROTECTED) ====================
 
 @api_router.get("/knowledge/sources")
@@ -2136,8 +1989,6 @@ async def get_knowledge_sources(instance_id: str = Depends(get_instance_access))
         grouped_list.append(g)
     result = sorted(grouped_list + ungrouped, key=lambda x: (-x.get("priority", 0), x.get("created_at", "") or ""))
     return result
-
-
 @api_router.post("/knowledge/sources/faq")
 async def add_faq(entry: FAQEntry, instance_id: str = Depends(get_instance_access)):
     doc = {
@@ -2149,8 +2000,6 @@ async def add_faq(entry: FAQEntry, instance_id: str = Depends(get_instance_acces
     await db.knowledge_sources.insert_one(doc)
     doc.pop("_id", None)
     return doc
-
-
 
 def _split_into_chunks(text: str, max_chunk: int = 8000) -> list:
     """Split large text into chunks, preferring section/Q&A boundaries."""
@@ -2174,8 +2023,6 @@ def _split_into_chunks(text: str, max_chunk: int = 8000) -> list:
         chunks.append(remaining[:split_at].strip())
         remaining = remaining[split_at:].strip()
     return [c for c in chunks if c]
-
-
 
 def _extract_nextjs_content(html: str) -> str:
     """Extract readable text from Next.js __NEXT_DATA__ embedded JSON.
@@ -2241,8 +2088,6 @@ def _extract_nextjs_content(html: str) -> str:
     _walk(page_props)
     return "\n\n".join(parts)
 
-
-
 async def _try_zendesk_api(url: str) -> tuple:
     """Try Zendesk Help Center API for /hc/ article URLs. Returns (text, title)."""
     # Extract article ID from URL like /hc/en-us/articles/360000776490-Title
@@ -2265,8 +2110,6 @@ async def _try_zendesk_api(url: str) -> tuple:
         soup = BeautifulSoup(body_html, "html.parser")
         text = soup.get_text(separator="\n", strip=True)
         return (text, title)
-
-
 async def _try_cloudscraper(url: str) -> tuple:
     """Try cloudscraper to bypass Cloudflare challenges. Returns (html, text)."""
     import asyncio
@@ -2283,8 +2126,6 @@ async def _try_cloudscraper(url: str) -> tuple:
         tag.decompose()
     text = soup.get_text(separator="\n", strip=True)
     return (html, text)
-
-
 @api_router.post("/knowledge/sources/url")
 async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
     try:
@@ -2417,8 +2258,6 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"URL scraping failed: {str(e)}")
-
-
 @api_router.post("/knowledge/sources/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -2459,20 +2298,14 @@ async def upload_document(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 class PriorityUpdate(BaseModel):
     priority: int = Field(ge=0, le=2)
-
-
 @api_router.delete("/knowledge/sources/{source_id}")
 async def delete_source(source_id: str, instance_id: str = Depends(get_instance_access)):
     result = await db.knowledge_sources.delete_one({"id": source_id, "instance_id": instance_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Source not found")
     return {"success": True}
-
-
 @api_router.delete("/knowledge/sources/group/{group_id}")
 async def delete_source_group(group_id: str, instance_id: str = Depends(get_instance_access)):
     """Delete all chunks in a group (all parts of a URL scrape)."""
@@ -2481,8 +2314,6 @@ async def delete_source_group(group_id: str, instance_id: str = Depends(get_inst
         # Fallback: try matching by URL for legacy ungrouped sources
         result = await db.knowledge_sources.delete_many({"url": group_id, "instance_id": instance_id})
     return {"success": True, "deleted": result.deleted_count}
-
-
 @api_router.patch("/knowledge/sources/group/{group_id}/category")
 async def update_group_category(group_id: str, body: dict, instance_id: str = Depends(get_instance_access)):
     """Update category for all chunks in a group."""
@@ -2499,8 +2330,6 @@ async def update_group_category(group_id: str, body: dict, instance_id: str = De
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Group not found")
     return {"success": True, "category": category}
-
-
 @api_router.patch("/knowledge/sources/group/{group_id}/toggle")
 async def toggle_source_group(group_id: str, instance_id: str = Depends(get_instance_access)):
     """Toggle active state for all chunks in a group."""
@@ -2515,8 +2344,6 @@ async def toggle_source_group(group_id: str, instance_id: str = Depends(get_inst
         {"$set": {"is_active": new_status}}
     )
     return {"is_active": new_status}
-
-
 @api_router.patch("/knowledge/sources/group/{group_id}/priority")
 async def update_group_priority(group_id: str, body: PriorityUpdate, instance_id: str = Depends(get_instance_access)):
     """Update priority for all chunks in a group."""
@@ -2527,8 +2354,6 @@ async def update_group_priority(group_id: str, body: PriorityUpdate, instance_id
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Group not found")
     return {"success": True, "priority": body.priority}
-
-
 @api_router.patch("/knowledge/sources/{source_id}/category")
 async def update_source_category(source_id: str, body: dict, instance_id: str = Depends(get_instance_access)):
     """Update category for a single source."""
@@ -2540,8 +2365,6 @@ async def update_source_category(source_id: str, body: dict, instance_id: str = 
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Source not found")
     return {"success": True, "category": category}
-
-
 @api_router.patch("/knowledge/sources/{source_id}/toggle")
 async def toggle_source(source_id: str, instance_id: str = Depends(get_instance_access)):
     source = await db.knowledge_sources.find_one({"id": source_id, "instance_id": instance_id}, {"_id": 0})
@@ -2550,8 +2373,6 @@ async def toggle_source(source_id: str, instance_id: str = Depends(get_instance_
     new_status = not source.get("is_active", True)
     await db.knowledge_sources.update_one({"id": source_id}, {"$set": {"is_active": new_status}})
     return {"is_active": new_status}
-
-
 class SourceUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
@@ -2568,8 +2389,6 @@ async def update_source_priority(source_id: str, body: PriorityUpdate, instance_
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Source not found")
     return {"success": True, "priority": body.priority}
-
-
 @api_router.put("/knowledge/sources/{source_id}")
 async def update_source(source_id: str, body: SourceUpdate, instance_id: str = Depends(get_instance_access)):
     source = await db.knowledge_sources.find_one({"id": source_id, "instance_id": instance_id}, {"_id": 0})
@@ -2582,15 +2401,11 @@ async def update_source(source_id: str, body: SourceUpdate, instance_id: str = D
     await db.knowledge_sources.update_one({"id": source_id, "instance_id": instance_id}, {"$set": update})
     updated = await db.knowledge_sources.find_one({"id": source_id}, {"_id": 0})
     return updated
-
-
 @api_router.get("/knowledge/categories")
 async def get_knowledge_categories(instance_id: str = Depends(get_instance_access)):
     """Return all unique categories used by knowledge sources in this instance."""
     cats = await db.knowledge_sources.distinct("category", {"instance_id": instance_id})
     return [c for c in cats if c and isinstance(c, str) and c.strip()]
-
-
 # ==================== CONVERSATIONS (PROTECTED) ====================
 
 @api_router.get("/conversations")
@@ -2608,16 +2423,12 @@ async def get_conversations(
     total = await db.conversations.count_documents(query)
     convs = await db.conversations.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     return {"conversations": convs, "total": total, "page": page, "limit": limit}
-
-
 @api_router.get("/conversations/{session_id}")
 async def get_conversation(session_id: str, instance_id: str = Depends(get_instance_access)):
     conv = await db.conversations.find_one({"session_id": session_id, "instance_id": instance_id}, {"_id": 0})
     if not conv:
         raise HTTPException(status_code=404, detail="Not found")
     return conv
-
-
 @api_router.patch("/conversations/{session_id}/approve")
 async def approve_conversation(session_id: str, body: ApproveBody,
                                 instance_id: str = Depends(get_instance_access)):
@@ -2628,8 +2439,6 @@ async def approve_conversation(session_id: str, body: ApproveBody,
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
     return {"success": True, "is_approved_for_training": body.approved}
-
-
 @api_router.delete("/conversations/{session_id}")
 async def delete_conversation(session_id: str, instance_id: str = Depends(get_instance_access)):
     llm_sessions.pop(session_id, None)
@@ -2637,8 +2446,6 @@ async def delete_conversation(session_id: str, instance_id: str = Depends(get_in
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
     return {"success": True}
-
-
 # ==================== ANALYTICS (PROTECTED) ====================
 
 @api_router.get("/analytics/overview")
@@ -2661,8 +2468,6 @@ async def analytics_overview(instance_id: str = Depends(get_instance_access)):
         "approved_for_training": approved_training, "knowledge_sources": knowledge_count,
         "platform_breakdown": {"web": web_count, "discord": discord_count}
     }
-
-
 @api_router.get("/analytics/daily")
 async def analytics_daily(instance_id: str = Depends(get_instance_access)):
     now = datetime.now(timezone.utc)
@@ -2684,8 +2489,6 @@ async def analytics_daily(instance_id: str = Depends(get_instance_access)):
         msg_count = msg_res[0]["total"] if msg_res else 0
         days.append({"date": day_start.strftime("%m/%d"), "conversations": count, "messages": msg_count})
     return days
-
-
 @api_router.get("/analytics/llm-usage")
 async def analytics_llm_usage(instance_id: str = Depends(get_instance_access)):
     """API usage, retry attempts, fallbacks and error breakdown for the selected instance."""
@@ -2743,8 +2546,6 @@ async def analytics_llm_usage(instance_id: str = Depends(get_instance_access)):
         "error_breakdown": error_breakdown,
         "daily": daily,
     }
-
-
 @api_router.get("/analytics/llm-cost")
 async def analytics_llm_cost(instance_id: str = Depends(get_instance_access)):
     """Per-instance LLM cost dashboard.
@@ -2843,8 +2644,6 @@ async def analytics_llm_cost(instance_id: str = Depends(get_instance_access)):
         "forecast_month_end_usd": forecast,
         "last_30d_cost_usd": round(series_total_30d, 4),
     }
-
-
 @api_router.get("/analytics/passive-skips")
 async def analytics_passive_skips(instance_id: str = Depends(get_instance_access)):
     """Stats for Passive Mode — how many Discord messages the bot intentionally stayed silent on."""
@@ -2857,11 +2656,7 @@ async def analytics_passive_skips(instance_id: str = Depends(get_instance_access
     week = await db.passive_skips.count_documents({**q, "timestamp": {"$gte": week_start.isoformat()}})
     recent = await db.passive_skips.find(q, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(length=10)
     return {"total": total, "today": today, "last_7_days": week, "recent": recent}
-
-
 # ==================== DISCORD (PROTECTED) ====================
-
-
 @api_router.get("/discord/app-config")
 async def get_discord_app_config(current_user: dict = Depends(require_admin)):
     """Get Discord app credentials (admin only). Secrets are masked."""
@@ -2878,8 +2673,6 @@ async def get_discord_app_config(current_user: dict = Depends(require_admin)):
         "has_bot_token": bool(creds["bot_token"]),
         "updated_at": raw.get("updated_at"),
     }
-
-
 class DiscordAppConfigUpdate(BaseModel):
     client_id: Optional[str] = None
     client_secret: Optional[str] = None
@@ -2897,8 +2690,6 @@ async def update_discord_app_config(body: DiscordAppConfigUpdate, current_user: 
         {"_id": "discord_app"}, {"$set": update}, upsert=True
     )
     return {"success": True, "message": "Discord credentials updated"}
-
-
 @api_router.get("/discord/app-config/connections")
 async def list_discord_connections(current_user: dict = Depends(require_admin)):
     """List every instance currently mapped to a Discord guild. Used by Discord App Setup to
@@ -2914,8 +2705,6 @@ async def list_discord_connections(current_user: dict = Depends(require_admin)):
             "guild_name": r.get("guild_name") or "",
         })
     return {"connections": out, "count": len(out)}
-
-
 @api_router.delete("/discord/app-config")
 async def clear_discord_app_config(
     clear_connections: bool = False,
@@ -2944,8 +2733,6 @@ async def clear_discord_app_config(
         "message": "Discord app credentials cleared",
         "connections_cleared": connections_cleared,
     }
-
-
 @api_router.get("/discord/oauth-url")
 async def get_discord_oauth_url(instance_id: str = Depends(get_instance_access)):
     """Generate Discord OAuth2 URL to invite the bot to a server."""
@@ -2965,8 +2752,6 @@ async def get_discord_oauth_url(instance_id: str = Depends(get_instance_access))
     }
     url = f"https://discord.com/oauth2/authorize?{urlencode(params)}"
     return {"url": url}
-
-
 @api_router.get("/discord/share-oauth-url")
 async def get_discord_share_oauth_url(instance_id: str = Depends(get_instance_access)):
     """Generate a shareable Discord OAuth2 URL for a third-party admin to invite the bot
@@ -2988,15 +2773,11 @@ async def get_discord_share_oauth_url(instance_id: str = Depends(get_instance_ac
     }
     url = f"https://discord.com/oauth2/authorize?{urlencode(params)}"
     return {"url": url}
-
-
 class SendInviteEmailBody(BaseModel):
     to_email: str
     recipient_name: Optional[str] = None
     invite_url: str
     custom_note: Optional[str] = None
-
-
 @api_router.post("/discord/send-invite-email")
 async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str = Depends(get_instance_access)):
     """Send a Discord bot invite link to a third-party server admin via Resend."""
@@ -3036,8 +2817,6 @@ async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str 
     except Exception as e:
         logger.error(f"Resend send failed: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}")
-
-
 @api_router.get("/discord/callback")
 async def discord_oauth_callback(
     request: Request,
@@ -3132,8 +2911,6 @@ async def discord_oauth_callback(
     except Exception as e:
         logger.error(f"Discord OAuth callback error: {e}")
         return RedirectResponse(url=f"{frontend_base}/discord/invited?error=1")
-
-
 @api_router.post("/discord/disconnect")
 async def disconnect_discord_guild(instance_id: str = Depends(get_instance_access)):
     """Clear the guild mapping for this instance. Idempotent — never 404s even if
@@ -3150,8 +2927,6 @@ async def disconnect_discord_guild(instance_id: str = Depends(get_instance_acces
     if guild_id and guild_id in guild_instance_map:
         del guild_instance_map[guild_id]
     return {"success": True, "cleared_guild_id": guild_id}
-
-
 @api_router.post("/discord/purge-all-connections")
 async def purge_all_discord_connections(current_user: dict = Depends(require_admin)):
     """ADMIN-ONLY: Wipe every guild mapping across every instance. Useful after
@@ -3168,8 +2943,6 @@ async def purge_all_discord_connections(current_user: dict = Depends(require_adm
         "success": True,
         "connections_cleared": result.modified_count,
     }
-
-
 @api_router.post("/discord/sync-name")
 async def sync_discord_name(instance_id: str = Depends(get_instance_access)):
     """Push the bot_config name to Discord as the bot's nickname in connected guilds."""
@@ -3211,8 +2984,6 @@ async def sync_discord_name(instance_id: str = Depends(get_instance_access)):
     if not results:
         raise HTTPException(status_code=400, detail="No guilds found to update nickname")
     return {"success": True, "message": " | ".join(results)}
-
-
 @api_router.get("/discord/channels")
 async def get_discord_channels(instance_id: str = Depends(get_instance_access)):
     """Fetch text channels from this instance's connected guild only."""
@@ -3253,8 +3024,6 @@ async def get_discord_channels(instance_id: str = Depends(get_instance_access)):
         logger.error(f"Discord channel fetch error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch channels from Discord")
     return all_channels
-
-
 @api_router.get("/discord/config")
 async def get_discord_config(instance_id: str = Depends(get_instance_access)):
     config = await db.discord_config.find_one({"instance_id": instance_id}, {"_id": 0})
@@ -3280,8 +3049,6 @@ async def get_discord_config(instance_id: str = Depends(get_instance_access)):
             sm["acknowledgment_replies"] = list(DEFAULT_ACK_REPLIES)
             config["scripted_mode"] = sm
     return config
-
-
 @api_router.put("/discord/config")
 async def update_discord_config(body: DiscordConfigUpdate, instance_id: str = Depends(get_instance_access)):
     update = {k: v for k, v in body.dict().items() if v is not None}
@@ -3289,8 +3056,6 @@ async def update_discord_config(body: DiscordConfigUpdate, instance_id: str = De
     update["instance_id"] = instance_id
     await db.discord_config.update_one({"instance_id": instance_id}, {"$set": update}, upsert=True)
     return {"success": True}
-
-
 @api_router.get("/discord/scripted-counters/count")
 async def get_scripted_counters_count(instance_id: str = Depends(get_instance_access)):
     """Return how many users currently have an active Scripted Mode conversation.
@@ -3322,8 +3087,6 @@ async def get_scripted_counters_count(instance_id: str = Depends(get_instance_ac
         "skips_last_24h": skips_24h,
         "reset_hours": reset_hours,
     }
-
-
 async def _run_sandbox_simulation(scripted_cfg: dict, messages: List[str], instance_id: str) -> List[dict]:
     """Run a sequence of user messages through the Scripted Mode decision helper
     in pure simulation mode (NO writes to scripted_counters). Returns the turn list
@@ -3352,8 +3115,6 @@ async def _run_sandbox_simulation(scripted_cfg: dict, messages: List[str], insta
         turn["used_replies_after"] = list(used_replies)
         turns.append(turn)
     return turns
-
-
 def _compare_against_golden(turns: List[dict], golden_turns: List[dict]) -> List[dict]:
     """Compare actual turns to golden turns. Returns a list of failure dicts.
     Match on (pool_name, intent) — the specific variant string is non-deterministic
@@ -3378,8 +3139,6 @@ def _compare_against_golden(turns: List[dict], golden_turns: List[dict]) -> List
                 "expected": golden.get("intent"), "actual": actual.get("intent"),
             })
     return failures
-
-
 @api_router.post("/discord/scripted-mode/sandbox")
 async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_instance_access)):
     """Dry-run a sequence of user messages through Scripted Mode and see what the bot
@@ -3404,16 +3163,12 @@ async def scripted_mode_sandbox(body: dict, instance_id: str = Depends(get_insta
         scripted_cfg = cfg.get("scripted_mode") or {}
     turns = await _run_sandbox_simulation(scripted_cfg, messages, instance_id)
     return {"turns": turns}
-
-
 # ── Saved Scenarios — regression tests for Scripted Mode copy ──────────────────────
 
 class ScenarioCreate(BaseModel):
     name: str
     messages: List[str]
     description: Optional[str] = None
-
-
 @api_router.get("/discord/scripted-mode/scenarios")
 async def list_scenarios(instance_id: str = Depends(get_instance_access)):
     """List all saved Scripted Mode scenarios for this instance."""
@@ -3421,8 +3176,6 @@ async def list_scenarios(instance_id: str = Depends(get_instance_access)):
         {"instance_id": instance_id}, {"_id": 0}
     ).sort("created_at", 1).to_list(200)
     return {"scenarios": rows}
-
-
 @api_router.post("/discord/scripted-mode/scenarios")
 async def create_scenario(body: ScenarioCreate, instance_id: str = Depends(get_instance_access)):
     """Create a new saved scenario. `golden_turns` is captured on the FIRST `/run`."""
@@ -3448,8 +3201,6 @@ async def create_scenario(body: ScenarioCreate, instance_id: str = Depends(get_i
     }
     await db.scripted_scenarios.insert_one(dict(doc))
     return doc
-
-
 @api_router.delete("/discord/scripted-mode/scenarios/{scenario_id}")
 async def delete_scenario(scenario_id: str, instance_id: str = Depends(get_instance_access)):
     """Delete a saved scenario."""
@@ -3457,8 +3208,6 @@ async def delete_scenario(scenario_id: str, instance_id: str = Depends(get_insta
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Scenario not found")
     return {"success": True}
-
-
 async def _run_scenario_doc(scenario: dict, scripted_cfg: dict, instance_id: str) -> dict:
     """Run one scenario's messages, compare to its golden_turns, persist last_run.
     Returns the full run result."""
@@ -3485,15 +3234,11 @@ async def _run_scenario_doc(scenario: dict, scripted_cfg: dict, instance_id: str
         {"$set": {"last_run": last_run, "updated_at": now}}
     )
     return last_run
-
-
 async def _load_scripted_cfg(instance_id: str, override: Optional[dict] = None) -> dict:
     if isinstance(override, dict):
         return override
     cfg = await db.discord_config.find_one({"instance_id": instance_id}) or {}
     return cfg.get("scripted_mode") or {}
-
-
 @api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/run")
 async def run_scenario(scenario_id: str, body: Optional[dict] = None, instance_id: str = Depends(get_instance_access)):
     """Run one scenario. Body may include `scripted_config` to test unsaved form values."""
@@ -3503,8 +3248,6 @@ async def run_scenario(scenario_id: str, body: Optional[dict] = None, instance_i
     scripted_cfg = await _load_scripted_cfg(instance_id, (body or {}).get("scripted_config"))
     result = await _run_scenario_doc(scenario, scripted_cfg, instance_id)
     return result
-
-
 @api_router.post("/discord/scripted-mode/scenarios/{scenario_id}/save-golden")
 async def save_scenario_golden(scenario_id: str, instance_id: str = Depends(get_instance_access)):
     """Promote the most recent `last_run` to be the new golden baseline.
@@ -3522,8 +3265,6 @@ async def save_scenario_golden(scenario_id: str, instance_id: str = Depends(get_
         {"$set": {"golden_turns": new_golden, "updated_at": now}}
     )
     return {"success": True, "golden_turns": new_golden}
-
-
 @api_router.post("/discord/scripted-mode/scenarios/run-all")
 async def run_all_scenarios(body: Optional[dict] = None, instance_id: str = Depends(get_instance_access)):
     """Run every scenario sequentially. Returns a per-scenario pass/fail summary."""
@@ -3552,8 +3293,6 @@ async def run_all_scenarios(body: Optional[dict] = None, instance_id: str = Depe
         "total": len(scenarios), "passed": passed, "failed": failed,
         "captured_golden": captured, "results": results,
     }
-
-
 @api_router.post("/discord/scripted-counters/reset")
 async def reset_scripted_counters(instance_id: str = Depends(get_instance_access)):
     """Wipe all Scripted Mode per-user counters for this instance.
@@ -3562,8 +3301,6 @@ async def reset_scripted_counters(instance_id: str = Depends(get_instance_access
     result = await db.scripted_counters.delete_many({"instance_id": instance_id})
     logger.info(f"[SCRIPTED] reset_counters instance={instance_id} cleared={result.deleted_count}")
     return {"success": True, "cleared": result.deleted_count}
-
-
 @api_router.post("/discord/restart")
 async def restart_discord_bot_endpoint(instance_id: str = Depends(get_instance_access)):
     global _shared_discord_client, _shared_discord_task
@@ -3586,8 +3323,6 @@ async def restart_discord_bot_endpoint(instance_id: str = Depends(get_instance_a
         guild_instance_map[guild_id] = instance_id
     _shared_discord_task = asyncio.create_task(start_shared_discord_bot(token))
     return {"success": True, "message": "Discord bot restarting..."}
-
-
 @api_router.get("/discord/handoff-status")
 async def get_handoff_status(instance_id: str = Depends(get_instance_access)):
     """List channels currently in human-takeover silence for this instance."""
@@ -3621,8 +3356,6 @@ async def get_handoff_status(instance_id: str = Depends(get_instance_access)):
             "remaining_min": round(remaining, 1),
         })
     return {"channels": out, "guild_id": guild_id, "cooldown_minutes": cooldown_minutes}
-
-
 @api_router.post("/discord/handoff-resume")
 async def resume_handoff(instance_id: str = Depends(get_instance_access)):
     """Clear all human-takeover silences for this instance's guild — bot resumes immediately."""
@@ -3641,8 +3374,6 @@ async def resume_handoff(instance_id: str = Depends(get_instance_access)):
             del _handoff_channels[ch_id]
             cleared += 1
     return {"success": True, "cleared": cleared}
-
-
 @api_router.get("/discord/status")
 async def get_discord_status(instance_id: str = Depends(get_instance_access)):
     if _shared_discord_client and _shared_discord_client.is_ready():
@@ -3659,8 +3390,6 @@ async def get_discord_status(instance_id: str = Depends(get_instance_access)):
             display_name = (bot_config or {}).get("name") or str(_shared_discord_client.user)
         return {"status": "online", "bot_name": display_name}
     return {"status": "offline", "bot_name": None}
-
-
 @api_router.post("/discord/rename-global")
 async def rename_global_bot(current_user: dict = Depends(require_admin)):
     """Rename the Discord bot's global username (admin only). Limit: 2 per hour."""
@@ -3670,8 +3399,6 @@ async def rename_global_bot(current_user: dict = Depends(require_admin)):
     # Read name from request
     from starlette.requests import Request
     return {"error": "Use the direct endpoint with name parameter"}
-
-
 @api_router.post("/discord/rename-global/{new_name}")
 async def rename_global_bot_name(new_name: str, current_user: dict = Depends(require_admin)):
     """Rename the Discord bot's global username (admin only). Limit: 2 per hour."""
@@ -3696,8 +3423,6 @@ async def rename_global_bot_name(new_name: str, current_user: dict = Depends(req
                 raise HTTPException(status_code=429, detail=f"Rate limited. Try again in {retry_after} seconds. Discord allows 2 name changes per hour.")
             else:
                 raise HTTPException(status_code=400, detail=body.get("message", "Discord API error"))
-
-
 @api_router.get("/discord/debug-roles")
 async def debug_discord_roles(instance_id: str = Depends(get_instance_access)):
     """Debug endpoint: check role detection for this instance's guild."""
@@ -3764,8 +3489,6 @@ async def debug_discord_roles(instance_id: str = Depends(get_instance_access)):
     except Exception as e:
         result["exception"] = str(e)
     return result
-
-
 
 # ==================== APP SETUP ====================
 

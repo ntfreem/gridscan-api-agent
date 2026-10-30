@@ -1,0 +1,41 @@
+{
+  "summary": "Tested External API (bbk_ keys + POST /api/v1/chat) and configurable Knowledge Gate (strict/flexible) on backend and frontend. Backend: 15 of 16 new tests passed, and the existing strict-gate regression test_knowledge_gate.py passed 6 of 6. Key create (bbk_ + 48 hex, full key returned only on create), list (no key/key_hash/_id), v1 chat (response/session_id/instance_id, usage_count/last_used_at updated), invalid/missing/non-bbk key -> 401, disabled key -> 403, re-enable works, revoke -> later calls 401 and a second delete -> 404. Flexible mode answers the off-KB question 'capital of France' with the prefix \"This isn't in my knowledge base, but from my general knowledge:\" and 'Paris'. This works via both /chat/send and /v1/chat. Strict mode refuses. A KB question in flexible mode is answered from the KB. The one failure is that knowledge_gate is not validated. Frontend: the Knowledge Gate card (Strict/Flexible) saves via Save Settings and keeps the setting after reload. The API Keys card works end to end: Generate Key shows the banner with the full key, then a new row appears; toggle changes the icon state; revoke removes the row; the usage example curl is shown.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/admin/bot-config", "issue": "knowledge_gate accepts any string (for example 'bogus' -> 200). build_system_prompt treats anything other than 'strict' as flexible, so a typo silently turns on general-knowledge answers. Use Literal['strict','flexible'] in BotConfigUpdate."},
+      {"endpoint": "DELETE/PATCH /api/admin/api-keys/{id}", "issue": "Not scoped to an instance: the key is looked up by id only. This is fine today because only superadmin is allowed, but it will become an IDOR if access is opened to instance admins."},
+      {"endpoint": "POST/DELETE/PATCH /api/admin/api-keys", "issue": "These require superadmin (require_admin), but GET only requires instance access. Non-superadmin instance users see the card and the Generate/Toggle/Revoke buttons, which fail with 403 (toggle/revoke show a generic error toast). Either hide the controls for non-superadmins or allow instance admins."},
+      {"endpoint": "POST /api/v1/chat", "issue": "No rate limit or message length limit on a public endpoint that costs LLM money. The Bearer prefix check is case-sensitive ('bearer bbk_' is rejected)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "API Keys card", "issue": "Revoke deletes immediately with no confirmation dialog, and the action is permanent.", "selector": "[data-testid='revoke-api-key-btn']", "priority": "LOW"},
+      {"component": "API Keys card", "issue": "The newKeyRevealed banner is not cleared when the instance is switched, so it can show the previous instance's key.", "selector": "[data-testid='new-key-banner']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bot Settings - Knowledge Gate", "issues": ["Changing the gate needs a separate 'Save Settings' click in the left panel. The helper text says so, but the user can easily miss it. Consider auto-saving the setting or showing an unsaved indicator."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_external_api_and_gate_mode.py", "/app/backend/tests/test_knowledge_gate.py", "/app/test_reports/pytest/pytest_iter30.xml"],
+  "action_items": [
+    "Validate knowledge_gate as Literal['strict','flexible'] (return 422 otherwise)",
+    "Scope api-key toggle/delete by instance_id, and align the permission model between GET and the write endpoints. Hide the write controls for non-superadmins.",
+    "Add a confirmation before revoking an API key",
+    "Consider rate limiting and a max message length on /api/v1/chat"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3780 lines and should be split into routers (external_api, bot_config, knowledge, etc.)",
+    "create_api_key takes a raw dict body. Use a Pydantic model (instance_id: str, label: Optional[str])",
+    "`import hashlib` is repeated inline in two functions. Move it to a module-level import or a _hash_key helper.",
+    "/chat/send and /v1/chat share the same prompt-building and LLM-call logic. Extract a shared helper (DRY)."
+  ],
+  "updated_files": ["/app/backend/tests/test_external_api_and_gate_mode.py"],
+  "success_rate": {"backend": "94% (15/16) + 6/6 regression", "frontend": "100%"},
+  "seed_data_creation": "TEST_ keys were created and revoked during the tests (cleaned up). The pre-existing 'Test Key' is kept. knowledge_gate on instance 88bfae82 was restored to 'strict'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Instance 88bfae82 (API Tester) has Gridscan FAQ. Login: administrator/Admin@123, field email_or_username. Run tests/test_external_api_and_gate_mode.py for API keys, /v1/chat and gate-mode coverage. test_invalid_gate_value is expected to fail until validation is added. Bot Settings is at /admin/settings."
+}

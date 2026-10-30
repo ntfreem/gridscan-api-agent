@@ -150,6 +150,25 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - System prompt includes "KNOWLEDGE GATE — STRICT RULE" that forbids the LLM from using training data
 - Tests: 6/6 backend LLM tests passed (KB answers, Blockfrost/Koios refusal, off-topic refusal, partial-topic refusal, no leaked phrases)
 
+
+### Configurable Knowledge Gate Strictness (DONE 2026-10-30)
+- Per-instance toggle between **Strict** (KB only, refuses off-KB questions) and **Flexible** (KB first, falls back to general knowledge with disclaimer prefix)
+- Saved as `knowledge_gate` field on `bot_config` ("strict" | "flexible"), validated on save
+- UI: Two toggle cards on Bot Settings page with descriptions, saved with the main config
+- Flexible mode prefixes general knowledge answers with "This isn't in my knowledge base, but from my general knowledge:"
+
+### External API with bbk_ Keys (DONE 2026-10-30)
+- `POST /api/v1/chat` — public chat endpoint authenticated via `bbk_...` API keys
+- Key management:
+  - `POST /api/admin/api-keys` — generate a new key (full key returned only on creation)
+  - `GET /api/admin/api-keys` — list keys (prefix only, no hash/full key exposed)
+  - `PATCH /api/admin/api-keys/{id}/toggle` — enable/disable a key
+  - `DELETE /api/admin/api-keys/{id}` — permanently revoke a key
+- Keys are SHA-256 hashed in DB, prefixed with `bbk_` for easy identification
+- Usage tracking: `usage_count` and `last_used_at` updated on each API call
+- UI: API Keys card on Bot Settings page with generate, copy, toggle, revoke, and curl usage example
+- Invalid key → 401, disabled key → 403, valid key → chat response with session_id
+
 - Tests: 11/11 backend + full desktop E2E pass
 
 - New endpoint `GET /api/analytics/llm-cost`: returns `{month_to_date: {cost_usd, input_tokens, output_tokens, calls, day_of_month, days_in_month}, by_model: [...], daily: [30 days], forecast_month_end_usd, last_30d_cost_usd}`.
