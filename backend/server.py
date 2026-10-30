@@ -438,28 +438,31 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         )
     elif knowledge_context:
         parts.append(
-            "KNOWLEDGE BASE — AUTHORITATIVE SOURCE:\n"
-            "The following information is verified and accurate. When a user's question is answered by "
-            "this knowledge base, respond with full confidence. State facts directly. "
-            "DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', 'you may want to verify', "
-            "or 'I cannot confirm' when the answer is present here. Treat this as ground truth.\n"
-            "If a question is NOT covered by this knowledge base, acknowledge that clearly and offer "
-            "to help with what you do know.\n\n"
+            "KNOWLEDGE BASE — YOUR ONLY SOURCE OF TRUTH:\n"
+            "The following information is your ONLY source for answering questions. "
+            "When a user's question is answered by this knowledge base, respond with full confidence. "
+            "State facts directly. DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', "
+            "'you may want to verify', or 'I cannot confirm' when the answer is present here.\n\n"
+            "KNOWLEDGE GATE — STRICT RULE:\n"
+            "You MUST ONLY answer using the knowledge base content provided below. "
+            "NEVER supplement, expand, or fill gaps with your general AI training knowledge. "
+            "If the user asks about something NOT covered in the knowledge base below, say:\n"
+            "\"I don't have information about that in my knowledge base.\"\n"
+            "Do NOT offer information from your training data. Do NOT mention other tools, APIs, "
+            "services, or resources unless they are explicitly mentioned in the knowledge base below. "
+            "If you don't find it below, you don't know it.\n\n"
             f"{knowledge_context}"
         )
     else:
         parts.append(
             "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
-            "IMPORTANT — KNOWLEDGE GATE PROTOCOL:\n"
-            "You must NOT answer the question directly from your general knowledge without the user's explicit permission.\n"
-            "Instead, respond with something like:\n"
-            "\"I couldn't find anything about that in my knowledge base. "
-            "Would you like me to expand the search and answer using my general knowledge?\"\n\n"
-            "Then wait for the user's response and follow these rules:\n"
-            "- If they say YES (yes, sure, go ahead, please, ok, expand, etc.) → answer the original question using your general knowledge.\n"
-            "- If they say NO (no, never mind, don't bother, skip, etc.) → acknowledge politely and offer to help with something else.\n"
-            "- If they ask a completely different question → treat it as a new query and apply the knowledge gate protocol again.\n"
-            "Keep your ask short and natural — one sentence is enough."
+            "KNOWLEDGE GATE — STRICT RULE:\n"
+            "You MUST NOT answer the question using your general AI training knowledge.\n"
+            "Respond with something like:\n"
+            "\"I don't have information about that in my knowledge base. "
+            "Is there something else I can help you with?\"\n"
+            "Be polite and brief. Do NOT offer to search elsewhere, expand your search, "
+            "or answer from general knowledge. Simply acknowledge you don't have the information."
         )
 
     if tone_examples:
