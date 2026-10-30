@@ -499,13 +499,12 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
 
     # Anti-fabrication rule — always included
     parts.append(
-        "CRITICAL RULE — NEVER FABRICATE:\n"
-        "NEVER pretend to make API calls, HTTP requests, or database queries. "
-        "NEVER generate fake API responses, JSON data, or transaction/block data. "
-        "If a user asks you to query an API or fetch live data, tell them: "
-        "\"Let me try to look that up for you.\" If you don't have real data in this conversation, "
-        "say: \"I wasn't able to fetch that data. You can query it directly using the endpoints in the documentation.\" "
-        "NEVER invent realistic-looking data. This is a zero-tolerance rule."
+        "CRITICAL RULE — NEVER FABRICATE DATA:\n"
+        "NEVER generate fake JSON, API responses, transaction data, block numbers, balances, or any data "
+        "that looks like it came from a database or API call. "
+        "NEVER prefix responses with 'Calling: GET' or pretend to execute HTTP requests. "
+        "If you don't have specific data, help the user with the correct endpoint and curl command instead. "
+        "Only present data that is explicitly provided to you in this conversation."
     )
 
     if passive_mode and allow_skip:
@@ -1852,7 +1851,9 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
         if stripped.startswith("GET /api/") or stripped.startswith("POST /api/"):
             endpoint_lines.append(stripped.split("\n")[0][:200])
     if not endpoint_lines:
+        logger.info(f"[API_QUERY] No endpoint lines found in knowledge context ({len(knowledge_context)} chars)")
         return None
+    logger.info(f"[API_QUERY] Found {len(endpoint_lines)} endpoints in context, routing question: {user_message[:80]}")
 
     # Step 1: Ask LLM to route the question to an endpoint
     route_prompt = API_ROUTE_PROMPT.format(
