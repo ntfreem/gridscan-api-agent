@@ -1,0 +1,21 @@
+{
+  "summary": "Tested the anti-fabrication fix on POST /api/chat/send for instance 88bfae82 (API Tester, Gridscan). All 6 new pytest tests passed, and 2 extra curl probes behaved correctly. Tx query ad9daf9a... returned real data with 'Live data from GET /api/txs/...'. The health query returned real data with 'Live data from GET /api/health' (tip block 14,136,718, epoch 664). The invalid stake address got a graceful HTTP 404 message with no fake JSON. The docs question ('What endpoints exist for accounts?') logged route=skip and returned a KB table with no marker. With api_query_enabled=false (fallback path), the bot said 'I wasn't able to fetch that data', made up no block or tx data, and showed no 'Calling: GET' pattern. The extra probes were a valid stake address and 'latest block raw JSON'. Both made real calls (backend logs show call_api) and returned data matching the live chain (height 14,136,719).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/chat/send (_try_api_query non-200)", "issue": "On a 4xx from the external API, a hardcoded error string is returned and there is no fallback to a KB/LLM answer. This is acceptable, but the user gets no guidance such as a valid stake address format."},
+    {"endpoint": "build_system_prompt anti-fabrication rule", "issue": "When no data is available, the scripted text makes the bot say 'Let me try to look that up for you.' and then immediately 'I wasn't able to fetch that data'. The UX is slightly awkward but not wrong."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_anti_fabrication.py", "/app/test_reports/pytest/pytest_anti_fab.xml"],
+  "action_items": ["Optional: when a live API call returns 404/4xx, consider adding KB context or a parameter hint to the response.", "Optional: simplify the anti-fabrication fallback phrasing so the reply does not contradict itself."],
+  "critical_code_review_comments": [
+    "_try_api_query uses `'route_response' in dir()` in the except block. It works, but is fragile. Initialize route_response='' before the try instead.",
+    "The json_start/json_end extraction is fine. Also consider rejecting paths that contain '..' or a query string injection, although the GET-only check plus the base_url prefix limits the risk.",
+    "server.py is 3766 lines and should be split into modules (the live API query engine, chat, and admin config)."
+  ],
+  "updated_files": ["/app/backend/tests/test_anti_fabrication.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "not tested"},
+  "seed_data_creation": "None. The tests only toggle api_query_enabled false→true and restore it in a finally block. api_key_value is not touched (verified api_key_value_set=true afterwards).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use test_anti_fabrication.py for anti-fabrication regression. It is safe and does not change the API key. Do NOT run test_live_api_query.py, because its teardown sets the key to 'test_key'. Backend logs show the router decision via the '[API_QUERY] Route decision' grep."
+}
