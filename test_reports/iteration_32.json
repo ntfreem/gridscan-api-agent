@@ -1,0 +1,36 @@
+{
+  "summary": "Tested API key masking on bot-config for instance 'API Tester' (88bfae82...). GET masks the key correctly (api_key_value='' with api_key_value_set=true). A PUT that leaves out the key keeps it, and a PUT with a new key updates it. The UI shows the green 'Saved' label and the placeholder 'Key saved — leave blank to keep', both before and after a reload. Clicking Save Settings with the field blank sends no api_key_value, and the key in the DB stays the same. A live query ('latest block height') afterwards returned real gridscan data. Found 2 backend issues: (1) a PUT with api_key_value='' wipes the saved key, because the backend only skips None and not empty strings; (2) the PUT response returns the raw key, which defeats the masking. I restored the real key after testing.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/admin/bot-config", "issue": "Sending api_key_value='' overwrites the saved key with an empty string. update_bot_config only skips None. The frontend avoids this by deleting the field, but any direct API client, or a future frontend change, will silently wipe the key. Fix: in update_bot_config, drop api_key_value when it is an empty or whitespace string.", "priority": "HIGH"},
+      {"endpoint": "PUT /api/admin/bot-config", "issue": "The response returns the full stored doc, including the raw api_key_value (e.g. 'mainnet_user_...'), so masking on GET can be bypassed. Fix: apply the same masking as GET (set api_key_value_set=true and api_key_value='') before returning.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "tests/test_live_api_query.py", "issue": "test_put_and_get_api_config asserts that GET returns api_key_value=='test_key', which now fails by design. The module teardown also PUTs api_key_value='test_key', which overwrites the real saved key (mainnet_user_...) and breaks live queries. The test needs updating."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bot Settings > Live API Queries", "issues": ["The 'Saved' label is very small (10px). Acceptable. There is no way to clear a saved key from the UI, so consider adding a 'Clear key' action."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_api_key_masking.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "In update_bot_config, ignore an empty api_key_value ('' or whitespace) so it never overwrites the stored key",
+    "Mask api_key_value in the PUT /api/admin/bot-config response, the same way GET does",
+    "Update tests/test_live_api_query.py: drop the assertion that GET returns the raw key, and stop the teardown from restoring 'test_key' over the real key"
+  ],
+  "critical_code_review_comments": [
+    "The frontend payload includes api_key_value_set. The Pydantic model ignores it, so this is harmless, but it is better to strip it client-side.",
+    "After a successful save with a new key, the frontend does not set api_key_value_set=true or clear the input; the 'Saved' label only appears after a reload. Minor UX issue."
+  ],
+  "updated_files": ["/app/backend/tests/test_api_key_masking.py"],
+  "success_rate": {"backend": "60% (3/5)", "frontend": "100%"},
+  "seed_data_creation": "None. The real key was temporarily replaced with TEST_key_* and then restored (verified in the DB).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run test_api_key_masking.py. Its fixture reads the original key from Mongo (backend/.env) and restores it on teardown. Do NOT run test_live_api_query.py as-is: its teardown sets the key to 'test_key'. UI: /admin/settings, data-testid api-key-value, save-settings-btn.",
+  "rca of the issue": "update_bot_config builds update_data from every non-None field, so '' passes through and is $set. The function then returns find_one() without masking."
+}

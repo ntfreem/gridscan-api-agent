@@ -1971,13 +1971,21 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
     for k, v in body.dict().items():
         if v is not None:
             update_data[k] = v
+    # Don't overwrite saved API key with empty string
+    if "api_key_value" in update_data and not update_data["api_key_value"].strip():
+        del update_data["api_key_value"]
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided")
     if update_data.get("knowledge_gate") and update_data["knowledge_gate"] not in ("strict", "flexible"):
         raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict' or 'flexible'")
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
-    return await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+    # Mask api_key_value in response
+    config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+    if config and config.get("api_key_value"):
+        config["api_key_value_set"] = True
+        config["api_key_value"] = ""
+    return config
 
 # ==================== EXTERNAL API (PUBLIC — authenticated via bbk_ keys) ====================
 
