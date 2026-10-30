@@ -8,7 +8,7 @@ import { colors, fonts, T, onFocus, onBlur } from "../theme";
 export default function BotSettings() {
   const { selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
-  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", api_query_enabled: false, api_base_url: "", api_key_header: "x-project-id", api_key_value: "" });
+  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", api_query_enabled: false, api_base_url: "", api_key_header: "x-project-id", api_key_value: "", api_key_value_set: false });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -113,7 +113,7 @@ export default function BotSettings() {
 
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: "" });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: "", api_key_value_set: !!r.data.api_key_value_set });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -384,7 +384,7 @@ export default function BotSettings() {
                       data-testid="api-key-header" onFocus={onFocus} onBlur={onBlur} />
                   </div>
                   <div>
-                    <label style={T.label}>API Key Value</label>
+                    <label style={T.label}>API Key Value {config.api_key_value_set && !config.api_key_value && <span style={{ fontSize: "10px", color: colors.brand.success, fontWeight: 600 }}> Saved</span>}</label>
                     <input style={T.input} type="password" value={config.api_key_value}
                       onChange={e => setConfig(p => ({ ...p, api_key_value: e.target.value }))}
                       placeholder={config.api_key_value_set ? "Key saved — leave blank to keep" : "Your API key"}
