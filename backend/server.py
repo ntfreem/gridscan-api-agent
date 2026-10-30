@@ -300,7 +300,22 @@ async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
                 {"is_active": True, "instance_id": instance_id}, {"_id": 0}
             ).sort([("priority", -1), ("created_at", -1)]).to_list(100)
         else:
-            all_sources = text_results
+            # If text search matched grouped chunks, pull in ALL sibling chunks from same group
+            matched_groups = set()
+            for r in text_results:
+                gid = r.get("group_id")
+                if gid:
+                    matched_groups.add(gid)
+            if matched_groups:
+                # Load all chunks from matched groups + keep non-group text results
+                group_sources = await db.knowledge_sources.find(
+                    {"group_id": {"$in": list(matched_groups)}, "is_active": True, "instance_id": instance_id}, {"_id": 0}
+                ).sort([("created_at", 1)]).to_list(200)
+                # Add non-grouped text results
+                non_group = [r for r in text_results if not r.get("group_id") or r.get("group_id") not in matched_groups]
+                all_sources = group_sources + non_group
+            else:
+                all_sources = text_results
 
         if not all_sources:
             return "__NO_KB__"  # Signal: no knowledge base configured at all
@@ -315,14 +330,18 @@ async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
             pri = r.get("priority", 0)
             pri_label = " [PRIORITY: HIGH]" if pri >= 2 else (" [PRIORITY: MEDIUM]" if pri == 1 else "")
 
-            # For large content (>2K), find the best matching window around query terms
-            if len(full_content) > 2000 and query_lower:
-                content = _extract_relevant_window(full_content, query_lower, window_size=2500)
+            # For grouped chunks (multi-part sources), include more content per chunk
+            is_grouped = bool(r.get("group_id"))
+            window = 4000 if is_grouped else 2500
+
+            # For large content, find the best matching window around query terms
+            if len(full_content) > window and query_lower:
+                content = _extract_relevant_window(full_content, query_lower, window_size=window)
             else:
-                content = full_content[:2500]
+                content = full_content[:window]
 
             chunk = f"[{title}]{pri_label}\n{content}"
-            if total_chars + len(chunk) > 30000:
+            if total_chars + len(chunk) > 45000:
                 break
             chunks.append(chunk)
             total_chars += len(chunk)
