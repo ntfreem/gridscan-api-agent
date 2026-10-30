@@ -2929,7 +2929,7 @@ async def discord_oauth_callback(
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             if resp.status_code != 200:
-                logger.error(f"Discord token exchange failed: {resp.status_code} {resp.text}")
+                logger.error(f"Discord token exchange failed: {resp.status_code} {resp.text} | redirect_uri={redirect_uri} | client_id={creds['client_id'][:8]}...")
                 return RedirectResponse(url=f"{frontend_base}/admin/discord?oauth=error&reason=token_exchange_failed")
 
             data = resp.json()
