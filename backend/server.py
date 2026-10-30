@@ -2088,6 +2088,77 @@ def _extract_nextjs_content(html: str) -> str:
     _walk(page_props)
     return "\n\n".join(parts)
 
+
+def _parse_openapi_spec(data: dict) -> str:
+    """Parse an OpenAPI JSON spec into readable KB text with all endpoints."""
+    parts = []
+    info = data.get("info", {})
+    title = info.get("title", "API")
+    desc = info.get("description", "")
+    version = info.get("version", "")
+    servers = data.get("servers", [])
+
+    parts.append(f"# {title} (v{version})")
+    if desc:
+        parts.append(desc.strip())
+    if servers:
+        parts.append(f"Base URL: {servers[0].get('url', '')} — {servers[0].get('description', '')}")
+
+    paths = data.get("paths", {})
+    # Group by tag
+    tagged = {}
+    for path, methods in paths.items():
+        for method, details in methods.items():
+            if method in ("get", "post", "put", "patch", "delete"):
+                tags = details.get("tags", ["Other"])
+                tag = tags[0] if tags else "Other"
+                if tag not in tagged:
+                    tagged[tag] = []
+                params = details.get("parameters", [])
+                param_strs = []
+                for p in params:
+                    name = p.get("name", "")
+                    loc = p.get("in", "")
+                    required = p.get("required", False)
+                    schema = p.get("schema", {})
+                    ptype = schema.get("type", "")
+                    default = schema.get("default")
+                    desc_p = p.get("description", "")
+                    s = f"  - {name} ({loc}, {ptype}"
+                    if required:
+                        s += ", required"
+                    if default is not None:
+                        s += f", default={default}"
+                    s += ")"
+                    if desc_p:
+                        s += f" — {desc_p}"
+                    param_strs.append(s)
+
+                entry = f"{method.upper()} {path}"
+                summary = details.get("summary", "")
+                description = details.get("description", "")
+                deprecated = details.get("deprecated", False)
+                if deprecated:
+                    entry += " [DEPRECATED]"
+                lines = [entry]
+                if summary:
+                    lines.append(f"  Summary: {summary}")
+                if description:
+                    lines.append(f"  {description.strip()}")
+                if param_strs:
+                    lines.append("  Parameters:")
+                    lines.extend(param_strs)
+                tagged[tag].append("\n".join(lines))
+
+    for tag in sorted(tagged.keys()):
+        parts.append(f"\n## {tag}")
+        parts.extend(tagged[tag])
+
+    endpoint_count = sum(len(v) for v in tagged.values())
+    parts.append(f"\n---\nTotal endpoints: {endpoint_count}")
+    return "\n\n".join(parts)
+
+
 async def _try_zendesk_api(url: str) -> tuple:
     """Try Zendesk Help Center API for /hc/ article URLs. Returns (text, title)."""
     # Extract article ID from URL like /hc/en-us/articles/360000776490-Title
@@ -2134,7 +2205,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             auth = httpx.BasicAuth(entry.auth_username, entry.auth_password)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml,application/json;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate, br",
             "Sec-Fetch-Dest": "document",
@@ -2197,6 +2268,21 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
         # If still 403 with no content, raise clear error
         if got_403 and not text and not html_text:
             raise HTTPException(status_code=403, detail="This website blocks automated scraping (Cloudflare/bot protection). Try adding the content manually as an FAQ entry instead.")
+
+        # ── Strategy 0: OpenAPI JSON spec detection ──
+        if not text and html_text:
+            content_type = (resp.headers.get("content-type", "") if resp else "").lower()
+            is_json = "application/json" in content_type or entry.url.rstrip("/").endswith(".json")
+            if is_json:
+                try:
+                    import json as _json
+                    json_data = _json.loads(html_text)
+                    if isinstance(json_data, dict) and ("openapi" in json_data or "swagger" in json_data):
+                        text = _parse_openapi_spec(json_data)
+                        page_title = json_data.get("info", {}).get("title", "") or "API Spec"
+                        logger.info(f"[SCRAPE] Parsed OpenAPI spec: {len(text)} chars for {entry.url}")
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"[SCRAPE] JSON/OpenAPI parsing failed: {e}")
 
         # ── Strategy 1: Extract structured data from Next.js __NEXT_DATA__ ──
         if not text and html_text and "__NEXT_DATA__" in html_text:
