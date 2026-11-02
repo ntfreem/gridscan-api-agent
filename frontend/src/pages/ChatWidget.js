@@ -3,6 +3,7 @@ import axios from "axios";
 import { Bot, Send, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { streamChat } from "../utils/streamChat";
+import MarkdownMessage from "../components/MarkdownMessage";
 
 const API = `/api`;
 
@@ -379,23 +380,28 @@ export default function ChatWidget() {
                 </div>
               )}
               <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
-                <p style={{ margin: 0 }}>
-                  {msg.content}
+                <div style={{ margin: 0 }}>
+                  {msg.role === "user" ? msg.content : <MarkdownMessage content={msg.content} compact />}
                   {msg.isStreaming && <span className="bb-stream-cursor" />}
-                </p>
+                </div>
               </div>
             </div>
           ))}
 
           {isLoading && !isStreaming && (
-            <div className="bb-msg-row bot">
+            <div className="bb-msg-row bot" data-testid="widget-typing-indicator">
               <div className="bb-msg-avatar">
                 <Bot size={11} color="#FFFFFF" />
               </div>
-              <div className="bb-typing">
-                <div className="bb-typing-dot" />
-                <div className="bb-typing-dot" />
-                <div className="bb-typing-dot" />
+              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                <div className="bb-typing">
+                  <div className="bb-typing-dot" />
+                  <div className="bb-typing-dot" />
+                  <div className="bb-typing-dot" />
+                </div>
+                <span style={{ fontSize: "9px", color: "var(--bb-text-muted)", fontFamily: "var(--bb-font-mono)", letterSpacing: "0.04em", paddingLeft: "2px" }}>
+                  {botConfig.name || "Bot"} is typing…
+                </span>
               </div>
             </div>
           )}

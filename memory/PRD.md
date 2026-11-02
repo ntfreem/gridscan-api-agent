@@ -320,6 +320,14 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 ### P1 — Multi-Server per Instance (PARKED — revisit later)
 
 ### DONE — Streaming Chat Responses (2026-11-02)
+
+### DONE — Markdown Rendering + Typing Indicator (2026-11-02)
+- Rich markdown rendering via `react-markdown` + `remark-gfm` in shared `MarkdownMessage` component
+- Supports: **bold**, *italic*, `inline code`, code blocks with language labels, tables with proper styling, ordered/unordered lists, headings, links (target=_blank), blockquotes, horizontal rules
+- User messages remain plain text (no markdown processing)
+- Typing indicator: animated dots + "[BotName] is typing…" text label in both ChatPage and ChatWidget
+- Compact mode variant for widget (smaller font sizes)
+- Tests: 90% frontend (iteration 36); HTML nesting fix applied, markdown-content testid verified
 - SSE-based real-time streaming for all chat surfaces:
   - `POST /api/chat/stream` — web chat page + embedded widget
   - `POST /api/v1/chat/stream` — external API with `bbk_` key authentication

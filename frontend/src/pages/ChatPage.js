@@ -4,6 +4,7 @@ import { Bot, Send, Plus, ExternalLink } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { colors, fonts } from "../theme";
 import { streamChat } from "../utils/streamChat";
+import MarkdownMessage from "../components/MarkdownMessage";
 
 const API = `/api`;
 
@@ -189,10 +190,14 @@ export default function ChatPage() {
               color: msg.isError ? colors.brand.error : colors.text.primary,
               fontFamily: fonts.body, fontSize: "14px", lineHeight: "1.7",
             }}>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {msg.content}
-                {msg.isStreaming && <span style={{ display: "inline-block", width: "2px", height: "14px", backgroundColor: colors.brand.cyan, marginLeft: "2px", verticalAlign: "text-bottom", animation: "cursor-blink 0.8s infinite" }} />}
-              </p>
+              {msg.role === "user" ? (
+                <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.content}</p>
+              ) : (
+                <div style={{ margin: 0, wordBreak: "break-word" }}>
+                  <MarkdownMessage content={msg.content} />
+                  {msg.isStreaming && <span style={{ display: "inline-block", width: "2px", height: "14px", backgroundColor: colors.brand.cyan, marginLeft: "2px", verticalAlign: "text-bottom", animation: "cursor-blink 0.8s infinite" }} />}
+                </div>
+              )}
               <p style={{ margin: "6px 0 0", fontSize: "10px", color: msg.role === "user" ? "rgba(255,255,255,0.4)" : colors.text.muted, fontFamily: fonts.mono }}>
                 {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
               </p>
@@ -201,14 +206,19 @@ export default function ChatPage() {
         ))}
 
         {isLoading && !isStreaming && (
-          <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }} data-testid="typing-indicator">
             <div style={{ width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "10px", flexShrink: 0 }}>
               <Bot size={14} color="#FFFFFF" />
             </div>
-            <div style={{ padding: "14px 18px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "5px", alignItems: "center" }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: colors.brand.cyan, animation: "typing-dot 1.4s infinite ease-in-out", animationDelay: `${i * 0.16}s` }} />
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ padding: "14px 18px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "5px", alignItems: "center" }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: colors.brand.cyan, animation: "typing-dot 1.4s infinite ease-in-out", animationDelay: `${i * 0.16}s` }} />
+                ))}
+              </div>
+              <span style={{ fontSize: "10px", color: colors.text.muted, fontFamily: fonts.mono, letterSpacing: "0.04em", paddingLeft: "4px" }}>
+                {botConfig.name || "Bot"} is typing…
+              </span>
             </div>
           </div>
         )}
