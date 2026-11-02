@@ -328,6 +328,13 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Typing indicator: animated dots + "[BotName] is typing…" text label in both ChatPage and ChatWidget
 - Compact mode variant for widget (smaller font sizes)
 - Tests: 90% frontend (iteration 36); HTML nesting fix applied, markdown-content testid verified
+
+### DONE — Copy Code Button (2026-11-02)
+- One-click copy button on all code blocks in chat responses (both ChatPage and ChatWidget)
+- Button shows "Copy" icon → transitions to "Copied" with green check for 2s
+- Positioned top-right of code block, non-intrusive styling that blends with code block background
+- Uses `navigator.clipboard.writeText` for reliable copy
+- data-testid="copy-code-btn" on each button
 - SSE-based real-time streaming for all chat surfaces:
   - `POST /api/chat/stream` — web chat page + embedded widget
   - `POST /api/v1/chat/stream` — external API with `bbk_` key authentication

@@ -1,5 +1,35 @@
+import { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Copy, Check } from "lucide-react";
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
+  return (
+    <button onClick={copy} data-testid="copy-code-btn"
+      style={{
+        position: "absolute", top: "6px", right: "6px",
+        display: "flex", alignItems: "center", gap: "4px",
+        padding: "3px 8px", borderRadius: "6px", cursor: "pointer",
+        fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
+        background: copied ? "rgba(52,211,153,0.15)" : "rgba(148,163,184,0.1)",
+        color: copied ? "#34D399" : "rgba(148,163,184,0.7)",
+        border: `1px solid ${copied ? "rgba(52,211,153,0.3)" : "rgba(148,163,184,0.15)"}`,
+        transition: "all 0.2s ease",
+      }}
+    >
+      {copied ? <Check size={10} /> : <Copy size={10} />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
 
 /**
  * Renders markdown content with rich formatting.
@@ -72,22 +102,24 @@ export default function MarkdownMessage({ content, isUser, compact }) {
             }
             // Block code
             const lang = (className || "").replace("language-", "");
+            const codeText = String(children).replace(/\n$/, "");
             return (
               <div style={{ margin: "8px 0", position: "relative" }}>
                 {lang && (
                   <div style={{
-                    position: "absolute", top: 0, right: 0,
+                    position: "absolute", top: 0, left: 0,
                     padding: "2px 8px", fontSize: "9px", fontFamily: mono,
                     color: "rgba(148,163,184,0.6)", textTransform: "uppercase", letterSpacing: "0.05em",
-                    borderRadius: "0 6px 0 4px", backgroundColor: "rgba(15,23,42,0.5)",
+                    borderRadius: "6px 0 4px 0", backgroundColor: "rgba(15,23,42,0.5)",
                   }}>
                     {lang}
                   </div>
                 )}
+                <CopyButton text={codeText} />
                 <pre style={{
                   fontFamily: mono, fontSize: `${base - 2}px`, lineHeight: 1.6,
                   backgroundColor: "rgba(15,23,42,0.6)", color: "#CBD5E1",
-                  padding: "12px 14px", borderRadius: "8px",
+                  padding: `${lang ? "28px" : "12px"} 14px 12px`, borderRadius: "8px",
                   border: "1px solid rgba(148,163,184,0.1)",
                   overflowX: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
                 }}>
