@@ -2129,6 +2129,111 @@ async def _authenticate_api_key(request: Request) -> dict:
 class ExternalChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+
+class EmbedConfigUpdate(BaseModel):
+    custom_css_url: Optional[str] = None
+    theme: Optional[dict] = None  # CSS variable overrides
+
+# ==================== EMBED CONFIG ====================
+
+@api_router.get("/embed/config/{instance_id}")
+async def get_embed_config(instance_id: str):
+    """Public endpoint — returns embed theming config for an instance."""
+    config = await db.embed_configs.find_one({"instance_id": instance_id}, {"_id": 0})
+    if not config:
+        return {"instance_id": instance_id, "custom_css_url": "", "theme": {}}
+    return config
+
+@api_router.put("/admin/embed-config")
+async def update_embed_config(body: EmbedConfigUpdate, instance_id: str = Depends(get_instance_access)):
+    """Save embed configuration (custom CSS URL, theme variables) for an instance."""
+    update_data = {"instance_id": instance_id, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.custom_css_url is not None:
+        update_data["custom_css_url"] = body.custom_css_url.strip()
+    if body.theme is not None:
+        update_data["theme"] = body.theme
+    await db.embed_configs.update_one(
+        {"instance_id": instance_id}, {"$set": update_data}, upsert=True
+    )
+    config = await db.embed_configs.find_one({"instance_id": instance_id}, {"_id": 0})
+    return config
+
+@api_router.get("/embed.js")
+async def serve_embed_script(request: Request, instance: str = "", mode: str = "popup"):
+    """Serve the embeddable JavaScript loader. Modes: popup, inline, fullpage."""
+    from fastapi.responses import Response as FastResponse
+    # Derive origin from the request so it works in any environment
+    origin = str(request.base_url).rstrip("/")
+    script = f"""
+(function() {{
+  var BRIDGE_INSTANCE = "{instance}";
+  var BRIDGE_MODE = "{mode}";
+  var BRIDGE_ORIGIN = "{origin}" || window.location.origin;
+  var widgetUrl = BRIDGE_ORIGIN + "/widget?instance=" + encodeURIComponent(BRIDGE_INSTANCE) + "&mode=" + BRIDGE_MODE;
+
+  if (BRIDGE_MODE === "inline") {{
+    var target = document.getElementById("bridgebot-container") || document.querySelector("[data-bridgebot]");
+    if (!target) {{ console.warn("BridgeBot: No #bridgebot-container or [data-bridgebot] element found."); return; }}
+    var iframe = document.createElement("iframe");
+    iframe.src = widgetUrl;
+    iframe.title = "BridgeBot Chat";
+    iframe.style.cssText = "width:100%;height:100%;border:none;min-height:500px;";
+    iframe.setAttribute("data-testid", "bridgebot-inline-iframe");
+    target.innerHTML = "";
+    target.appendChild(iframe);
+    return;
+  }}
+
+  if (BRIDGE_MODE === "fullpage") {{
+    var iframe = document.createElement("iframe");
+    iframe.src = widgetUrl;
+    iframe.title = "BridgeBot Chat";
+    iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;";
+    iframe.setAttribute("data-testid", "bridgebot-fullpage-iframe");
+    document.body.appendChild(iframe);
+    return;
+  }}
+
+  // Default: popup mode
+  var isOpen = false;
+  var btn = document.createElement("div");
+  btn.setAttribute("data-testid", "bridgebot-popup-trigger");
+  btn.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:99998;cursor:pointer;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.2);transition:transform 0.2s ease;background:var(--bb-accent,#3B82F6);";
+  btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5C21 16.75 16.75 21 11.5 21C6.25 21 2 16.75 2 11.5C2 6.25 6.25 2 11.5 2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 9" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 2H22V7" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  btn.onmouseenter = function() {{ btn.style.transform = "scale(1.08)"; }};
+  btn.onmouseleave = function() {{ btn.style.transform = "scale(1)"; }};
+
+  var panel = document.createElement("div");
+  panel.setAttribute("data-testid", "bridgebot-popup-panel");
+  panel.style.cssText = "position:fixed;bottom:88px;right:20px;z-index:99999;width:380px;height:580px;border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.25);opacity:0;transform:translateY(16px) scale(0.96);transition:opacity 0.25s ease,transform 0.25s ease;pointer-events:none;";
+  var iframe = document.createElement("iframe");
+  iframe.src = widgetUrl;
+  iframe.title = "BridgeBot Chat";
+  iframe.style.cssText = "width:100%;height:100%;border:none;";
+  iframe.setAttribute("data-testid", "bridgebot-popup-iframe");
+  panel.appendChild(iframe);
+
+  document.body.appendChild(panel);
+  document.body.appendChild(btn);
+
+  btn.addEventListener("click", function() {{
+    isOpen = !isOpen;
+    if (isOpen) {{
+      panel.style.opacity = "1";
+      panel.style.transform = "translateY(0) scale(1)";
+      panel.style.pointerEvents = "auto";
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
+    }} else {{
+      panel.style.opacity = "0";
+      panel.style.transform = "translateY(16px) scale(0.96)";
+      panel.style.pointerEvents = "none";
+      btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5C21 16.75 16.75 21 11.5 21C6.25 21 2 16.75 2 11.5C2 6.25 6.25 2 11.5 2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 9" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 2H22V7" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }}
+  }});
+}})();
+"""
+    return FastResponse(content=script.strip(), media_type="application/javascript")
+
 @api_router.post("/v1/chat")
 async def external_chat(body: ExternalChatRequest, request: Request):
     """Public chat endpoint authenticated via bbk_ API key.
@@ -2622,6 +2727,30 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=str(e))
 class PriorityUpdate(BaseModel):
     priority: int = Field(ge=0, le=2)
+@api_router.post("/knowledge/sources/bulk-delete")
+async def bulk_delete_sources(body: dict, instance_id: str = Depends(get_instance_access)):
+    """Delete multiple sources/groups in one call.
+    Accepts { "items": [{"type": "group", "id": "gid"}, {"type": "source", "id": "sid"}, ...] }
+    """
+    items = body.get("items", [])
+    if not items:
+        raise HTTPException(status_code=400, detail="No items provided")
+    total_deleted = 0
+    for item in items:
+        item_type = item.get("type", "source")
+        item_id = item.get("id", "")
+        if not item_id:
+            continue
+        if item_type == "group":
+            r = await db.knowledge_sources.delete_many({"group_id": item_id, "instance_id": instance_id})
+            if r.deleted_count == 0:
+                r = await db.knowledge_sources.delete_many({"url": item_id, "instance_id": instance_id})
+            total_deleted += r.deleted_count
+        else:
+            r = await db.knowledge_sources.delete_one({"id": item_id, "instance_id": instance_id})
+            total_deleted += r.deleted_count
+    return {"success": True, "deleted": total_deleted}
+
 @api_router.delete("/knowledge/sources/{source_id}")
 async def delete_source(source_id: str, instance_id: str = Depends(get_instance_access)):
     result = await db.knowledge_sources.delete_one({"id": source_id, "instance_id": instance_id})

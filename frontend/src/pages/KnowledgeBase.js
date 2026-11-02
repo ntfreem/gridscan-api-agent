@@ -379,6 +379,29 @@ export default function KnowledgeBase() {
     finally { setBulkAssigning(false); }
   };
 
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const bulkDeleteSources = async () => {
+    const count = selected.size;
+    if (!window.confirm(`Delete ${count} selected source${count > 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      const selectedSources = filteredSources.filter(s => selected.has(s.group_id || s.id || s.parts?.[0]));
+      const items = selectedSources.map(source => {
+        if (source.total_parts > 1 && source.group_id) {
+          return { type: "group", id: source.group_id };
+        } else if (source.parts?.length === 1) {
+          return { type: "source", id: source.parts[0] };
+        }
+        return { type: "source", id: source.id };
+      });
+      const r = await api.post("/knowledge/sources/bulk-delete", { items });
+      toast.success(`Deleted ${r.data.deleted || count} source${(r.data.deleted || count) > 1 ? "s" : ""}`);
+      setSelected(new Set());
+      loadSources();
+    } catch { toast.error("Failed to delete sources"); }
+    finally { setBulkDeleting(false); }
+  };
+
   const filteredSources = categoryFilter
     ? sources.filter(s => (s.category || "") === categoryFilter)
     : sources;
@@ -606,6 +629,20 @@ export default function KnowledgeBase() {
               >
                 {bulkAssigning ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}
                 {bulkAssigning ? "Applying..." : "Assign"}
+              </button>
+              <div style={{ width: "1px", height: "20px", backgroundColor: colors.border.default, margin: "0 4px" }} />
+              <button
+                onClick={bulkDeleteSources}
+                disabled={bulkDeleting}
+                data-testid="bulk-delete-btn"
+                style={{
+                  padding: "5px 14px", borderRadius: "8px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "600",
+                  backgroundColor: "rgba(244,63,94,0.12)", border: `1px solid rgba(244,63,94,0.3)`, color: colors.brand.error, cursor: "pointer",
+                  opacity: bulkDeleting ? 0.6 : 1, display: "flex", alignItems: "center", gap: "5px",
+                }}
+              >
+                {bulkDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                {bulkDeleting ? "Deleting..." : "Delete"}
               </button>
               <button
                 onClick={() => { setSelected(new Set()); setBulkCategory(""); }}

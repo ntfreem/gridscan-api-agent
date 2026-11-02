@@ -1,0 +1,55 @@
+{
+  "summary": "Tested Enhanced Embed Code page (3 integration methods + CSS import) and Bulk Delete for Knowledge Sources. All 17 backend API tests passed. Frontend UI testing confirmed all features working: method tabs (Popup/Inline/Fullpage), code snippets with Copy buttons, CSS URL input/save, CSS Variables Reference toggle, Live Preview, Direct URLs, and Knowledge Base bulk action bar with Delete button.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Embed Code page", "issues": ["Console warning: 'cdn.tailwindcss.com should not be used in production' - appears in widget iframe preview"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_embed_and_bulk_delete.py",
+    "/app/test_reports/pytest/iter34_embed_bulk.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EmbedCode.js is well-structured with clear separation of concerns (CodeBlock component, METHOD_TABS config, getSnippets function)",
+    "The embed.js endpoint correctly handles all 3 modes (popup, inline, fullpage) with appropriate DOM manipulation",
+    "Bulk delete endpoint properly handles both 'source' and 'group' types with fallback to URL matching for legacy sources",
+    "ChatWidget.js correctly injects custom CSS stylesheet via link element and cleans up on unmount"
+  ],
+  "updated_files": ["/app/backend/tests/test_embed_and_bulk_delete.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100%"},
+  "seed_data_creation": "Test FAQs created and deleted during bulk delete tests (prefixed with TEST_)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Embed Code page routes are at /admin/embed (not /embed-code). Knowledge Base is at /admin/knowledge. The embed config endpoints are: GET /api/embed/config/{id} (public), PUT /api/admin/embed-config (auth+instance required), GET /api/embed.js?instance=X&mode=Y (public). Bulk delete is POST /api/knowledge/sources/bulk-delete with items array containing {type: 'source'|'group', id: string}.",
+  "features_tested": {
+    "embed_code_page": {
+      "method_tabs": "PASS - 3 tabs (Popup Widget, Inline Embed, Full Page) all clickable and update code snippets",
+      "popup_widget_snippets": "PASS - Script Tag, Manual iframe, React Component with Copy buttons",
+      "inline_embed_snippets": "PASS - HTML+Script, Direct iframe, React Component with Copy buttons",
+      "fullpage_snippets": "PASS - Redirect/Link, Full Page iframe, React Route with Copy buttons",
+      "custom_stylesheet_input": "PASS - URL input field present and functional",
+      "save_css_button": "PASS - Saves via PUT /api/admin/embed-config",
+      "css_variables_reference": "PASS - Toggle expands/collapses reference block",
+      "live_preview": "PASS - Shows widget preview corresponding to active method tab",
+      "direct_urls": "PASS - Widget URL and Embed Script links update per active method"
+    },
+    "backend_embed_endpoints": {
+      "GET /api/embed/config/{id}": "PASS - Returns embed config with custom_css_url",
+      "PUT /api/admin/embed-config": "PASS - Saves custom_css_url, requires auth+instance",
+      "GET /api/embed.js": "PASS - Returns valid JavaScript for popup/inline/fullpage modes"
+    },
+    "knowledge_base_bulk_delete": {
+      "bulk_action_bar": "PASS - Appears when sources selected",
+      "bulk_delete_button": "PASS - Present in bulk action bar",
+      "bulk_assign_button": "PASS - Present in bulk action bar",
+      "POST /api/knowledge/sources/bulk-delete": "PASS - Correctly deletes by source or group type"
+    }
+  }
+}

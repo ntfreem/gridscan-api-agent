@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Bot, Send, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { colors, fonts } from "../theme";
 
 const API = `/api`;
 
@@ -16,6 +15,36 @@ export default function ChatWidget() {
   const inputRef = useRef(null);
   const [searchParams] = useSearchParams();
   const instanceId = searchParams.get("instance");
+  const mode = searchParams.get("mode") || "popup";
+
+  // Load embed config (custom CSS) for this instance
+  useEffect(() => {
+    if (instanceId) {
+      axios.get(`${API}/embed/config/${instanceId}`).then(r => {
+        const cfg = r.data || {};
+        // Inject custom stylesheet if configured
+        if (cfg.custom_css_url) {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = cfg.custom_css_url;
+          link.setAttribute("data-bridgebot-css", "true");
+          document.head.appendChild(link);
+        }
+        // Apply theme CSS variables
+        if (cfg.theme) {
+          const root = document.documentElement;
+          Object.entries(cfg.theme).forEach(([k, v]) => {
+            if (v) root.style.setProperty(k, v);
+          });
+        }
+      }).catch(() => {});
+    }
+    return () => {
+      // Cleanup injected CSS on unmount
+      const link = document.querySelector('link[data-bridgebot-css]');
+      if (link) link.remove();
+    };
+  }, [instanceId]);
 
   useEffect(() => {
     axios.get(`${API}/admin/bot-config`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
@@ -47,119 +76,294 @@ export default function ChatWidget() {
     } finally { setIsLoading(false); }
   };
 
-  const reset = () => { sessionStorage.removeItem("widget_session"); setSessionId(null); setMessages([]); };
+  const reset = () => { sessionStorage.removeItem(`widget_session_${instanceId || "default"}`); setSessionId(null); setMessages([]); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
+  const isFullpage = mode === "fullpage";
+  const isInline = mode === "inline";
+
   return (
-    <div style={{ width: "100%", height: "100vh", backgroundColor: colors.bg.base, display: "flex", flexDirection: "column", fontFamily: fonts.body, overflow: "hidden" }}>
-      {/* Header */}
-      <div style={{ backgroundColor: colors.bg.surface, borderBottom: `1px solid ${colors.border.default}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-        <div style={{
-          width: "30px", height: "30px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-          borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: `0 0 10px rgba(59, 130, 246, 0.4)`,
-        }}>
-          <Bot size={16} color="#FFFFFF" />
-        </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.3px" }}>
-            {botConfig.name || "Assistant"}
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <div style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: colors.brand.success, boxShadow: `0 0 6px ${colors.brand.success}` }} />
-            <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.success, textTransform: "uppercase", letterSpacing: "0.1em" }}>Online</span>
-          </div>
-        </div>
-        <button onClick={reset} data-testid="widget-reset-btn"
-          style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", display: "flex", alignItems: "center" }}>
-          <RotateCcw size={13} />
-        </button>
-      </div>
+    <>
+      <style>{`
+        :root {
+          --bb-bg: #0B1120;
+          --bb-surface: #111827;
+          --bb-panel: #1E293B;
+          --bb-text: #F1F5F9;
+          --bb-text-secondary: #94A3B8;
+          --bb-text-muted: #64748B;
+          --bb-accent: #3B82F6;
+          --bb-accent-light: #60A5FA;
+          --bb-border: rgba(148, 163, 184, 0.15);
+          --bb-user-bubble: #3B82F6;
+          --bb-user-bubble-text: #FFFFFF;
+          --bb-bot-bubble: #1E293B;
+          --bb-bot-bubble-text: #F1F5F9;
+          --bb-input-bg: #111827;
+          --bb-font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+          --bb-font-mono: 'JetBrains Mono', monospace;
+          --bb-radius: 12px;
+          --bb-success: #34D399;
+          --bb-error: #F43F5E;
+        }
+        .bb-widget * { box-sizing: border-box; margin: 0; padding: 0; }
+        .bb-widget {
+          width: 100%;
+          height: ${isFullpage ? '100vh' : isInline ? '100%' : '100vh'};
+          background: var(--bb-bg);
+          display: flex;
+          flex-direction: column;
+          font-family: var(--bb-font);
+          overflow: hidden;
+          ${isFullpage ? 'max-width: 700px; margin: 0 auto;' : ''}
+        }
+        .bb-header {
+          background: var(--bb-surface);
+          border-bottom: 1px solid var(--bb-border);
+          padding: 12px 16px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .bb-avatar {
+          width: 30px; height: 30px;
+          background: var(--bb-accent);
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .bb-bot-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--bb-text);
+          letter-spacing: -0.3px;
+        }
+        .bb-status {
+          display: flex; align-items: center; gap: 4px;
+        }
+        .bb-status-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: var(--bb-success);
+          box-shadow: 0 0 6px var(--bb-success);
+        }
+        .bb-status-text {
+          font-family: var(--bb-font-mono);
+          font-size: 9px; color: var(--bb-success);
+          text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .bb-messages {
+          flex: 1; overflow-y: auto; padding: 14px;
+        }
+        .bb-messages::-webkit-scrollbar { width: 4px; }
+        .bb-messages::-webkit-scrollbar-track { background: transparent; }
+        .bb-messages::-webkit-scrollbar-thumb { background: var(--bb-border); border-radius: 4px; }
+        .bb-empty {
+          text-align: center; padding-top: 40px;
+        }
+        .bb-empty-icon {
+          width: 44px; height: 44px;
+          background: var(--bb-accent);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 14px;
+        }
+        .bb-empty-title {
+          font-size: 18px; font-weight: 700;
+          color: var(--bb-text);
+          margin-bottom: 6px; letter-spacing: -0.3px;
+        }
+        .bb-empty-sub {
+          font-size: 13px; color: var(--bb-text-secondary);
+        }
+        .bb-msg-row {
+          display: flex; margin-bottom: 10px;
+        }
+        .bb-msg-row.user { justify-content: flex-end; }
+        .bb-msg-row.bot { justify-content: flex-start; }
+        .bb-msg-avatar {
+          width: 22px; height: 22px;
+          background: var(--bb-accent);
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          margin-right: 7px; flex-shrink: 0; margin-top: 3px;
+        }
+        .bb-bubble {
+          max-width: 80%; padding: 9px 12px;
+          border-radius: var(--bb-radius);
+          font-size: 13px; line-height: 1.6;
+          white-space: pre-wrap; word-break: break-word;
+        }
+        .bb-bubble.user {
+          background: var(--bb-user-bubble);
+          color: var(--bb-user-bubble-text);
+          border: 1px solid rgba(96,165,250,0.2);
+        }
+        .bb-bubble.bot {
+          background: var(--bb-bot-bubble);
+          color: var(--bb-bot-bubble-text);
+          border: 1px solid var(--bb-border);
+        }
+        .bb-bubble.error {
+          background: rgba(244,63,94,0.08);
+          color: var(--bb-error);
+          border-color: rgba(244,63,94,0.2);
+        }
+        .bb-typing {
+          display: flex; gap: 4px; padding: 10px 14px;
+          background: var(--bb-bot-bubble);
+          border: 1px solid var(--bb-border);
+          border-radius: var(--bb-radius);
+        }
+        .bb-typing-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: var(--bb-accent-light);
+          animation: bb-dot 1.4s infinite ease-in-out;
+        }
+        .bb-typing-dot:nth-child(2) { animation-delay: 0.16s; }
+        .bb-typing-dot:nth-child(3) { animation-delay: 0.32s; }
+        @keyframes bb-dot {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+        .bb-input-area {
+          border-top: 1px solid var(--bb-border);
+          padding: 10px 12px;
+          background: var(--bb-bg);
+          flex-shrink: 0;
+        }
+        .bb-input-row {
+          display: flex; gap: 8px;
+        }
+        .bb-input {
+          flex: 1;
+          background: var(--bb-input-bg);
+          border: 1px solid var(--bb-border);
+          border-radius: var(--bb-radius);
+          padding: 9px 12px;
+          color: var(--bb-text);
+          font-family: var(--bb-font);
+          font-size: 13px;
+          outline: none;
+          transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .bb-input:focus {
+          border-color: var(--bb-accent-light);
+          box-shadow: 0 0 6px rgba(96,165,250,0.15);
+        }
+        .bb-send {
+          width: 36px; height: 36px;
+          border-radius: var(--bb-radius);
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+        }
+        .bb-send.active {
+          background: var(--bb-accent);
+          border: 1px solid rgba(96,165,250,0.5);
+          cursor: pointer;
+        }
+        .bb-send.disabled {
+          background: var(--bb-panel);
+          border: 1px solid var(--bb-border);
+          cursor: not-allowed;
+        }
+        .bb-footer {
+          font-family: var(--bb-font-mono);
+          font-size: 9px; color: var(--bb-text-muted);
+          margin: 6px 0 0; text-transform: uppercase;
+          letter-spacing: 0.1em; text-align: center;
+        }
+        .bb-reset {
+          background: none; border: none; cursor: pointer;
+          color: var(--bb-text-secondary); padding: 4px;
+          display: flex; align-items: center;
+        }
+      `}</style>
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
-        {messages.length === 0 && !isLoading && (
-          <div style={{ textAlign: "center", paddingTop: "40px" }}>
-            <div style={{
-              width: "44px", height: "44px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-              borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 14px", boxShadow: `0 0 20px rgba(59, 130, 246, 0.3)`,
-            }}>
-              <Bot size={22} color="#FFFFFF" />
-            </div>
-            <p style={{ fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700", color: colors.text.primary, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Hi! How can I help?</p>
-            <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0 }}>Ask me anything.</p>
+      <div className="bb-widget" data-testid="bridgebot-widget">
+        {/* Header */}
+        <div className="bb-header" data-testid="widget-header">
+          <div className="bb-avatar">
+            <Bot size={16} color="#FFFFFF" />
           </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={`${msg.role}-${msg.timestamp || i}`} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: "10px" }}>
-            {msg.role === "assistant" && (
-              <div style={{
-                width: "22px", height: "22px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-                borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
-                marginRight: "7px", flexShrink: 0, marginTop: "3px",
-              }}>
-                <Bot size={11} color="#FFFFFF" />
-              </div>
-            )}
-            <div style={{
-              maxWidth: "80%", padding: "9px 12px", borderRadius: "12px",
-              backgroundColor: msg.role === "user" ? colors.brand.blue : (msg.isError ? "rgba(244,63,94,0.08)" : colors.bg.panel),
-              border: msg.role === "user" ? `1px solid rgba(96,165,250,0.2)` : `1px solid ${msg.isError ? "rgba(244,63,94,0.2)" : colors.border.default}`,
-              color: msg.isError ? colors.brand.error : colors.text.primary,
-              fontSize: "13px", lineHeight: "1.6",
-            }}>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.content}</p>
+          <div style={{ flex: 1 }}>
+            <p className="bb-bot-name">{botConfig.name || "Assistant"}</p>
+            <div className="bb-status">
+              <div className="bb-status-dot" />
+              <span className="bb-status-text">Online</span>
             </div>
           </div>
-        ))}
-
-        {isLoading && (
-          <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "10px" }}>
-            <div style={{ width: "22px", height: "22px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "7px", flexShrink: 0 }}>
-              <Bot size={11} color="#FFFFFF" />
-            </div>
-            <div style={{ padding: "10px 14px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "4px" }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: colors.brand.cyan, animation: "typing-dot 1.4s infinite ease-in-out", animationDelay: `${i * 0.16}s` }} />
-              ))}
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div style={{ borderTop: `1px solid ${colors.border.default}`, padding: "10px 12px", backgroundColor: colors.bg.base, flexShrink: 0 }}>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
-            placeholder="Type a message..." data-testid="widget-input"
-            style={{
-              flex: 1, backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
-              borderRadius: "10px", padding: "9px 12px", color: colors.text.primary,
-              fontFamily: fonts.body, fontSize: "13px", outline: "none",
-              transition: "border-color 0.3s ease, box-shadow 0.3s ease",
-            }}
-            onFocus={e => { e.target.style.borderColor = colors.brand.cyan; e.target.style.boxShadow = `0 0 6px rgba(96,165,250,0.15)`; }}
-            onBlur={e => { e.target.style.borderColor = "rgba(59,130,246,0.3)"; e.target.style.boxShadow = "none"; }}
-          />
-          <button onClick={sendMessage} disabled={isLoading || !input.trim()} data-testid="widget-send-btn"
-            style={{
-              width: "36px", height: "36px",
-              backgroundColor: !isLoading && input.trim() ? colors.brand.blue : colors.bg.panel,
-              border: !isLoading && input.trim() ? `1px solid rgba(96,165,250,0.5)` : `1px solid ${colors.border.default}`,
-              borderRadius: "10px", cursor: !isLoading && input.trim() ? "pointer" : "not-allowed",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              transition: "all 0.2s ease",
-            }}>
-            <Send size={13} color={!isLoading && input.trim() ? "#FFFFFF" : colors.text.muted} />
+          <button onClick={reset} className="bb-reset" data-testid="widget-reset-btn">
+            <RotateCcw size={13} />
           </button>
         </div>
-        <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "6px 0 0", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>
-          Powered by BridgeBot
-        </p>
+
+        {/* Messages */}
+        <div className="bb-messages" data-testid="widget-messages">
+          {messages.length === 0 && !isLoading && (
+            <div className="bb-empty">
+              <div className="bb-empty-icon">
+                <Bot size={22} color="#FFFFFF" />
+              </div>
+              <p className="bb-empty-title">Hi! How can I help?</p>
+              <p className="bb-empty-sub">Ask me anything.</p>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
+            <div key={`${msg.role}-${msg.timestamp || i}`} className={`bb-msg-row ${msg.role === "user" ? "user" : "bot"}`}>
+              {msg.role === "assistant" && (
+                <div className="bb-msg-avatar">
+                  <Bot size={11} color="#FFFFFF" />
+                </div>
+              )}
+              <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
+                <p style={{ margin: 0 }}>{msg.content}</p>
+              </div>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className="bb-msg-row bot">
+              <div className="bb-msg-avatar">
+                <Bot size={11} color="#FFFFFF" />
+              </div>
+              <div className="bb-typing">
+                <div className="bb-typing-dot" />
+                <div className="bb-typing-dot" />
+                <div className="bb-typing-dot" />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="bb-input-area" data-testid="widget-input-area">
+          <div className="bb-input-row">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Type a message..."
+              className="bb-input"
+              data-testid="widget-input"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={isLoading || !input.trim()}
+              className={`bb-send ${!isLoading && input.trim() ? "active" : "disabled"}`}
+              data-testid="widget-send-btn"
+            >
+              <Send size={13} color={!isLoading && input.trim() ? "#FFFFFF" : "#64748B"} />
+            </button>
+          </div>
+          <p className="bb-footer">Powered by BridgeBot</p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

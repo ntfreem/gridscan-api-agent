@@ -294,6 +294,29 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 
 ## Backlog
 
+### P1 — Bulk Delete for Knowledge Sources (DONE 2026-11-02)
+- New "Delete" button in Knowledge Base bulk action bar alongside Assign Category
+- Backend `POST /api/knowledge/sources/bulk-delete` accepts `{items: [{type: "source"|"group", id}]}` and deletes all in one call
+- Handles both individual sources and groups (with legacy URL fallback)
+- Confirmation dialog before deletion
+- Tests: 17/17 backend, 100% frontend
+
+### P1 — Enhanced Embed Widget with 3 Integration Methods + Custom CSS (DONE 2026-11-02)
+- Complete overhaul of `/admin/embed` page with 3 distinct embed methods:
+  - **Popup Widget** — floating chat bubble with expandable panel (embed.js auto-inject)
+  - **Inline Embed** — embeds into a `#bridgebot-container` div on the host page
+  - **Full Page** — dedicated chat page filling the entire viewport
+- Each method shows: Script Tag (recommended), Manual iframe, React Component code snippets
+- **Custom CSS Stylesheet Import** — admin enters a URL to an external CSS file that the widget loads at runtime
+- **CSS Custom Properties** — widget uses `--bb-*` CSS variables for all colors, fonts, borders, and radii, allowing full theme control
+- **CSS Variables Reference** — collapsible section showing all available variables
+- Live preview panel updates per active method tab
+- Backend endpoints:
+  - `GET /api/embed/config/{instance_id}` (public) — returns custom_css_url and theme overrides
+  - `PUT /api/admin/embed-config` (auth) — saves embed config per instance
+  - `GET /api/embed.js?instance=X&mode=Y` (public) — serves JavaScript embed loader
+- Tests: 17/17 backend + 100% frontend pass (iteration 34)
+
 ### P1 — Multi-Server per Instance (PARKED — revisit later)
 - Allow one bot instance to be connected to multiple Discord servers, all sharing that instance's KB
 - Schema: new `discord_guilds` collection `{instance_id, guild_id, guild_name, connected_at}` (move guild mapping out of `discord_config`)
