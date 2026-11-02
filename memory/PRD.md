@@ -318,6 +318,20 @@ Multi-tenant SaaS chatbot platform where admins create AI knowledge-base instanc
 - Tests: 17/17 backend + 100% frontend pass (iteration 34)
 
 ### P1 — Multi-Server per Instance (PARKED — revisit later)
+
+### DONE — Streaming Chat Responses (2026-11-02)
+- SSE-based real-time streaming for all chat surfaces:
+  - `POST /api/chat/stream` — web chat page + embedded widget
+  - `POST /api/v1/chat/stream` — external API with `bbk_` key authentication
+- Three provider strategies:
+  - **Anthropic Direct**: Native token-by-token streaming via `client.messages.stream()`
+  - **Ollama**: Native streaming via `stream: True` payload
+  - **Emergent (default)**: Full response fetched, then simulated word-by-word at ~50 words/sec
+- Frontend: Shared `streamChat.js` utility consumed by both ChatPage.js and ChatWidget.js
+- UX: Typing dots during LLM processing → text streams with blinking cursor → complete response
+- SSE event format: `session` (session_id), `token` (chunk), `done` (full_response), `error` (message)
+- BotSettings API usage docs updated to show both standard and streaming curl examples
+- Tests: 13/13 backend, 100% frontend (iteration 35)
 - Allow one bot instance to be connected to multiple Discord servers, all sharing that instance's KB
 - Schema: new `discord_guilds` collection `{instance_id, guild_id, guild_name, connected_at}` (move guild mapping out of `discord_config`)
 - Bot routing: lookup `guild_id → instance_id` via new collection

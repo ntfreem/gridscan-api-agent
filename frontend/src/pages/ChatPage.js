@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { Bot, Send, Plus, ExternalLink } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { colors, fonts } from "../theme";
+import { streamChat } from "../utils/streamChat";
 
 const API = `/api`;
 
@@ -10,10 +11,12 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [botConfig, setBotConfig] = useState({ name: "BridgeBot Assistant" });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const streamRef = useRef(null);
   const [searchParams] = useSearchParams();
   const instanceId = searchParams.get("instance");
 
@@ -27,30 +30,76 @@ export default function ChatPage() {
     }
   }, [instanceId]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, isStreaming]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || isLoading || isStreaming) return;
     const text = input.trim();
     setInput("");
-    setMessages(prev => [...prev, { role: "user", content: text, timestamp: new Date().toISOString() }]);
+    const userMsg = { role: "user", content: text, timestamp: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
-    try {
-      const res = await axios.post(`${API}/chat/send`, { message: text, session_id: sessionId, instance_id: instanceId });
-      if (!sessionId) {
-        setSessionId(res.data.session_id);
-        localStorage.setItem(`bf_chat_${instanceId || "default"}`, res.data.session_id);
-      }
-      setMessages(prev => [...prev, { role: "assistant", content: res.data.response, timestamp: new Date().toISOString() }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "I encountered an error. Please try again.", timestamp: new Date().toISOString(), isError: true }]);
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  };
 
-  const startNewChat = () => { localStorage.removeItem(`bf_chat_${instanceId || "default"}`); setSessionId(null); setMessages([]); };
+    let sessionReceived = false;
+    let firstTokenReceived = false;
+    streamRef.current = streamChat({
+      message: text,
+      sessionId,
+      instanceId,
+      onSession: (sid) => {
+        sessionReceived = true;
+        if (!sessionId) {
+          setSessionId(sid);
+          localStorage.setItem(`bf_chat_${instanceId || "default"}`, sid);
+        }
+      },
+      onToken: (token) => {
+        if (!firstTokenReceived) {
+          firstTokenReceived = true;
+          setIsLoading(false);
+          setIsStreaming(true);
+        }
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, content: last.content + token };
+            return updated;
+          }
+          return [...prev, { role: "assistant", content: token, timestamp: new Date().toISOString(), isStreaming: true }];
+        });
+      },
+      onDone: (fullResponse) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = { ...last, content: fullResponse, isStreaming: false };
+          }
+          return updated;
+        });
+        setIsStreaming(false);
+        setIsLoading(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      },
+      onError: (errMsg) => {
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, content: errMsg || "I encountered an error. Please try again.", isStreaming: false, isError: true };
+            return updated;
+          }
+          return [...prev, { role: "assistant", content: errMsg || "I encountered an error. Please try again.", timestamp: new Date().toISOString(), isError: true }];
+        });
+        setIsStreaming(false);
+        setIsLoading(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      },
+    });
+  }, [input, isLoading, isStreaming, sessionId, instanceId]);
+
+  const startNewChat = () => { localStorage.removeItem(`bf_chat_${instanceId || "default"}`); setSessionId(null); setMessages([]); if (streamRef.current) streamRef.current.abort(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   return (
@@ -140,7 +189,10 @@ export default function ChatPage() {
               color: msg.isError ? colors.brand.error : colors.text.primary,
               fontFamily: fonts.body, fontSize: "14px", lineHeight: "1.7",
             }}>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.content}</p>
+              <p style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {msg.content}
+                {msg.isStreaming && <span style={{ display: "inline-block", width: "2px", height: "14px", backgroundColor: colors.brand.cyan, marginLeft: "2px", verticalAlign: "text-bottom", animation: "cursor-blink 0.8s infinite" }} />}
+              </p>
               <p style={{ margin: "6px 0 0", fontSize: "10px", color: msg.role === "user" ? "rgba(255,255,255,0.4)" : colors.text.muted, fontFamily: fonts.mono }}>
                 {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
               </p>
@@ -148,7 +200,7 @@ export default function ChatPage() {
           </div>
         ))}
 
-        {isLoading && (
+        {isLoading && !isStreaming && (
           <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }}>
             <div style={{ width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "10px", flexShrink: 0 }}>
               <Bot size={14} color="#FFFFFF" />
@@ -180,7 +232,7 @@ export default function ChatPage() {
               onFocus={e => { e.target.style.borderColor = colors.brand.cyan; e.target.style.boxShadow = `0 0 8px rgba(96,165,250,0.15)`; }}
               onBlur={e => { e.target.style.borderColor = "rgba(59,130,246,0.3)"; e.target.style.boxShadow = "none"; }}
             />
-            <button onClick={sendMessage} disabled={isLoading || !input.trim()} data-testid="send-message-btn"
+            <button onClick={sendMessage} disabled={isLoading || isStreaming || !input.trim()} data-testid="send-message-btn"
               style={{
                 width: "44px", height: "44px",
                 backgroundColor: !isLoading && input.trim() ? colors.brand.blue : colors.bg.panel,

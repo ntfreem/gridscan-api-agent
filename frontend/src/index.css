@@ -130,3 +130,8 @@ body {
   background: rgba(96, 165, 250, 0.25);
   color: #FFFFFF;
 }
+
+@keyframes cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Depends, Header, Response, Cookie, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, Field
@@ -1058,6 +1058,192 @@ async def save_conversation(session_id: str, user_message: str, bot_response: st
             "created_at": timestamp, "updated_at": timestamp,
             "metadata": metadata or {}
         })
+
+# ==================== STREAMING LLM ====================
+
+import json as _json
+
+async def _stream_anthropic(session_id: str, user_message: str, system_prompt: str,
+                            instance_id: str, model_short: str, api_key: str):
+    """Yield text chunks from Anthropic streaming API. Returns (async_generator, finalize_fn).
+    finalize_fn must be called after consuming the generator to get (full_text, in_tok, out_tok)."""
+    import anthropic as _anthropic
+    client = _anthropic.AsyncAnthropic(api_key=api_key)
+    api_model = ALLOWED_ANTHROPIC_MODELS.get(model_short)
+    if not api_model:
+        raise HTTPException(status_code=500, detail=f"Model '{model_short}' not in allowlist")
+    key = f"{session_id}_{instance_id}_anthropic_{model_short}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+
+    full_text_parts = []
+    in_tok = 0
+    out_tok = 0
+
+    async def generate():
+        nonlocal in_tok, out_tok
+        try:
+            async with client.messages.stream(
+                model=api_model, max_tokens=8096,
+                system=system_prompt, messages=history,
+            ) as stream:
+                async for text in stream.text_stream:
+                    full_text_parts.append(text)
+                    yield text
+                resp = await stream.get_final_message()
+                usage = getattr(resp, "usage", None)
+                in_tok = int(getattr(usage, "input_tokens", 0) or 0) if usage else _estimate_tokens(system_prompt + user_message)
+                out_tok = int(getattr(usage, "output_tokens", 0) or 0) if usage else _estimate_tokens("".join(full_text_parts))
+        except _anthropic.AuthenticationError as e:
+            yield f"\n[Error: Anthropic auth failed: {e}]"
+        except _anthropic.RateLimitError as e:
+            yield f"\n[Error: Rate limited: {e}]"
+        except Exception as e:
+            logger.error(f"Anthropic stream error: {e}")
+            yield f"\n[Error: AI service temporarily unavailable]"
+
+    async def finalize():
+        full = "".join(full_text_parts)
+        history.append({"role": "assistant", "content": full})
+        llm_history[key] = history[-40:]
+        return full, in_tok, out_tok
+
+    return generate(), finalize
+
+
+async def _stream_ollama(session_id: str, user_message: str, system_prompt: str,
+                         instance_id: str, model: str, base_url: str):
+    """Yield text chunks from Ollama streaming. Returns (async_generator, finalize_fn)."""
+    base_url = (base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
+    key = f"{session_id}_{instance_id}_ollama_{model}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+    messages = [{"role": "system", "content": system_prompt}] + history
+    payload = {"model": model, "messages": messages, "stream": True}
+
+    full_text_parts = []
+    in_tok = 0
+    out_tok = 0
+
+    async def generate():
+        nonlocal in_tok, out_tok
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as hclient:
+                async with hclient.stream("POST", f"{base_url}/api/chat", json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            chunk = _json.loads(line)
+                        except Exception:
+                            continue
+                        token = (chunk.get("message") or {}).get("content", "")
+                        if token:
+                            full_text_parts.append(token)
+                            yield token
+                        if chunk.get("done"):
+                            in_tok = int(chunk.get("prompt_eval_count") or 0) or _estimate_tokens(system_prompt + user_message)
+                            out_tok = int(chunk.get("eval_count") or 0) or _estimate_tokens("".join(full_text_parts))
+        except Exception as e:
+            logger.error(f"Ollama stream error: {e}")
+            yield f"\n[Error: Ollama unavailable: {e}]"
+
+    async def finalize():
+        full = "".join(full_text_parts)
+        history.append({"role": "assistant", "content": full})
+        llm_history[key] = history[-40:]
+        return full, in_tok, out_tok
+
+    return generate(), finalize
+
+
+async def _simulate_stream(text: str):
+    """Yield a pre-fetched response in word-sized chunks to simulate streaming."""
+    words = text.split(" ")
+    for i, word in enumerate(words):
+        chunk = word if i == 0 else " " + word
+        yield chunk
+        await asyncio.sleep(0.02)  # ~50 words/sec, fast but visible
+
+
+async def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Event."""
+    return f"event: {event}\ndata: {_json.dumps(data)}\n\n"
+
+
+async def stream_chat_response(session_id: str, user_message: str, instance_id: str, platform: str = "web"):
+    """SSE generator for streaming chat. Yields SSE-formatted events."""
+    # Emit session ID first
+    yield await _sse_event("session", {"session_id": session_id})
+
+    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    knowledge = await search_knowledge(user_message, instance_id)
+
+    if knowledge == "__NO_KB__":
+        response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
+        async for chunk in _simulate_stream(response):
+            yield await _sse_event("token", {"token": chunk})
+        yield await _sse_event("done", {"full_response": response})
+        await save_conversation(session_id, user_message, response, platform=platform, instance_id=instance_id)
+        return
+
+    # Try live API query first (non-streamable — simulate)
+    api_response = await _try_api_query(user_message, bot_config, knowledge, instance_id, session_id)
+    if api_response:
+        async for chunk in _simulate_stream(api_response):
+            yield await _sse_event("token", {"token": chunk})
+        yield await _sse_event("done", {"full_response": api_response})
+        await save_conversation(session_id, user_message, api_response, platform=platform, instance_id=instance_id)
+        return
+
+    # LLM streaming
+    tone = await get_tone_examples_text(instance_id, bot_config)
+    system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
+    cfg = await _resolve_llm_config(instance_id)
+    provider = (cfg.get("provider") or "emergent").lower()
+
+    full_response = ""
+    try:
+        if provider == "anthropic":
+            model_short = cfg.get("model") or DEFAULT_ANTHROPIC_MODEL
+            api_key = cfg.get("anthropic_api_key") or ""
+            gen, finalize = await _stream_anthropic(session_id, user_message, system_prompt, instance_id, model_short, api_key)
+            async for chunk in gen:
+                yield await _sse_event("token", {"token": chunk})
+            full_response, in_tok, out_tok = await finalize()
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}",
+                                 f"anthropic:{model_short}", True, 0, False, None, in_tok, out_tok)
+
+        elif provider == "ollama":
+            model = cfg.get("model") or DEFAULT_OLLAMA_MODEL
+            base_url = cfg.get("ollama_base_url") or ""
+            gen, finalize = await _stream_ollama(session_id, user_message, system_prompt, instance_id, model, base_url)
+            async for chunk in gen:
+                yield await _sse_event("token", {"token": chunk})
+            full_response, in_tok, out_tok = await finalize()
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}",
+                                 f"ollama:{model}", True, 0, False, None, in_tok, out_tok)
+
+        else:
+            # Emergent path — no native streaming, fetch full then simulate
+            full_response = await call_claude(session_id, user_message, system_prompt,
+                                             instance_id=instance_id, platform=platform)
+            async for chunk in _simulate_stream(full_response):
+                yield await _sse_event("token", {"token": chunk})
+
+    except HTTPException as he:
+        err_msg = he.detail or "AI service error"
+        yield await _sse_event("error", {"message": err_msg})
+        return
+    except Exception as e:
+        logger.error(f"Stream error: {e}")
+        yield await _sse_event("error", {"message": "AI service temporarily unavailable"})
+        return
+
+    yield await _sse_event("done", {"full_response": full_response})
+    await save_conversation(session_id, user_message, full_response, platform=platform, instance_id=instance_id)
+
 # ==================== DISCORD BOT ====================
 
 # Shared client and handoff state
@@ -2013,6 +2199,18 @@ async def send_chat_message(body: ChatMessage):
                                         instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
     return {"response": response, "session_id": session_id}
+
+@api_router.post("/chat/stream")
+async def stream_chat_message(body: ChatMessage):
+    """Streaming version of /chat/send. Returns SSE (text/event-stream)."""
+    session_id = body.session_id or str(uuid.uuid4())
+    instance_id = body.instance_id or "default"
+    return StreamingResponse(
+        stream_chat_response(session_id, body.message, instance_id, platform="web"),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 @api_router.get("/chat/history/{session_id}")
 async def get_chat_history(session_id: str):
     conv = await db.conversations.find_one({"session_id": session_id}, {"_id": 0})
@@ -2265,6 +2463,19 @@ async def external_chat(body: ExternalChatRequest, request: Request):
         "session_id": session_id,
         "instance_id": instance_id,
     }
+
+@api_router.post("/v1/chat/stream")
+async def external_chat_stream(body: ExternalChatRequest, request: Request):
+    """Streaming version of /v1/chat. Authenticated via bbk_ API key. Returns SSE."""
+    auth_info = await _authenticate_api_key(request)
+    instance_id = auth_info["instance_id"]
+    session_id = body.session_id or str(uuid.uuid4())
+    return StreamingResponse(
+        stream_chat_response(session_id, body.message, instance_id, platform="api"),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 # ==================== KNOWLEDGE SOURCES (PROTECTED) ====================
 
 @api_router.get("/knowledge/sources")

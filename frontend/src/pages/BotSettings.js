@@ -529,7 +529,14 @@ export default function BotSettings() {
             <div style={{ marginTop: "14px", padding: "12px", backgroundColor: colors.bg.base, borderRadius: "8px", border: `1px solid ${colors.border.subtle}` }}>
               <p style={{ margin: "0 0 6px", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Usage Example</p>
               <code style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.6", whiteSpace: "pre-wrap", display: "block" }}>
-{`curl -X POST ${window.location.origin}/api/v1/chat \\
+{`# Standard request
+curl -X POST ${window.location.origin}/api/v1/chat \\
+  -H "Authorization: Bearer bbk_your_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "Hello", "session_id": "optional-id"}'
+
+# Streaming (SSE) — tokens arrive in real time
+curl -N -X POST ${window.location.origin}/api/v1/chat/stream \\
   -H "Authorization: Bearer bbk_your_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{"message": "Hello", "session_id": "optional-id"}'`}

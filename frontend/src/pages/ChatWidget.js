@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { Bot, Send, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { streamChat } from "../utils/streamChat";
 
 const API = `/api`;
 
@@ -9,10 +10,12 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [botConfig, setBotConfig] = useState({ name: "Assistant" });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const streamRef = useRef(null);
   const [searchParams] = useSearchParams();
   const instanceId = searchParams.get("instance");
   const mode = searchParams.get("mode") || "popup";
@@ -55,28 +58,74 @@ export default function ChatWidget() {
     }
   }, [instanceId]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, isStreaming]);
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || isLoading || isStreaming) return;
     const text = input.trim();
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: text, timestamp: new Date().toISOString() }]);
     setIsLoading(true);
-    try {
-      const res = await axios.post(`${API}/chat/send`, { message: text, session_id: sessionId, instance_id: instanceId });
-      if (!sessionId) {
-        setSessionId(res.data.session_id);
-        sessionStorage.setItem(`widget_session_${instanceId || "default"}`, res.data.session_id);
-      }
-      setMessages(prev => [...prev, { role: "assistant", content: res.data.response, timestamp: new Date().toISOString() }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, an error occurred. Please try again.", timestamp: new Date().toISOString(), isError: true }]);
-    } finally { setIsLoading(false); }
-  };
 
-  const reset = () => { sessionStorage.removeItem(`widget_session_${instanceId || "default"}`); setSessionId(null); setMessages([]); };
+    let sessionReceived = false;
+    let firstTokenReceived = false;
+    streamRef.current = streamChat({
+      message: text,
+      sessionId,
+      instanceId,
+      onSession: (sid) => {
+        sessionReceived = true;
+        if (!sessionId) {
+          setSessionId(sid);
+          sessionStorage.setItem(`widget_session_${instanceId || "default"}`, sid);
+        }
+      },
+      onToken: (token) => {
+        if (!firstTokenReceived) {
+          firstTokenReceived = true;
+          setIsLoading(false);
+          setIsStreaming(true);
+        }
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, content: last.content + token };
+            return updated;
+          }
+          return [...prev, { role: "assistant", content: token, timestamp: new Date().toISOString(), isStreaming: true }];
+        });
+      },
+      onDone: (fullResponse) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            updated[updated.length - 1] = { ...last, content: fullResponse, isStreaming: false };
+          }
+          return updated;
+        });
+        setIsStreaming(false);
+        setIsLoading(false);
+      },
+      onError: (errMsg) => {
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, content: errMsg || "Sorry, an error occurred.", isStreaming: false, isError: true };
+            return updated;
+          }
+          return [...prev, { role: "assistant", content: errMsg || "Sorry, an error occurred.", timestamp: new Date().toISOString(), isError: true }];
+        });
+        setIsStreaming(false);
+        setIsLoading(false);
+      },
+    });
+  }, [input, isLoading, isStreaming, sessionId, instanceId]);
+
+  const reset = () => { sessionStorage.removeItem(`widget_session_${instanceId || "default"}`); setSessionId(null); setMessages([]); if (streamRef.current) streamRef.current.abort(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   const isFullpage = mode === "fullpage";
@@ -226,6 +275,16 @@ export default function ChatWidget() {
           0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
           40% { transform: scale(1); opacity: 1; }
         }
+        @keyframes bb-cursor-blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .bb-stream-cursor {
+          display: inline-block; width: 2px; height: 13px;
+          background: var(--bb-accent-light);
+          margin-left: 2px; vertical-align: text-bottom;
+          animation: bb-cursor-blink 0.8s infinite;
+        }
         .bb-input-area {
           border-top: 1px solid var(--bb-border);
           padding: 10px 12px;
@@ -320,12 +379,15 @@ export default function ChatWidget() {
                 </div>
               )}
               <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
-                <p style={{ margin: 0 }}>{msg.content}</p>
+                <p style={{ margin: 0 }}>
+                  {msg.content}
+                  {msg.isStreaming && <span className="bb-stream-cursor" />}
+                </p>
               </div>
             </div>
           ))}
 
-          {isLoading && (
+          {isLoading && !isStreaming && (
             <div className="bb-msg-row bot">
               <div className="bb-msg-avatar">
                 <Bot size={11} color="#FFFFFF" />
@@ -354,11 +416,11 @@ export default function ChatWidget() {
             />
             <button
               onClick={sendMessage}
-              disabled={isLoading || !input.trim()}
-              className={`bb-send ${!isLoading && input.trim() ? "active" : "disabled"}`}
+              disabled={isLoading || isStreaming || !input.trim()}
+              className={`bb-send ${!isLoading && !isStreaming && input.trim() ? "active" : "disabled"}`}
               data-testid="widget-send-btn"
             >
-              <Send size={13} color={!isLoading && input.trim() ? "#FFFFFF" : "#64748B"} />
+              <Send size={13} color={!isLoading && !isStreaming && input.trim() ? "#FFFFFF" : "#64748B"} />
             </button>
           </div>
           <p className="bb-footer">Powered by BridgeBot</p>
