@@ -467,17 +467,41 @@ function IntegrationCard({ intg, onRefresh }) {
       {/* Connection Test Result */}
       {connResult && (
         <div style={{
-          marginTop: "10px", padding: "8px 12px", borderRadius: radius.md,
+          marginTop: "10px", padding: "10px 14px", borderRadius: radius.md,
           backgroundColor: connResult.success ? "rgba(52,211,153,0.06)" : "rgba(244,63,94,0.06)",
           border: `1px solid ${connResult.success ? "rgba(52,211,153,0.2)" : "rgba(244,63,94,0.2)"}`,
-          display: "flex", alignItems: "center", gap: "8px",
         }}>
-          {connResult.success ? <CheckCircle size={14} color={colors.brand.success} /> : <XCircle size={14} color={colors.brand.error} />}
-          <span style={{ fontFamily: fonts.body, fontSize: "12px", color: connResult.success ? colors.brand.success : colors.brand.error }}>
-            {connResult.success
-              ? `Connected (HTTP ${connResult.status}, ${connResult.duration_ms}ms)`
-              : `Failed: ${connResult.error || `HTTP ${connResult.status || "unknown"} — server returned an error`}`}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {connResult.success ? <CheckCircle size={14} color={colors.brand.success} /> : <XCircle size={14} color={colors.brand.error} />}
+            <span style={{ fontFamily: fonts.body, fontSize: "12px", color: connResult.success ? colors.brand.success : colors.brand.error, fontWeight: "500" }}>
+              {connResult.success
+                ? `Connected (HTTP ${connResult.status}, ${connResult.duration_ms}ms)`
+                : `Failed: ${connResult.error || `HTTP ${connResult.status || "unknown"} — server returned an error`}`}
+            </span>
+          </div>
+          {/* Diagnostics: what was tested */}
+          {connResult.tested_url && (
+            <div style={{ marginTop: "6px", fontSize: "11px", fontFamily: fonts.mono, color: colors.text.muted }}>
+              Tested: {connResult.tested_label || connResult.tested_url}
+              {connResult.probes_tried > 1 && ` (${connResult.probes_tried} probes tried)`}
+            </div>
+          )}
+          {/* Probe details on failure */}
+          {!connResult.success && connResult.probe_details?.length > 0 && (
+            <div style={{ marginTop: "8px", fontSize: "10px", fontFamily: fonts.mono }}>
+              {connResult.probe_details.map((p, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 0", color: colors.text.muted }}>
+                  {p.success
+                    ? <CheckCircle size={10} color={colors.brand.success} />
+                    : <XCircle size={10} color={colors.text.muted} />}
+                  <span>{p.label}</span>
+                  <span style={{ color: p.success ? colors.brand.success : colors.text.muted }}>
+                    HTTP {p.status || "ERR"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -168,6 +168,7 @@ async def delete_integration(integration_id: str, request: Request):
 
 @router.post("/{integration_id}/test-connection")
 async def test_connection(integration_id: str, request: Request):
+    """Smart connection test: tries a known-valid endpoint or doc URL instead of blindly hitting the root."""
     db = _require_db()
     instance_id = await _get_instance_access(request)
     intg = await db.api_integrations.find_one({"id": integration_id, "instance_id": instance_id})
@@ -176,12 +177,89 @@ async def test_connection(integration_id: str, request: Request):
 
     headers = _build_auth_headers(intg)
     params = _build_auth_params(intg)
-    result = await safe_api_request("GET", intg["base_url"], headers=headers, params=params, timeout=10.0)
+    base = intg["base_url"].rstrip("/")
+    doc_url = intg.get("doc_source_url", "")
     now = datetime.now(timezone.utc).isoformat()
+
+    # Build a prioritised list of URLs to probe:
+    # 1. The first enabled GET endpoint (most reliable — it's a real route)
+    # 2. The documentation URL (usually valid if discovery worked)
+    # 3. Common API health paths
+    # 4. The base URL root (least likely to work)
+    probes = []
+
+    # Add the first enabled GET endpoint
+    first_ep = await db.api_endpoints.find_one(
+        {"integration_id": integration_id, "instance_id": instance_id, "enabled": True, "method": "GET"},
+        sort=[("path", 1)]
+    )
+    if first_ep:
+        ep_path = first_ep["path"]
+        # Replace path params with placeholders that won't break
+        import re as _re
+        safe_path = _re.sub(r"\{[^}]+\}", "test", ep_path)
+        probes.append({"url": base + safe_path, "label": f"GET {ep_path}", "method": "GET"})
+
+    # Add doc URL
+    if doc_url:
+        probes.append({"url": doc_url, "label": "Documentation URL", "method": "GET"})
+
+    # Common health paths
+    for path in ["/health", "/api/health", "/api/v1/health", "/api/status", "/"]:
+        probes.append({"url": base + path, "label": f"GET {path}", "method": "GET"})
+
+    # Try each probe until one succeeds or returns a non-404
+    results = []
+    best = None
+    for probe in probes:
+        result = await safe_api_request(probe["method"], probe["url"], headers=headers, params=params, timeout=8.0)
+        entry = {
+            "url": probe["url"],
+            "label": probe["label"],
+            "method": probe["method"],
+            "status": result.get("status"),
+            "success": result.get("success", False),
+            "duration_ms": result.get("duration_ms", 0),
+            "error": result.get("error"),
+        }
+        results.append(entry)
+
+        # Success or auth error (API is reachable, just auth issue)
+        if result.get("success") or result.get("status") in (200, 201, 204):
+            best = entry
+            break
+        # Auth errors (401/403) mean the server is reachable — that's a good sign
+        if result.get("status") in (401, 403):
+            best = {
+                **entry,
+                "success": True,  # Server is reachable
+                "error": f"Server reachable (HTTP {result['status']}). Authentication may need updating.",
+            }
+            break
+        # Any response other than 404 is also meaningful
+        if result.get("status") and result.get("status") != 404:
+            best = entry
+            break
+
+    # If nothing worked, use the most informative failure
+    if not best:
+        best = results[0] if results else {"success": False, "error": "No probes could reach the server"}
+
     await db.api_integrations.update_one({"id": integration_id}, {"$set": {"last_connection_test": now}})
+
     return {
-        "success": result["success"], "status": result.get("status"),
-        "duration_ms": result.get("duration_ms"), "error": result.get("error"), "tested_at": now,
+        "success": best["success"],
+        "status": best.get("status"),
+        "duration_ms": best.get("duration_ms"),
+        "error": best.get("error"),
+        "tested_url": best.get("url", ""),
+        "tested_label": best.get("label", ""),
+        "tested_at": now,
+        "probes_tried": len(results),
+        "probe_details": [
+            {"label": r["label"], "status": r.get("status"), "success": r["success"]}
+            for r in results
+        ],
     }
 
 
