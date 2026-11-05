@@ -46,15 +46,18 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - Emergent Universal Key as default provider
 
 ### Phase 4 — API Intelligence Diagnostics (Nov 2026)
-- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation. Calculated from stored data — no API/LLM calls.
-- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints using real routing prompt. Shows candidate endpoints, selected endpoints, permission validation, correctness evaluation.
-- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against stored schema. Shows field-level validation, doc source, schema context preview.
+- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation. Calculated from stored data — no API/LLM calls. Generic schemas (type: object without properties) correctly NOT counted as covered.
+- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints using real routing prompt.
+- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against stored schema.
 - **Unified KB+API Reasoning Test** (LLM + API): Full pipeline trace — KB retrieval → endpoint discovery → LLM selection → permission validation → API execution → schema retrieval → context assembly → answer generation. LLM context verification shows what was included/missing.
-- **LLM Context Verification**: Inspects actual assembled LLM prompt for KB content, API responses, endpoint info, schema info, field descriptions, units, error definitions, anti-fabrication rules. Redacted preview available.
 - **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test.
 - **Diagnostic History**: Timestamped records of all diagnostic runs with status, duration, error details.
-- **Doc Source Identification**: Shows whether endpoint docs come from OpenAPI, custom references, or manual config.
-- **Frontend**: Diagnostics panel per integration with 5 collapsible sections + instance summary bar. Clear cost tags (FREE/LLM TOKENS/API CALL/LLM+API).
+
+### Phase 4.1 — Diagnostics Accuracy Fix (Nov 2026)
+- **Investigation**: Deep analysis of GridScan's OpenAPI spec revealed all 90 endpoints return generic `{type: "object", additionalProperties: true}` schemas with no field properties defined. No supplementary reference documentation exists.
+- **Importer verified**: BridgeBot's OpenAPI importer correctly and faithfully imports all available documentation from the published spec. No data is lost during import.
+- **Bug fix**: Diagnostic `_analyse_response_schemas` no longer counts `{type: "object"}` without `properties` as "covered". Added `generic_count` metric and `no_fields_defined` indicator for field descriptions.
+- **Result**: Overall score corrected from 51 → 26 (accurately reflecting the documentation gap).
 
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)

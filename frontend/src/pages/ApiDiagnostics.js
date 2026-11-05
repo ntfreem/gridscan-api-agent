@@ -379,7 +379,17 @@ export default function ApiDiagnostics({ integrationId, integrationName }) {
             {scan.metrics && (
               <div>
                 <CoverageBar {...scan.metrics.response_schema_coverage} label="Response Schema Coverage" />
+                {scan.metrics.response_schema_coverage?.generic_count > 0 && (
+                  <div style={{ fontSize: "11px", color: colors.brand.warning, marginTop: "-6px", marginBottom: "10px", paddingLeft: "2px" }}>
+                    {scan.metrics.response_schema_coverage.generic_count} endpoint{scan.metrics.response_schema_coverage.generic_count > 1 ? "s have" : " has"} generic schemas (no field definitions) — not counted as covered
+                  </div>
+                )}
                 <CoverageBar {...scan.metrics.field_description_coverage} label="Field Description Coverage" />
+                {scan.metrics.field_description_coverage?.no_fields_defined && (
+                  <div style={{ fontSize: "11px", color: colors.brand.warning, marginTop: "-6px", marginBottom: "10px", paddingLeft: "2px" }}>
+                    No response fields defined in any schema — field descriptions cannot be evaluated
+                  </div>
+                )}
                 <CoverageBar {...scan.metrics.parameter_documentation} label="Parameter Documentation" />
                 <CoverageBar {...scan.metrics.endpoint_description_coverage} label="Endpoint Description Coverage" />
                 <CoverageBar {...scan.metrics.response_example_coverage} label="Response Example Coverage" />

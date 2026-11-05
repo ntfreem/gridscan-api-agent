@@ -53,26 +53,42 @@ def run_passive_scan(endpoints: list, integration: dict) -> dict:
 
 
 def _analyse_response_schemas(endpoints: list) -> dict:
-    covered, missing = [], []
+    covered, generic, missing = [], [], []
     for ep in endpoints:
         entry = {"endpoint_id": ep["id"], "method": ep["method"], "path": ep["path"]}
         schemas = ep.get("response_schema") or {}
-        has_content = any(
-            (s.get("schema", {}).get("properties") or s.get("schema", {}).get("type"))
-            for s in schemas.values() if isinstance(s, dict)
-        )
-        if has_content:
+        if not schemas:
+            missing.append({**entry, "reason": "No response schema"})
+            continue
+
+        # A schema counts as "covered" ONLY if it defines actual field properties.
+        # A generic {type: "object"} or {type: "array", items: {type: "object"}}
+        # with no properties is NOT useful documentation.
+        has_properties = False
+        for s in schemas.values():
+            if not isinstance(s, dict):
+                continue
+            sc = s.get("schema", {})
+            if sc.get("properties"):
+                has_properties = True
+                break
+            items = sc.get("items", {}) if isinstance(sc.get("items"), dict) else {}
+            if items.get("properties"):
+                has_properties = True
+                break
+
+        if has_properties:
             covered.append({**entry, "status_codes": list(schemas.keys())})
         else:
-            reason = "Schema present but empty" if schemas else "No response schema"
-            missing.append({**entry, "reason": reason})
+            generic.append({**entry, "reason": "Schema is generic (no field definitions)"})
 
     total = len(endpoints)
     return {
         "covered": len(covered), "total": total,
         "percentage": round(len(covered) / total * 100, 1) if total else 0,
         "covered_endpoints": covered[:30],
-        "missing_endpoints": missing[:30],
+        "missing_endpoints": (missing + generic)[:30],
+        "generic_count": len(generic),
     }
 
 
@@ -107,6 +123,7 @@ def _analyse_field_descriptions(endpoints: list) -> dict:
         "percentage": round(described / total_fields * 100, 1) if total_fields else 0,
         "undescribed_fields": undescribed[:40],
         "fields_with_units": units_count,
+        "no_fields_defined": total_fields == 0,
     }
 
 
