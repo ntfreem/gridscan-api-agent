@@ -8,7 +8,7 @@ import { colors, fonts, T, onFocus, onBlur } from "../theme";
 export default function BotSettings() {
   const { selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
-  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", api_query_enabled: false, api_base_url: "", api_key_header: "x-project-id", api_key_value: "", api_key_value_set: false });
+  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict" });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -40,9 +40,6 @@ export default function BotSettings() {
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeyRevealed, setNewKeyRevealed] = useState(null);
-  const [testPath, setTestPath] = useState("");
-  const [testResult, setTestResult] = useState(null);
-  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     if (!instanceId) return;
@@ -119,21 +116,9 @@ export default function BotSettings() {
     navigator.clipboard.writeText(key).then(() => toast.success("Copied to clipboard"));
   };
 
-  const runApiTest = async () => {
-    if (!testPath.trim()) { toast.error("Enter an endpoint path"); return; }
-    setTesting(true); setTestResult(null);
-    try {
-      const r = await api.post(`/admin/api-test`, { path: testPath.trim() });
-      setTestResult(r.data);
-      if (r.data.status === 200) toast.success(`API returned ${r.data.status}`);
-      else toast.error(`API returned ${r.data.status}`);
-    } catch (e) { toast.error(e.response?.data?.detail || "Test failed"); setTestResult({ error: e.message }); }
-    finally { setTesting(false); }
-  };
-
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", api_query_enabled: !!r.data.api_query_enabled, api_base_url: r.data.api_base_url || "", api_key_header: r.data.api_key_header || "x-project-id", api_key_value: "", api_key_value_set: !!r.data.api_key_value_set });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict" });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -400,101 +385,6 @@ export default function BotSettings() {
               ))}
             </div>
             <p style={{ ...T.hint, marginTop: "8px" }}>This is saved with your bot config. Click &ldquo;Save Settings&rdquo; in the left panel to apply.</p>
-          </div>
-
-          {/* ── Live API Connection ── */}
-          <div data-testid="api-connection-card" style={{ ...T.card, marginBottom: "20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Zap size={14} color={config.api_query_enabled ? colors.brand.success : colors.text.muted} />
-                <p style={{ ...T.sectionTitle, margin: 0 }}>Live API Queries</p>
-              </div>
-              <button
-                onClick={() => setConfig(p => ({ ...p, api_query_enabled: !p.api_query_enabled }))}
-                data-testid="api-query-toggle"
-                style={{ background: "none", border: "none", cursor: "pointer", color: config.api_query_enabled ? colors.brand.success : colors.text.muted }}
-              >
-                {config.api_query_enabled ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
-              </button>
-            </div>
-            <p style={T.sectionSub}>When enabled, the bot can make live GET requests to an external API to fetch real-time data (balances, transactions, etc). The AI decides when to call the API based on the user&apos;s question.</p>
-
-            {config.api_query_enabled && (
-              <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                <div>
-                  <label style={T.label}>API Base URL</label>
-                  <input style={T.input} value={config.api_base_url}
-                    onChange={e => setConfig(p => ({ ...p, api_base_url: e.target.value }))}
-                    placeholder="https://ada.api.gridscan.io"
-                    data-testid="api-base-url" onFocus={onFocus} onBlur={onBlur} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  <div>
-                    <label style={T.label}>API Key Header</label>
-                    <input style={T.input} value={config.api_key_header}
-                      onChange={e => setConfig(p => ({ ...p, api_key_header: e.target.value }))}
-                      placeholder="x-project-id"
-                      data-testid="api-key-header" onFocus={onFocus} onBlur={onBlur} />
-                  </div>
-                  <div>
-                    <label style={T.label}>API Key Value {config.api_key_value_set && !config.api_key_value && <span style={{ fontSize: "10px", color: colors.brand.success, fontWeight: 600 }}> Saved</span>}</label>
-                    <input style={T.input} type="password" value={config.api_key_value}
-                      onChange={e => setConfig(p => ({ ...p, api_key_value: e.target.value }))}
-                      placeholder={config.api_key_value_set ? "Key saved — leave blank to keep" : "Your API key"}
-                      data-testid="api-key-value" onFocus={onFocus} onBlur={onBlur} />
-                  </div>
-                </div>
-                <p style={T.hint}>The bot uses AI to decide which endpoint to call based on the user&apos;s question. Only GET requests are allowed. Save Settings to apply.</p>
-
-                {/* API Test Dashboard */}
-                <div style={{ marginTop: "16px", padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
-                  <p style={{ margin: "0 0 8px", fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>Test Endpoint</p>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, whiteSpace: "nowrap" }}>GET</span>
-                    <input
-                      value={testPath}
-                      onChange={e => setTestPath(e.target.value)}
-                      placeholder="/api/txs/{hash} or /api/health"
-                      data-testid="api-test-path"
-                      onKeyDown={e => { if (e.key === "Enter") runApiTest(); }}
-                      onFocus={onFocus} onBlur={onBlur}
-                      style={{ ...T.input, flex: 1, padding: "8px 10px", fontFamily: fonts.mono, fontSize: "12px" }}
-                    />
-                    <button onClick={runApiTest} disabled={testing} data-testid="api-test-run-btn"
-                      style={{ ...T.btnPrimary, padding: "8px 16px", whiteSpace: "nowrap", opacity: testing ? 0.6 : 1 }}>
-                      {testing ? "Querying..." : "Run"}
-                    </button>
-                  </div>
-                  <p style={{ ...T.hint, marginTop: "4px" }}>Enter an endpoint path with real values — e.g. <code style={{ fontFamily: fonts.mono, fontSize: "10px" }}>/api/txs/ad9daf9a...</code> or <code style={{ fontFamily: fonts.mono, fontSize: "10px" }}>/api/health</code></p>
-
-                  {testResult && (
-                    <div data-testid="api-test-result" style={{ marginTop: "10px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                        <span style={{
-                          fontFamily: fonts.mono, fontSize: "11px", fontWeight: "600",
-                          color: testResult.status === 200 ? colors.brand.success : colors.brand.error,
-                          backgroundColor: testResult.status === 200 ? "rgba(34,197,94,0.1)" : "rgba(244,63,94,0.1)",
-                          padding: "2px 8px", borderRadius: "6px"
-                        }}>
-                          {testResult.status || "ERR"}
-                        </span>
-                        <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {testResult.url}
-                        </span>
-                      </div>
-                      <pre style={{
-                        fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary,
-                        backgroundColor: "rgba(0,0,0,0.3)", borderRadius: "8px", padding: "12px",
-                        maxHeight: "300px", overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",
-                        border: `1px solid ${colors.border.subtle}`, margin: 0,
-                      }}>
-                        {testResult.error || (typeof testResult.data === "string" ? testResult.data : JSON.stringify(testResult.data, null, 2))}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* ── External API Keys ── */}
