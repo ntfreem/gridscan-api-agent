@@ -2392,7 +2392,22 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
         return None
 
     if route.get("action") not in ("call_api",):
-        return None
+        # No specific API call needed, but provide a capability summary so
+        # the LLM can answer meta-questions ("how many endpoints?") accurately
+        # instead of relying on potentially incomplete KB documentation.
+        categories = {}
+        for ep in endpoints:
+            cat = ep.get("category", "uncategorized")
+            categories[cat] = categories.get(cat, 0) + 1
+        cat_lines = [f"  {cat}: {cnt} endpoints" for cat, cnt in sorted(categories.items())]
+        capability_ctx = (
+            f"API CAPABILITY SUMMARY (live system, not from documentation):\n"
+            f"This bot has {len(endpoints)} live, executable API endpoints across "
+            f"{len(categories)} categories:\n" + "\n".join(cat_lines) + "\n"
+            "Use these numbers when the user asks about available endpoints or capabilities. "
+            "Do NOT rely on Knowledge Base documentation for endpoint counts."
+        )
+        return capability_ctx, ["API System"]
 
     calls = route.get("calls", [])
     if not calls:
