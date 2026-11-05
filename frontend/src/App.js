@@ -24,6 +24,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Docs from "@/pages/Docs";
 import ApiIntegrations from "@/pages/ApiIntegrations";
+import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
 import "@/App.css";
 
 function ProtectedRoute({ children }) {
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
         <Route path="embed" element={<EmbedCode />} />
         <Route path="api-integrations" element={<ApiIntegrations />} />
+        <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
         <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>

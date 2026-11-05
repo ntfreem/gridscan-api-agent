@@ -18,6 +18,11 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import httpx
 import hashlib
+import contextvars
+import time as _time
+
+# Context variable to track which API key initiated a request (set in /v1/chat endpoints)
+_current_api_key_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar('api_key_id', default=None)
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
@@ -995,42 +1000,53 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     if provider == "openai":
         model = cfg.get("model") or DEFAULT_OPENAI_MODEL
         api_key = cfg.get("openai_api_key") or ""
+        t0 = _time.monotonic()
         try:
             text, in_tok, out_tok = await _call_openai(session_id, user_message, system_prompt, instance_id, model, api_key)
-            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", True, 0, False, None, in_tok, out_tok)
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", True, 0, False, None, in_tok, out_tok, dur)
             return text
         except HTTPException:
-            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "openai_error")
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "openai_error", duration_ms=dur)
             raise
         except Exception as e:
+            dur = int((_time.monotonic() - t0) * 1000)
             logger.error(f"OpenAI call failed: {e}")
-            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "unknown")
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "unknown", duration_ms=dur)
             raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
 
     if provider == "anthropic":
         model_short = cfg.get("model") or DEFAULT_ANTHROPIC_MODEL
         api_key = cfg.get("anthropic_api_key") or ""
+        t0 = _time.monotonic()
         try:
             text, in_tok, out_tok = await _call_anthropic(session_id, user_message, system_prompt, instance_id, model_short, api_key)
-            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", True, 0, False, None, in_tok, out_tok)
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", True, 0, False, None, in_tok, out_tok, dur)
             return text
         except HTTPException:
-            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "anthropic_error")
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "anthropic_error", duration_ms=dur)
             raise
         except Exception as e:
+            dur = int((_time.monotonic() - t0) * 1000)
             logger.error(f"Anthropic call failed: {e}")
-            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "unknown")
+            await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}", f"anthropic:{model_short}", False, 0, False, "unknown", duration_ms=dur)
             raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
 
     if provider == "ollama":
         model = cfg.get("model") or DEFAULT_OLLAMA_MODEL
         base_url = cfg.get("ollama_base_url") or ""
+        t0 = _time.monotonic()
         try:
             text, in_tok, out_tok = await _call_ollama(session_id, user_message, system_prompt, instance_id, model, base_url)
-            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", True, 0, False, None, in_tok, out_tok)
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", True, 0, False, None, in_tok, out_tok, dur)
             return text
         except HTTPException:
-            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", False, 0, False, "ollama_error")
+            dur = int((_time.monotonic() - t0) * 1000)
+            await _log_llm_usage(instance_id, session_id, platform, f"ollama:{model}", f"ollama:{model}", False, 0, False, "ollama_error", duration_ms=dur)
             raise
 
     # ── EMERGENT (default) — legacy retry + Opus→Sonnet fallback ───────────────
@@ -1050,11 +1066,13 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
         return await _call_emergent(session_id, user_message, system_prompt, instance_id, model)
 
     # Try primary model with retries
+    t0 = _time.monotonic()
     for attempt in range(max_retries + 1):
         try:
             text, in_tok, out_tok = await _attempt(primary_model)
+            dur = int((_time.monotonic() - t0) * 1000)
             await _log_llm_usage(instance_id, session_id, platform, primary_model,
-                                 primary_model, True, retry_count, False, None, in_tok, out_tok)
+                                 primary_model, True, retry_count, False, None, in_tok, out_tok, dur)
             return text
         except Exception as e:
             last_error = e  # noqa: F841
@@ -1074,20 +1092,24 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     try:
         used_fallback = True  # noqa: F841
         text, in_tok, out_tok = await _attempt(fallback_model)
+        dur = int((_time.monotonic() - t0) * 1000)
         logger.info(f"Fallback to {fallback_model} succeeded for session {session_id}")
         await _log_llm_usage(instance_id, session_id, platform, fallback_model,
-                             primary_model, True, retry_count, True, error_type, in_tok, out_tok)
+                             primary_model, True, retry_count, True, error_type, in_tok, out_tok, dur)
         return text
     except Exception as e:
+        dur = int((_time.monotonic() - t0) * 1000)
         logger.error(f"Fallback model also failed: {e}")
         await _log_llm_usage(instance_id, session_id, platform, fallback_model,
-                             primary_model, False, retry_count, True, error_type)
+                             primary_model, False, retry_count, True, error_type, duration_ms=dur)
         raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
 async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
                           model_used: str, model_attempted: str, success: bool,
                           retry_count: int, used_fallback: bool, error_type: str,
-                          input_tokens: int = 0, output_tokens: int = 0):
+                          input_tokens: int = 0, output_tokens: int = 0,
+                          duration_ms: int = 0):
     try:
+        api_key_id = _current_api_key_id.get(None)
         await db.llm_usage.insert_one({
             "id": str(uuid.uuid4()),
             "instance_id": instance_id,
@@ -1102,6 +1124,8 @@ async def _log_llm_usage(instance_id: str, session_id: str, platform: str,
             "error_type": error_type,
             "input_tokens": int(input_tokens or 0),
             "output_tokens": int(output_tokens or 0),
+            "duration_ms": int(duration_ms or 0),
+            "api_key_id": api_key_id,
         })
     except Exception as e:
         logger.warning(f"Failed to log LLM usage: {e}")
@@ -1157,24 +1181,31 @@ def _cost_for(model: str, input_tokens: int, output_tokens: int) -> float:
 async def save_conversation(session_id: str, user_message: str, bot_response: str,
                             platform: str = "web", metadata: dict = None, instance_id: str = "default"):
     timestamp = datetime.now(timezone.utc).isoformat()
+    api_key_id = _current_api_key_id.get(None)
     new_messages = [
         {"role": "user", "content": user_message, "timestamp": timestamp},
         {"role": "assistant", "content": bot_response, "timestamp": timestamp}
     ]
     existing = await db.conversations.find_one({"session_id": session_id})
     if existing:
+        update_set = {"updated_at": timestamp}
+        if api_key_id and not existing.get("api_key_id"):
+            update_set["api_key_id"] = api_key_id
         await db.conversations.update_one(
             {"session_id": session_id},
-            {"$push": {"messages": {"$each": new_messages}}, "$set": {"updated_at": timestamp}}
+            {"$push": {"messages": {"$each": new_messages}}, "$set": update_set}
         )
     else:
-        await db.conversations.insert_one({
+        doc = {
             "session_id": session_id, "platform": platform,
             "instance_id": instance_id,
             "messages": new_messages, "is_approved_for_training": False,
             "created_at": timestamp, "updated_at": timestamp,
             "metadata": metadata or {}
-        })
+        }
+        if api_key_id:
+            doc["api_key_id"] = api_key_id
+        await db.conversations.insert_one(doc)
 
 # ==================== STREAMING LLM ====================
 
@@ -2487,6 +2518,174 @@ async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin
     new_status = not doc.get("is_active", True)
     await db.api_keys.update_one({"id": key_id}, {"$set": {"is_active": new_status}})
     return {"is_active": new_status}
+
+# ==================== API KEY ANALYTICS ====================
+
+@api_router.get("/admin/api-key-analytics")
+async def api_key_analytics_list(
+    instance_id: str = Depends(get_instance_access),
+    days: int = 30
+):
+    """Overview analytics for all API keys of an instance."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    keys = await db.api_keys.find({"instance_id": instance_id}, {"_id": 0, "key_hash": 0}).to_list(100)
+
+    result = []
+    for k in keys:
+        kid = k["id"]
+        # Count requests from llm_usage
+        total = await db.llm_usage.count_documents({"api_key_id": kid, "timestamp": {"$gte": cutoff}})
+        success = await db.llm_usage.count_documents({"api_key_id": kid, "success": True, "timestamp": {"$gte": cutoff}})
+        failed = total - success
+        # Token totals
+        pipeline = [
+            {"$match": {"api_key_id": kid, "timestamp": {"$gte": cutoff}}},
+            {"$group": {"_id": None,
+                        "total_input": {"$sum": "$input_tokens"},
+                        "total_output": {"$sum": "$output_tokens"},
+                        "avg_duration": {"$avg": "$duration_ms"}}},
+        ]
+        agg = await db.llm_usage.aggregate(pipeline).to_list(1)
+        tokens = agg[0] if agg else {}
+        result.append({
+            **k,
+            "analytics": {
+                "period_days": days,
+                "total_requests": total,
+                "successful": success,
+                "failed": failed,
+                "total_input_tokens": tokens.get("total_input", 0),
+                "total_output_tokens": tokens.get("total_output", 0),
+                "avg_duration_ms": round(tokens.get("avg_duration", 0)),
+            }
+        })
+    return result
+
+
+@api_router.get("/admin/api-key-analytics/{key_id}")
+async def api_key_analytics_detail(
+    key_id: str,
+    days: int = 30,
+    instance_id: str = Depends(get_instance_access),
+):
+    """Detailed analytics for a single API key."""
+    key_doc = await db.api_keys.find_one({"id": key_id, "instance_id": instance_id}, {"_id": 0, "key_hash": 0})
+    if not key_doc:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    base_match = {"api_key_id": key_id, "timestamp": {"$gte": cutoff}}
+
+    # 1. Requests per day
+    requests_by_day = await db.llm_usage.aggregate([
+        {"$match": base_match},
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "input_tokens": {"$sum": "$input_tokens"},
+            "output_tokens": {"$sum": "$output_tokens"},
+            "avg_duration": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"_id": 1}},
+    ]).to_list(days + 1)
+
+    # 2. Model/endpoint breakdown
+    model_breakdown = await db.llm_usage.aggregate([
+        {"$match": base_match},
+        {"$group": {
+            "_id": "$model_used",
+            "count": {"$sum": 1},
+            "input_tokens": {"$sum": "$input_tokens"},
+            "output_tokens": {"$sum": "$output_tokens"},
+            "avg_duration": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"count": -1}},
+    ]).to_list(20)
+
+    # 3. Platform breakdown
+    platform_breakdown = await db.llm_usage.aggregate([
+        {"$match": base_match},
+        {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]).to_list(10)
+
+    # 4. Success vs failure totals
+    totals_pipeline = [
+        {"$match": base_match},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "total_input_tokens": {"$sum": "$input_tokens"},
+            "total_output_tokens": {"$sum": "$output_tokens"},
+            "avg_duration": {"$avg": "$duration_ms"},
+            "max_duration": {"$max": "$duration_ms"},
+            "min_duration": {"$min": "$duration_ms"},
+        }},
+    ]
+    totals = (await db.llm_usage.aggregate(totals_pipeline).to_list(1))
+    t = totals[0] if totals else {}
+
+    # 5. Error type breakdown
+    error_breakdown = await db.llm_usage.aggregate([
+        {"$match": {**base_match, "success": False, "error_type": {"$ne": None}}},
+        {"$group": {"_id": "$error_type", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]).to_list(10)
+
+    # 6. Recent requests (last 50)
+    recent = await db.llm_usage.find(
+        {"api_key_id": key_id},
+        {"_id": 0, "id": 1, "timestamp": 1, "model_used": 1, "success": 1,
+         "input_tokens": 1, "output_tokens": 1, "duration_ms": 1, "error_type": 1, "platform": 1}
+    ).sort("timestamp", -1).to_list(50)
+
+    # 7. Cost estimation
+    total_cost = 0.0
+    for day in requests_by_day:
+        # Approximate cost — we use per-model breakdown for more accuracy
+        pass
+    # Calculate cost per model
+    cost_by_model = []
+    for m in model_breakdown:
+        model_name = m["_id"] or "unknown"
+        cost = _cost_for(model_name, m.get("input_tokens", 0), m.get("output_tokens", 0))
+        total_cost += cost
+        cost_by_model.append({"model": model_name, "cost": round(cost, 4), "requests": m["count"],
+                              "input_tokens": m.get("input_tokens", 0), "output_tokens": m.get("output_tokens", 0)})
+
+    return {
+        "key": key_doc,
+        "period_days": days,
+        "summary": {
+            "total_requests": t.get("total", 0),
+            "successful": t.get("successful", 0),
+            "failed": t.get("failed", 0),
+            "success_rate": round(t.get("successful", 0) / max(t.get("total", 1), 1) * 100, 1),
+            "total_input_tokens": t.get("total_input_tokens", 0),
+            "total_output_tokens": t.get("total_output_tokens", 0),
+            "avg_duration_ms": round(t.get("avg_duration", 0)),
+            "max_duration_ms": t.get("max_duration", 0),
+            "min_duration_ms": t.get("min_duration", 0),
+            "estimated_cost_usd": round(total_cost, 4),
+        },
+        "requests_by_day": [{"date": d["_id"], "total": d["total"], "successful": d["successful"],
+                             "failed": d["failed"], "input_tokens": d["input_tokens"],
+                             "output_tokens": d["output_tokens"],
+                             "avg_duration_ms": round(d.get("avg_duration", 0))} for d in requests_by_day],
+        "model_breakdown": [{"model": m["_id"], "count": m["count"],
+                             "input_tokens": m.get("input_tokens", 0), "output_tokens": m.get("output_tokens", 0),
+                             "avg_duration_ms": round(m.get("avg_duration", 0))} for m in model_breakdown],
+        "platform_breakdown": [{"platform": p["_id"], "count": p["count"]} for p in platform_breakdown],
+        "error_breakdown": [{"error_type": e["_id"], "count": e["count"]} for e in error_breakdown],
+        "cost_by_model": cost_by_model,
+        "recent_requests": recent,
+    }
+
 async def _authenticate_api_key(request: Request) -> dict:
     """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
     auth = request.headers.get("Authorization", "")
@@ -2620,6 +2819,7 @@ async def external_chat(body: ExternalChatRequest, request: Request):
     Send messages to a bot instance's knowledge base and get AI responses."""
     auth_info = await _authenticate_api_key(request)
     instance_id = auth_info["instance_id"]
+    _current_api_key_id.set(auth_info["key_id"])
     session_id = body.session_id or str(uuid.uuid4())
 
     bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
@@ -2642,6 +2842,7 @@ async def external_chat(body: ExternalChatRequest, request: Request):
                                     instance_id=instance_id, platform="api")
 
     await save_conversation(session_id, body.message, response, platform="api", instance_id=instance_id)
+    _current_api_key_id.set(None)
     return {
         "response": response,
         "session_id": session_id,
@@ -2653,6 +2854,7 @@ async def external_chat_stream(body: ExternalChatRequest, request: Request):
     """Streaming version of /v1/chat. Authenticated via bbk_ API key. Returns SSE."""
     auth_info = await _authenticate_api_key(request)
     instance_id = auth_info["instance_id"]
+    _current_api_key_id.set(auth_info["key_id"])
     session_id = body.session_id or str(uuid.uuid4())
     return StreamingResponse(
         stream_chat_response(session_id, body.message, instance_id, platform="api"),

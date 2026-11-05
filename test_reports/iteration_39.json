@@ -1,0 +1,82 @@
+{
+  "summary": "Completed comprehensive testing of the new API Key Usage Analytics feature. All backend tests passed (16/16 pytest). All frontend tests passed. The feature correctly tracks API key usage including request counts, success/failure rates, token usage, cost tracking, model breakdown, and response time trends.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_api_key_analytics.py",
+    "/app/test_reports/pytest/iter39_api_key_analytics.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "API Key Analytics overview endpoint correctly returns list of keys with analytics (total_requests, successful, failed, tokens, avg_duration_ms)",
+    "API Key Analytics detail endpoint returns comprehensive data: summary, requests_by_day, model_breakdown, platform_breakdown, error_breakdown, cost_by_model, recent_requests",
+    "Authentication and X-Instance-ID header correctly enforced on both endpoints (401/400 without them)",
+    "404 correctly returned for non-existent key_id",
+    "Frontend page has proper data-testid attributes: api-key-analytics-page, key-card-{id}, days-filter, refresh-analytics",
+    "Sidebar correctly shows 'API Key Usage' with Activity icon between 'API Integrations' and 'Embed Code'"
+  ],
+  "updated_files": ["/app/backend/tests/test_api_key_analytics.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "seed_data_creation": "No test data created - used existing API key with label 'mainnet_user_3f0bc1c3dda8f3d8' which has 3 requests of usage data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "API Key Analytics feature fully tested. Backend endpoints: GET /api/admin/api-key-analytics (overview) and GET /api/admin/api-key-analytics/{key_id} (detail). Frontend page at /admin/api-key-analytics shows key cards with stats, detail view with charts and tables. The key 'mainnet_user_3f0bc1c3dda8f3d8' (id: 2f5ae7e6-95f4-4334-9833-f186830dc5ff) has 3 requests of real usage data for testing.",
+  "features_tested": {
+    "backend": {
+      "analytics_overview_auth": "PASS - Returns 401 without auth token",
+      "analytics_overview_instance_id": "PASS - Returns 400/422 without X-Instance-ID header",
+      "analytics_overview_returns_list": "PASS - Returns array of API keys with analytics",
+      "analytics_overview_key_structure": "PASS - Each key has id, key_prefix, is_active, analytics object",
+      "analytics_overview_days_param": "PASS - Accepts days=7,14,30,90 parameter",
+      "analytics_overview_has_usage": "PASS - Key 'mainnet_user_3f0bc1c3dda8f3d8' has 3 requests",
+      "analytics_detail_auth": "PASS - Returns 401 without auth token",
+      "analytics_detail_instance_id": "PASS - Returns 400/422 without X-Instance-ID header",
+      "analytics_detail_not_found": "PASS - Returns 404 for non-existent key_id",
+      "analytics_detail_full_response": "PASS - Returns key, period_days, summary, requests_by_day, model_breakdown, platform_breakdown, error_breakdown, cost_by_model, recent_requests",
+      "analytics_detail_summary_fields": "PASS - Summary has total_requests, successful, failed, success_rate, tokens, duration stats, estimated_cost_usd",
+      "analytics_detail_requests_by_day": "PASS - Array with date, total, successful, failed, tokens, avg_duration_ms",
+      "analytics_detail_model_breakdown": "PASS - Array with model, count, tokens, avg_duration_ms",
+      "analytics_detail_cost_by_model": "PASS - Array with model, cost, requests, tokens",
+      "analytics_detail_days_param": "PASS - Accepts days=7,14,30,90 parameter"
+    },
+    "frontend": {
+      "page_loads": "PASS - data-testid='api-key-analytics-page' found",
+      "page_heading": "PASS - Shows 'API Key Usage' heading",
+      "days_filter": "PASS - data-testid='days-filter' dropdown with default 30 days",
+      "refresh_button": "PASS - data-testid='refresh-analytics' button found",
+      "key_cards": "PASS - 3 key cards displayed with Requests, Success, Avg ms stats",
+      "key_with_usage": "PASS - Key 'mainnet_user_3f0bc1c3dda8f3d8' shows 3 requests, 3 success, 3521ms avg",
+      "detail_stat_cards": "PASS - Total Requests, Successful, Failed, Avg Latency, Input Tokens, Output Tokens, Est. Cost",
+      "detail_sections": "PASS - Requests Over Time, Model Breakdown, Platform, Errors, Cost Breakdown, Recent Requests",
+      "sidebar_navigation": "PASS - 'API Key Usage' with Activity icon between 'API Integrations' and 'Embed Code'"
+    }
+  },
+  "test_credentials": {
+    "admin": {"username": "administrator", "password": "Admin@123"},
+    "instance_id": "88bfae82-2533-4235-968d-b3298fd57073"
+  },
+  "verified_data": {
+    "key_with_usage": {
+      "id": "2f5ae7e6-95f4-4334-9833-f186830dc5ff",
+      "label": "mainnet_user_3f0bc1c3dda8f3d8",
+      "key_prefix": "bbk_6f1671c6",
+      "total_requests": 3,
+      "successful": 3,
+      "failed": 0,
+      "success_rate": "100%",
+      "total_input_tokens": 33864,
+      "total_output_tokens": 329,
+      "avg_duration_ms": 3521,
+      "estimated_cost_usd": 0.1065,
+      "model_used": "claude-sonnet-4-6",
+      "platform": "api"
+    }
+  }
+}

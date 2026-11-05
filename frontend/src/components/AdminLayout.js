@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
-  BarChart2, Zap, Code2, ExternalLink, Bot, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe
+  BarChart2, Zap, Code2, ExternalLink, Bot, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity
 } from "lucide-react";
 import { useState } from "react";
 import { colors, fonts, radius } from "@/theme";
@@ -18,6 +18,7 @@ const ALL_NAV_ITEMS = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { path: "/admin/analytics", label: "Analytics", icon: BarChart2 },
   { path: "/admin/api-integrations", label: "API Integrations", icon: Globe },
+  { path: "/admin/api-key-analytics", label: "API Key Usage", icon: Activity },
   { path: "/admin/embed", label: "Embed Code", icon: Code2 },
 ];
 
