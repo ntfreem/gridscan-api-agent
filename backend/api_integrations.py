@@ -135,12 +135,28 @@ async def safe_api_request(
             except Exception:
                 data = resp.text[:10000]
 
+            is_ok = resp.status_code < 400
+            error_msg = None
+            if not is_ok:
+                # Build a descriptive error message for HTTP errors
+                reason = resp.reason_phrase or ""
+                body_preview = ""
+                if isinstance(data, dict):
+                    body_preview = data.get("message") or data.get("error") or data.get("detail") or ""
+                elif isinstance(data, str):
+                    body_preview = data[:200]
+                if body_preview:
+                    error_msg = f"HTTP {resp.status_code} {reason}: {body_preview}"
+                else:
+                    error_msg = f"HTTP {resp.status_code} {reason}"
+
             return {
-                "success": resp.status_code < 400,
+                "success": is_ok,
                 "status": resp.status_code,
                 "data": data,
                 "duration_ms": duration_ms,
                 "response_size": content_len,
+                "error": error_msg,
             }
     except httpx.TimeoutException:
         return {"success": False, "status": 0, "error": "Request timed out"}

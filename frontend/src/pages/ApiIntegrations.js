@@ -287,6 +287,11 @@ function EndpointRow({ ep, integrationId, onToggle, onTest }) {
                     </span>
                   </div>
                   {testResult.error && <p style={{ fontSize: "11px", color: colors.brand.error, margin: "4px 0 0" }}>{testResult.error}</p>}
+                  {!testResult.success && !testResult.error && (
+                    <p style={{ fontSize: "11px", color: colors.brand.error, margin: "4px 0 0" }}>
+                      HTTP {testResult.status || "?"} — The API returned an error. Check the response below for details.
+                    </p>
+                  )}
                   {testResult.data && (
                     <pre style={{
                       marginTop: "6px", padding: "8px", backgroundColor: colors.bg.base,
@@ -469,7 +474,9 @@ function IntegrationCard({ intg, onRefresh }) {
         }}>
           {connResult.success ? <CheckCircle size={14} color={colors.brand.success} /> : <XCircle size={14} color={colors.brand.error} />}
           <span style={{ fontFamily: fonts.body, fontSize: "12px", color: connResult.success ? colors.brand.success : colors.brand.error }}>
-            {connResult.success ? `Connected (HTTP ${connResult.status}, ${connResult.duration_ms}ms)` : `Failed: ${connResult.error}`}
+            {connResult.success
+              ? `Connected (HTTP ${connResult.status}, ${connResult.duration_ms}ms)`
+              : `Failed: ${connResult.error || `HTTP ${connResult.status || "unknown"} — server returned an error`}`}
           </span>
         </div>
       )}
