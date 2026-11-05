@@ -17,7 +17,7 @@ from api_integrations import (
     encrypt_value, decrypt_value,
     parse_openapi_spec, parse_gridscan_reference,
     safe_api_request, build_endpoint_selection_context, build_schema_context,
-    MAX_API_CALLS_PER_MESSAGE,
+    MAX_API_CALLS_PER_MESSAGE, MAX_RESPONSE_SIZE, MAX_DOC_RESPONSE_SIZE,
 )
 
 logger = logging.getLogger("bridgebot.api_integrations")
@@ -182,27 +182,53 @@ async def test_connection(integration_id: str, request: Request):
     now = datetime.now(timezone.utc).isoformat()
 
     # Build a prioritised list of URLs to probe:
-    # 1. The first enabled GET endpoint (most reliable — it's a real route)
-    # 2. The documentation URL (usually valid if discovery worked)
-    # 3. Common API health paths
-    # 4. The base URL root (least likely to work)
+    # 1. First enabled GET endpoint WITHOUT path params (safest)
+    # 2. First enabled GET endpoint WITH path params (using examples/defaults)
+    # 3. The documentation URL (allows larger responses)
+    # 4. Common API health paths
+    # 5. The base URL root (least likely to work)
     probes = []
+    import re as _re
 
-    # Add the first enabled GET endpoint
-    first_ep = await db.api_endpoints.find_one(
-        {"integration_id": integration_id, "instance_id": instance_id, "enabled": True, "method": "GET"},
+    # Prefer parameter-free endpoints first
+    param_free_ep = await db.api_endpoints.find_one(
+        {"integration_id": integration_id, "instance_id": instance_id,
+         "enabled": True, "method": "GET",
+         "path": {"$not": {"$regex": r"\{"}}},
         sort=[("path", 1)]
     )
-    if first_ep:
-        ep_path = first_ep["path"]
-        # Replace path params with placeholders that won't break
-        import re as _re
-        safe_path = _re.sub(r"\{[^}]+\}", "test", ep_path)
-        probes.append({"url": base + safe_path, "label": f"GET {ep_path}", "method": "GET"})
+    if param_free_ep:
+        probes.append({"url": base + param_free_ep["path"], "label": f"GET {param_free_ep['path']}", "method": "GET"})
 
-    # Add doc URL
+    # Then parameterised endpoints with valid example values
+    first_ep = await db.api_endpoints.find_one(
+        {"integration_id": integration_id, "instance_id": instance_id,
+         "enabled": True, "method": "GET"},
+        sort=[("path", 1)]
+    )
+    if first_ep and first_ep.get("id") != (param_free_ep or {}).get("id"):
+        ep_path = first_ep["path"]
+        safe_path = ep_path
+        path_params = _re.findall(r"\{([^}]+)\}", ep_path)
+        if path_params:
+            # Try to find example values from parameter definitions
+            for pname in path_params:
+                pdef = next((p for p in (first_ep.get("parameters") or []) if p.get("name") == pname), {})
+                example_val = pdef.get("example") or pdef.get("default")
+                if not example_val:
+                    # Use a type-appropriate placeholder that won't break URL routing
+                    example_val = "1" if pdef.get("type") in ("integer", "number") else "test"
+                safe_path = safe_path.replace(f"{{{pname}}}", str(example_val))
+            probes.append({
+                "url": base + safe_path,
+                "label": f"GET {ep_path} (example params)",
+                "method": "GET",
+                "expect_404": True,  # Placeholder params may 404 — that's OK for connectivity
+            })
+
+    # Add doc URL (with larger size limit)
     if doc_url:
-        probes.append({"url": doc_url, "label": "Documentation URL", "method": "GET"})
+        probes.append({"url": doc_url, "label": "Documentation URL", "method": "GET", "is_doc": True})
 
     # Common health paths
     for path in ["/health", "/api/health", "/api/v1/health", "/api/status", "/"]:
@@ -212,7 +238,12 @@ async def test_connection(integration_id: str, request: Request):
     results = []
     best = None
     for probe in probes:
-        result = await safe_api_request(probe["method"], probe["url"], headers=headers, params=params, timeout=8.0)
+        # Documentation probes use larger size limit
+        size_limit = MAX_DOC_RESPONSE_SIZE if probe.get("is_doc") else MAX_RESPONSE_SIZE
+        result = await safe_api_request(
+            probe["method"], probe["url"], headers=headers, params=params,
+            timeout=8.0, max_size=size_limit,
+        )
         entry = {
             "url": probe["url"],
             "label": probe["label"],
@@ -234,6 +265,15 @@ async def test_connection(integration_id: str, request: Request):
                 **entry,
                 "success": True,  # Server is reachable
                 "error": f"Server reachable (HTTP {result['status']}). Authentication may need updating.",
+            }
+            break
+        # For probes with placeholder params, 400/404 means the API is reachable
+        # (it's responding with a validation error, not a connectivity failure)
+        if probe.get("expect_404") and result.get("status") in (400, 404, 422):
+            best = {
+                **entry,
+                "success": True,
+                "error": f"Server reachable (HTTP {result['status']} — expected with example parameters).",
             }
             break
         # Any response other than 404 is also meaningful

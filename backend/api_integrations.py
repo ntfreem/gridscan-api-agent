@@ -96,12 +96,14 @@ def _is_safe_url(url: str) -> tuple[bool, str]:
                 return False, f"Resolved to blocked address {ip}"
     return True, "OK"
 
-MAX_RESPONSE_SIZE = 500_000  # 500KB
+MAX_RESPONSE_SIZE = 500_000  # 500KB — ordinary API execution
+MAX_DOC_RESPONSE_SIZE = 2_000_000  # 2MB — OpenAPI / documentation downloads
 REQUEST_TIMEOUT = 20.0
 MAX_API_CALLS_PER_MESSAGE = 5
 
 async def safe_api_request(
-    method: str, url: str, headers: dict = None, params: dict = None, timeout: float = REQUEST_TIMEOUT
+    method: str, url: str, headers: dict = None, params: dict = None,
+    timeout: float = REQUEST_TIMEOUT, max_size: int = MAX_RESPONSE_SIZE
 ) -> dict:
     """Execute an SSRF-safe outbound HTTP request. Returns structured result."""
     if method.upper() != "GET":
@@ -125,9 +127,9 @@ async def safe_api_request(
                 return {"success": False, "status": 0, "error": f"Redirect blocked: {reason2}"}
 
             content_len = len(resp.content)
-            if content_len > MAX_RESPONSE_SIZE:
+            if content_len > max_size:
                 return {"success": False, "status": resp.status_code,
-                        "error": f"Response too large ({content_len} bytes, max {MAX_RESPONSE_SIZE})"}
+                        "error": f"Response too large ({content_len} bytes, max {max_size})"}
 
             duration_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
             try:

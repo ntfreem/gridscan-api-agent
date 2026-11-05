@@ -46,18 +46,22 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - Emergent Universal Key as default provider
 
 ### Phase 4 — API Intelligence Diagnostics (Nov 2026)
-- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation. Calculated from stored data — no API/LLM calls. Generic schemas (type: object without properties) correctly NOT counted as covered.
-- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints using real routing prompt.
-- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against stored schema.
-- **Unified KB+API Reasoning Test** (LLM + API): Full pipeline trace — KB retrieval → endpoint discovery → LLM selection → permission validation → API execution → schema retrieval → context assembly → answer generation. LLM context verification shows what was included/missing.
-- **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test.
-- **Diagnostic History**: Timestamped records of all diagnostic runs with status, duration, error details.
+- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation
+- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints
+- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against schema
+- **Unified KB+API Reasoning Test** (LLM + API): Full pipeline trace with LLM context verification
+- **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test
+- **Diagnostic History**: Timestamped records of all diagnostic runs
 
 ### Phase 4.1 — Diagnostics Accuracy Fix (Nov 2026)
-- **Investigation**: Deep analysis of GridScan's OpenAPI spec revealed all 90 endpoints return generic `{type: "object", additionalProperties: true}` schemas with no field properties defined. No supplementary reference documentation exists.
-- **Importer verified**: BridgeBot's OpenAPI importer correctly and faithfully imports all available documentation from the published spec. No data is lost during import.
-- **Bug fix**: Diagnostic `_analyse_response_schemas` no longer counts `{type: "object"}` without `properties` as "covered". Added `generic_count` metric and `no_fields_defined` indicator for field descriptions.
-- **Result**: Overall score corrected from 51 → 26 (accurately reflecting the documentation gap).
+- Generic schemas (`{type: "object"}` without properties) correctly NOT counted as covered
+- Contextual warnings for "no fields defined" in field description metrics
+
+### Phase 4.2 — Response Size Limits & Connection Probing Fix (Nov 2026)
+- **Root cause**: `safe_api_request` enforced a hard 500KB limit on ALL responses. The enriched GridScan OpenAPI spec is 578KB, which caused "Response too large" failures on test-connection (which probed the doc URL).
+- **Fix**: Introduced `MAX_DOC_RESPONSE_SIZE` (2MB) for documentation downloads; `MAX_RESPONSE_SIZE` (500KB) preserved for ordinary API execution.
+- **Connection probing**: Now prefers parameter-free endpoints (e.g., `/api/assets`) over parameterised ones (e.g., `/api/accounts/{stake_address}`). When parameterised endpoints must be used, extracts example/default values from the parameter schema instead of using "test" as a placeholder. Distinguishes expected 400/404 validation failures from actual connectivity failures.
+- **Regression tests**: 14 new tests covering large OpenAPI docs, normal API size limits, schema validation, diagnostic accuracy, and doc import.
 
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
