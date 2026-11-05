@@ -52,6 +52,9 @@ All 4 chat paths (streaming, non-streaming, v1 API, Discord) returned a hard-cod
 **Bug 3 — Endpoint listing truncation hid 60+ endpoints from LLM:**
 With enriched documentation, the endpoint listing grew to 33,745 chars but was truncated at 12,000. All `txs`, `pools`, `scripts` and later-alphabet endpoints were invisible. Fixed: compact listing format (33K → 10K chars) drops optional parameter details and descriptions, keeping only path params and required query params. Raised limit to 30K.
 
+**Bug 4 — LLM recites curl commands from KB instead of executing APIs (P0):**
+`build_system_prompt` only checked the legacy `bot_config.api_query_enabled` flag to decide whether to tell the LLM it can call APIs. Newer instances use the `api_integrations` collection (checked via `has_api_integrations`), but this was never passed into the function. Result: the LLM was never told it could make API calls, so when KB contained API documentation with curl examples, it regurgitated them. Fixed: added `has_api_integrations` parameter to `build_system_prompt`, unified the gate (`api_query_enabled OR has_api_integrations`), added explicit anti-hallucination guardrails ("DO NOT recite curl commands or API docs"), updated all 4 call sites (streaming, non-streaming, v1 API, Discord). Also removed the harmful fallback text "help the user with documentation and curl commands instead."
+
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)

@@ -504,12 +504,12 @@ async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> s
     if not parts:
         return ""
     return "\n\n---\n\n".join(parts[:5])
-def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict", api_context: str = "", api_sources: list = None) -> str:
+def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict", api_context: str = "", api_sources: list = None, has_api_integrations: bool = False) -> str:
     name = bot_config.get("name", "Assistant")
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
     custom_instructions = bot_config.get("custom_instructions", "")
     tone_instructions = bot_config.get("tone_instructions", "")
-    api_enabled = bot_config.get("api_query_enabled", False)
+    api_enabled = bot_config.get("api_query_enabled", False) or has_api_integrations
 
     parts = [f"You are {name}. {persona}"]
 
@@ -609,19 +609,27 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
             "RULE: NEVER fabricate data. NEVER generate fake JSON, API responses, or made-up numbers. "
             "Only present data that comes from the API results or Knowledge Base provided above."
         )
-    elif bot_config.get("api_query_enabled"):
+    elif api_enabled:
         parts.append(
             "IMPORTANT — LIVE API CAPABILITY:\n"
-            "You can query configured APIs to get live data. When a user asks for real-time data, "
+            "You have live API integrations configured. The system will automatically execute API calls "
+            "on the user's behalf and provide you with real data. When a user asks for real-time data, "
             "ask them for the specific identifier (hash, address, etc.) if they haven't provided one, "
             "and the system will make the API call for you.\n"
             "NEVER fabricate or invent data. If you present data, it must come from an actual API response "
-            "provided to you. NEVER generate fake JSON, made-up hashes, or invented numbers."
+            "provided to you. NEVER generate fake JSON, made-up hashes, or invented numbers.\n\n"
+            "CRITICAL — DO NOT RECITE API DOCUMENTATION:\n"
+            "Even if the Knowledge Base contains API documentation, curl commands, code examples, "
+            "or instructional guides on how to call APIs, you must NEVER recite those to the user. "
+            "Do NOT tell users to use curl, make HTTP requests, or call APIs themselves. "
+            "Do NOT say 'I cannot make live API calls'. You CAN — the system handles it for you. "
+            "Instead, ask the user for the required parameter (e.g., a transaction hash, an address) "
+            "and let the system execute the API call automatically."
         )
     else:
         parts.append(
             "RULE: NEVER fabricate data. NEVER generate fake JSON, API responses, or made-up numbers. "
-            "If you don't have specific data, help the user with documentation and curl commands instead."
+            "If you don't have specific data, let the user know you don't have that information."
         )
 
     # Inject live API context when present — unified KB + API reasoning
@@ -634,7 +642,9 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
             "Combine this live data with relevant Knowledge Base information to form a single, "
             "coherent answer. Do NOT return raw JSON — summarize the data in natural language.\n"
             "If an API call returned an error, explain what went wrong using the documented error codes.\n"
-            "NEVER fabricate data beyond what is shown below.\n\n"
+            "NEVER fabricate data beyond what is shown below.\n"
+            "NEVER recite curl commands, code snippets, or API usage instructions from the Knowledge Base. "
+            "The API has already been called for the user — just present the results.\n\n"
             f"{api_context}\n\n"
             f"Sources: {source_list}"
         )
@@ -1427,7 +1437,8 @@ async def stream_chat_response(session_id: str, user_message: str, instance_id: 
     # LLM streaming — unified KB + API context
     tone = await get_tone_examples_text(instance_id, bot_config)
     system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"),
-                                       api_context=api_context, api_sources=api_sources)
+                                       api_context=api_context, api_sources=api_sources,
+                                       has_api_integrations=has_api_integrations)
     cfg = await _resolve_llm_config(instance_id)
     provider = (cfg.get("provider") or "emergent").lower()
 
@@ -1771,7 +1782,8 @@ async def start_shared_discord_bot(token: str):
                     if api_result:
                         api_context, api_sources = api_result
                     system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"),
-                                                       api_context=api_context, api_sources=api_sources)
+                                                       api_context=api_context, api_sources=api_sources,
+                                                       has_api_integrations=has_api_integrations)
                     async with message.channel.typing():
                         response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
                     # Passive mode: detect [SKIP] sentinel and stay silent
@@ -2457,7 +2469,8 @@ async def send_chat_message(body: ChatMessage):
         tone = await get_tone_examples_text(instance_id, bot_config)
         system_prompt = build_system_prompt(bot_config, knowledge, tone,
                                            knowledge_gate=bot_config.get("knowledge_gate", "strict"),
-                                           api_context=api_context, api_sources=api_sources)
+                                           api_context=api_context, api_sources=api_sources,
+                                           has_api_integrations=has_api_integrations)
         response = await call_claude(session_id, body.message, system_prompt,
                                     instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
@@ -2891,7 +2904,8 @@ async def external_chat(body: ExternalChatRequest, request: Request):
         tone = await get_tone_examples_text(instance_id, bot_config)
         gate = bot_config.get("knowledge_gate", "strict")
         system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate,
-                                           api_context=api_context, api_sources=api_sources)
+                                           api_context=api_context, api_sources=api_sources,
+                                           has_api_integrations=has_api_integrations)
         response = await call_claude(session_id, body.message, system_prompt,
                                     instance_id=instance_id, platform="api")
 
