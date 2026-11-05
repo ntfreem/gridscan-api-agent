@@ -28,6 +28,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
 
 import api_integrations_routes
+import api_diagnostics_routes
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
 ROOT_DIR = Path(__file__).parent
@@ -327,6 +328,24 @@ async def _get_instance_from_request(request):
 
 api_integrations_routes.init(db, _get_instance_from_request)
 api_router.include_router(api_integrations_routes.router)
+
+# Diagnostics routes — initialised with real pipeline functions (deferred until they're defined)
+def _init_diagnostics():
+    api_diagnostics_routes.init(
+        db, _get_instance_from_request,
+        call_claude_fn=call_claude,
+        search_knowledge_fn=search_knowledge,
+        build_system_prompt_fn=build_system_prompt,
+        get_tone_examples_fn=get_tone_examples_text,
+        api_route_prompt_str=API_ROUTE_PROMPT,
+        get_enabled_endpoints_fn=api_integrations_routes.get_enabled_endpoints_for_instance,
+        execute_selected_endpoints_fn=api_integrations_routes.execute_selected_endpoints,
+        execute_endpoint_fn=api_integrations_routes.execute_endpoint,
+        build_auth_headers_fn=api_integrations_routes._build_auth_headers,
+        build_auth_params_fn=api_integrations_routes._build_auth_params,
+    )
+api_router.include_router(api_diagnostics_routes.router)
+
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
     """Admin tool to test an API endpoint directly. Returns raw JSON response."""
@@ -1845,6 +1864,11 @@ async def startup_event():
     if bot_token:
         _shared_discord_task = asyncio.create_task(start_shared_discord_bot(bot_token))
         logger.info(f"Starting shared Discord bot ({len(active_configs)} active instances)")
+
+    # Initialise diagnostics routes (deferred — all pipeline functions must exist first)
+    _init_diagnostics()
+    await db.api_diagnostics_history.create_index([("instance_id", 1), ("timestamp", -1)])
+    await db.api_diagnostics_history.create_index([("integration_id", 1), ("timestamp", -1)])
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task

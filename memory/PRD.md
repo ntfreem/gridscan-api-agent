@@ -1,65 +1,62 @@
 # BridgeBot — Product Requirements Document
 
-## Overview
-BridgeBot is a multi-tenant SaaS chatbot platform connecting AI bots to Discord and web interfaces. Each instance has its own Knowledge Base, API integrations, conversation history, and LLM provider configuration.
+## Product Overview
+Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with Knowledge Base, multi-API integrations, and unified AI reasoning.
+
+## Core Requirements
+- Multi-tenant bot instance management with admin dashboard
+- Knowledge Base ingestion (text, PDF, web scrape) with vector search
+- Discord and Web chat interfaces with SSE streaming
+- Unified AI reasoning: LLM receives KB context + live API data simultaneously
+- Multi-API integration management with endpoint CRUD
+- BYOK OpenAI support + Emergent Universal Key fallback
 
 ## Architecture
-- **Backend**: FastAPI — `server.py` (main), `api_integrations.py`, `api_integrations_routes.py`
-- **Frontend**: React — `/app/frontend/src/`
-- **Database**: MongoDB
-- **LLM Providers**: Emergent (default), Anthropic Direct, OpenAI Direct, Ollama
-- **Messaging**: Discord.py, SSE streaming
+- **Backend**: FastAPI on port 8001, MongoDB
+- **Frontend**: React SPA on port 3000
+- **AI**: Emergent Universal Key (Claude/GPT), BYOK OpenAI
+- **Integrations**: Discord.py, external REST APIs
 
-## Implemented Features
+## Key DB Collections
+- `api_integrations`: integration configs with encrypted credentials
+- `api_endpoints`: endpoint definitions with schemas, parameters, docs
+- `api_diagnostics_history`: diagnostic run results with timestamps, pass/fail
+- `llm_usage`: LLM token tracking per API key
+- `api_request_logs`: external API call logs
 
-### Auth & Multi-tenancy
-- JWT admin auth, multi-instance workspaces, user assignment, API keys (bbk_ prefix)
+## Implemented Features (Completed)
 
-### Knowledge Base
-- File upload (PDF/TXT/DOCX/CSV), web scraping, manual entries, priority retrieval, bulk delete, Knowledge Gate Protocol
+### Phase 1 — Core Platform
+- Multi-tenant bot instances with admin/user roles
+- Knowledge Base ingestion and vector search
+- Discord bot integration with shared bot architecture
+- Web chat widget with SSE streaming
+- Bot configuration (personality, knowledge gate, tone examples)
 
-### Chat System
-- Web chat (SSE streaming + non-streaming), Discord (passive/scripted mode), External API (`/v1/chat`, `/v1/chat/stream`)
-- Markdown rendering, copy-code buttons, typing indicators, session management
+### Phase 2 — API Integration System
+- Multi-API integration CRUD with encrypted credentials
+- Endpoint management with OpenAPI/Swagger auto-discovery
+- Smart connection probing (tests doc URLs and endpoints, not just root)
+- Unified AI orchestrator: LLM routes questions → selects endpoints → executes APIs → merges KB+API context
+- API request logging and activity tracking
 
-### Embed Widget
-- Popup, Inline, Fullpage modes. Custom CSS URL, brand color customization
+### Phase 3 — LLM Configuration
+- BYOK OpenAI API keys with custom model selection
+- API key analytics dashboard (token usage, costs, latency)
+- Emergent Universal Key as default provider
 
-### API Integrations (Phases 1-4)
-- Multi-API per instance, CRUD, OpenAPI endpoint discovery, endpoint enable/disable
-- Schema/example/error viewers, connection/endpoint testing, encrypted credentials (Fernet)
-- Activity logging with endpoint_path, stats aggregation
-
-### Unified AI Intelligence
-- `_try_api_query` returns (context, sources) tuple
-- `build_system_prompt` accepts api_context/api_sources
-- All 4 chat entry points use unified KB+API reasoning
-- Endpoint permissions enforced (enabled=True filter)
-
-### LLM Provider System (BYOK)
-- Emergent Universal Key, Anthropic Direct, OpenAI Direct, Ollama
-- Per-instance config, model allowlists, streaming for all providers
-- Duration tracking on all LLM calls
-
-### API Key Usage Analytics (NEW)
-- Dedicated analytics page at /admin/api-key-analytics
-- Per-key tracking via contextvars (api_key_id on llm_usage + conversations)
-- Overview: all keys with request count, success, avg latency
-- Detail view per key: requests over time (bar chart), model breakdown, platform breakdown, error breakdown, cost by model, recent requests list
-- Summary stats: total requests, success rate, input/output tokens, avg/min/max latency, estimated cost
-- Time period filter (7/14/30/90 days)
-
-### Analytics
-- LLM cost tracking per model (Anthropic + OpenAI pricing tables)
-- Token usage, API activity per integration, conversation analytics
-
-## Key Database Collections
-- `users`, `bot_instances` (with llm_config), `bot_config`, `knowledge_sources`
-- `conversations` (now includes api_key_id), `api_integrations`, `api_endpoints`
-- `api_request_logs` (now includes endpoint_path), `api_keys`
-- `llm_usage` (now includes api_key_id + duration_ms)
+### Phase 4 — API Intelligence Diagnostics (Nov 2026)
+- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation. Calculated from stored data — no API/LLM calls.
+- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints using real routing prompt. Shows candidate endpoints, selected endpoints, permission validation, correctness evaluation.
+- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against stored schema. Shows field-level validation, doc source, schema context preview.
+- **Unified KB+API Reasoning Test** (LLM + API): Full pipeline trace — KB retrieval → endpoint discovery → LLM selection → permission validation → API execution → schema retrieval → context assembly → answer generation. LLM context verification shows what was included/missing.
+- **LLM Context Verification**: Inspects actual assembled LLM prompt for KB content, API responses, endpoint info, schema info, field descriptions, units, error definitions, anti-fabrication rules. Redacted preview available.
+- **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test.
+- **Diagnostic History**: Timestamped records of all diagnostic runs with status, duration, error details.
+- **Doc Source Identification**: Shows whether endpoint docs come from OpenAPI, custom references, or manual config.
+- **Frontend**: Diagnostics panel per integration with 5 collapsible sections + instance summary bar. Clear cost tags (FREE/LLM TOKENS/API CALL/LLM+API).
 
 ## Backlog
-- P2: Refactor server.py into modular route files
-- P2: APP_MODE env splitting
-- P2: Multi-server Discord
+- P2: Refactor server.py into modular route files (/routes, /models, /services)
+- P2: APP_MODE env splitting (worker vs api)
+- P2: Multi-server Discord feature

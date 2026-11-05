@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, Save, X, RefreshCw, Play, ChevronDown, ChevronRight,
   Globe, Key, Lock, Zap, Search, ToggleLeft, ToggleRight, Activity,
-  FileText, AlertTriangle, CheckCircle, XCircle, ExternalLink, Copy, Eye, EyeOff
+  FileText, AlertTriangle, CheckCircle, XCircle, ExternalLink, Copy, Eye, EyeOff, Shield
 } from "lucide-react";
 import { colors, fonts, T, radius, onFocus, onBlur } from "../theme";
+import ApiDiagnostics, { InstanceDiagnosticsSummary } from "./ApiDiagnostics";
 
 const AUTH_TYPES = [
   { value: "none", label: "No Authentication" },
@@ -328,6 +329,7 @@ function IntegrationCard({ intg, onRefresh }) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState(null);
   const [stats, setStats] = useState(null);
+  const [diagOpen, setDiagOpen] = useState(false);
 
   const loadEndpoints = useCallback(async () => {
     try {
@@ -451,6 +453,12 @@ function IntegrationCard({ intg, onRefresh }) {
           )}
           <button style={T.btnGhost} onClick={() => setShowEndpoints(!showEndpoints)} title="View Endpoints">
             <FileText size={13} /> Endpoints
+          </button>
+          <button data-testid={`intg-diagnostics-${intg.id}`} style={{
+            ...T.btnGhost,
+            ...(diagOpen ? { borderColor: colors.brand.primary, color: colors.brand.primary, backgroundColor: `${colors.brand.primary}10` } : {}),
+          }} onClick={() => setDiagOpen(!diagOpen)} title="AI Diagnostics">
+            <Shield size={13} /> Diagnostics
           </button>
           <button style={T.btnGhost} onClick={loadActivity} title="Activity Log">
             <Activity size={13} />
@@ -591,6 +599,13 @@ function IntegrationCard({ intg, onRefresh }) {
           )}
         </div>
       )}
+
+      {/* AI Diagnostics Panel */}
+      {diagOpen && (
+        <div style={{ marginTop: "14px" }}>
+          <ApiDiagnostics integrationId={intg.id} integrationName={intg.name} />
+        </div>
+      )}
     </div>
   );
 }
@@ -657,6 +672,9 @@ export default function ApiIntegrations() {
           {showAdd ? "Cancel" : "Add Integration"}
         </button>
       </div>
+
+      {/* Instance-Wide Diagnostics Summary */}
+      <InstanceDiagnosticsSummary />
 
       {/* Add Form */}
       {showAdd && (
