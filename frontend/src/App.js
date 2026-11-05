@@ -23,6 +23,7 @@ import Users from "@/pages/Users";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Docs from "@/pages/Docs";
+import ApiIntegrations from "@/pages/ApiIntegrations";
 import "@/App.css";
 
 function ProtectedRoute({ children }) {
@@ -72,6 +73,7 @@ function AppRoutes() {
         <Route path="discord" element={<DiscordSettings />} />
         <Route path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
         <Route path="embed" element={<EmbedCode />} />
+        <Route path="api-integrations" element={<ApiIntegrations />} />
         <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>

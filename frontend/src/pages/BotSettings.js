@@ -20,11 +20,15 @@ export default function BotSettings() {
     provider: "emergent",
     model: "",
     anthropic_api_key: "",
+    openai_api_key: "",
     ollama_base_url: "",
     anthropic_api_key_set: false,
     anthropic_api_key_preview: "",
+    openai_api_key_set: false,
+    openai_api_key_preview: "",
     allowed_anthropic_models: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
-    default_models: { emergent: "claude-sonnet-4-5-20251101", anthropic: "claude-sonnet-4-5", ollama: "llama3.1" },
+    allowed_openai_models: ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini"],
+    default_models: { emergent: "claude-sonnet-4-6", anthropic: "claude-sonnet-4-6", openai: "gpt-4o", ollama: "llama3.1" },
   });
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
@@ -43,7 +47,7 @@ export default function BotSettings() {
   useEffect(() => {
     if (!instanceId) return;
     api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
-      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
+      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
     }).catch(() => {});
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
     api.get(`/admin/api-keys`).then(r => setApiKeys(r.data || [])).catch(() => {});
@@ -55,6 +59,7 @@ export default function BotSettings() {
       model: llm.model || null,
       // Send key only if the admin typed a new one; backend preserves existing on empty
       anthropic_api_key: llm.anthropic_api_key.trim() || null,
+      openai_api_key: llm.openai_api_key.trim() || null,
       ollama_base_url: llm.ollama_base_url || null,
     };
     setLlmSaving(true); setLlmTestResult(null);
@@ -63,7 +68,7 @@ export default function BotSettings() {
       toast.success(`Provider saved: ${llm.provider}`);
       // Reload to refresh masked key preview
       const r = await api.get(`/admin/instances/${instanceId}/llm-config`);
-      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "" }));
+      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save LLM config");
     } finally { setLlmSaving(false); }
@@ -223,7 +228,7 @@ export default function BotSettings() {
               <Cpu size={14} color={colors.brand.light} />
               <p style={{ ...T.sectionTitle, margin: 0 }}>LLM Provider</p>
             </div>
-            <p style={T.sectionSub}>Pick where this instance&apos;s AI calls go. <strong>Emergent</strong> uses the platform&apos;s Universal Key (default). <strong>Anthropic Direct</strong> bills against your own Anthropic account. <strong>Ollama</strong> calls a self-hosted model.</p>
+            <p style={T.sectionSub}>Pick where this instance&apos;s AI calls go. <strong>Emergent</strong> uses the platform&apos;s Universal Key (default). <strong>Anthropic Direct</strong> / <strong>OpenAI Direct</strong> bill against your own accounts. <strong>Ollama</strong> calls a self-hosted model.</p>
 
             <label style={T.label}>Provider</label>
             <select
@@ -234,6 +239,7 @@ export default function BotSettings() {
             >
               <option value="emergent">Emergent Universal Key (default)</option>
               <option value="anthropic">Anthropic Direct (BYO key)</option>
+              <option value="openai">OpenAI Direct (BYO key)</option>
               <option value="ollama">Ollama (self-hosted)</option>
             </select>
 
@@ -247,6 +253,18 @@ export default function BotSettings() {
               >
                 <option value="">{`Default (${llm.default_models?.anthropic})`}</option>
                 {(llm.allowed_anthropic_models || []).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            ) : llm.provider === "openai" ? (
+              <select
+                value={llm.model || ""}
+                onChange={e => setLlm(p => ({ ...p, model: e.target.value }))}
+                data-testid="llm-model-select"
+                style={{ ...T.input, cursor: "pointer" }}
+              >
+                <option value="">{`Default (${llm.default_models?.openai})`}</option>
+                {(llm.allowed_openai_models || []).map(m => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
@@ -264,6 +282,7 @@ export default function BotSettings() {
             )}
             <p style={T.hint}>
               {llm.provider === "anthropic" && "Allowed: Haiku 4.5 (cheapest), Sonnet 4.5 (balanced), Opus 4.5 (best quality)."}
+              {llm.provider === "openai" && "Choose from available OpenAI models. GPT-4o is a great starting point."}
               {llm.provider === "emergent" && "Model name only — Emergent supplies the key automatically. Leave blank to use Opus → Sonnet fallback."}
               {llm.provider === "ollama" && "Any model installed on your Ollama server."}
             </p>
@@ -288,6 +307,25 @@ export default function BotSettings() {
                 />
                 <p style={T.hint}>
                   Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" style={{ color: colors.brand.light }}>console.anthropic.com</a>. Leave blank to keep the existing saved key.
+                </p>
+              </>
+            )}
+
+            {llm.provider === "openai" && (
+              <>
+                <label style={{ ...T.label, marginTop: "14px" }}>OpenAI API Key</label>
+                <input
+                  type="password"
+                  value={llm.openai_api_key}
+                  onChange={e => setLlm(p => ({ ...p, openai_api_key: e.target.value }))}
+                  placeholder={llm.openai_api_key_set ? `Current: ${llm.openai_api_key_preview} — leave blank to keep` : "sk-…"}
+                  autoComplete="new-password"
+                  data-testid="llm-openai-key-input"
+                  onFocus={onFocus} onBlur={onBlur}
+                  style={T.input}
+                />
+                <p style={T.hint}>
+                  Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={{ color: colors.brand.light }}>platform.openai.com</a>. Leave blank to keep the existing saved key.
                 </p>
               </>
             )}

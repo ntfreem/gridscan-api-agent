@@ -22,6 +22,9 @@ import hashlib
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
 
+import api_integrations_routes
+from api_integrations import build_endpoint_selection_context, build_schema_context
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -73,6 +76,21 @@ ALLOWED_ANTHROPIC_MODELS = {
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 DEFAULT_OLLAMA_MODEL = "llama3.1"
 DEFAULT_EMERGENT_MODEL = "claude-sonnet-4-6"
+
+ALLOWED_OPENAI_MODELS = {
+    "gpt-4o": "gpt-4o",
+    "gpt-4.1": "gpt-4.1",
+    "gpt-4.1-mini": "gpt-4.1-mini",
+    "gpt-5": "gpt-5",
+    "gpt-5-mini": "gpt-5-mini",
+    "gpt-5.4": "gpt-5.4",
+    "gpt-5.4-mini": "gpt-5.4-mini",
+    "gpt-5.5": "gpt-5.5",
+    "gpt-5.6-terra": "gpt-5.6-terra",
+    "o3": "o3",
+    "o4-mini": "o4-mini",
+}
+DEFAULT_OPENAI_MODEL = "gpt-4o"
 
 # Per-instance Discord bot tracking
 # Guild-to-instance mapping for shared token routing
@@ -184,9 +202,10 @@ class BotConfigUpdate(BaseModel):
     api_key_value: Optional[str] = None
 class LLMProviderConfig(BaseModel):
     """Per-instance LLM provider settings. Stored on bot_instances.llm_config."""
-    provider: str  # "emergent" | "anthropic" | "ollama"
+    provider: str  # "emergent" | "anthropic" | "ollama" | "openai"
     model: Optional[str] = None
     anthropic_api_key: Optional[str] = None  # only used when provider == "anthropic"
+    openai_api_key: Optional[str] = None     # only used when provider == "openai"
     ollama_base_url: Optional[str] = None    # only used when provider == "ollama"; defaults to OLLAMA_BASE_URL env
 
 class FAQEntry(BaseModel):
@@ -283,6 +302,26 @@ async def get_instance_access(
     current_user: dict = Depends(get_current_user)
 ) -> str:
     return await _verify_instance_access(x_instance_id, current_user)
+
+# Initialize API integrations sub-module
+async def _get_instance_from_request(request):
+    """Extract instance_id from a Request, usable outside Depends()."""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from jose import jwt as jose_jwt
+    try:
+        payload = jose_jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    inst_id = request.headers.get("X-Instance-ID")
+    return await _verify_instance_access(inst_id, user)
+
+api_integrations_routes.init(db, _get_instance_from_request)
+api_router.include_router(api_integrations_routes.router)
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
     """Admin tool to test an API endpoint directly. Returns raw JSON response."""
@@ -441,7 +480,7 @@ async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> s
     if not parts:
         return ""
     return "\n\n---\n\n".join(parts[:5])
-def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict") -> str:
+def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict", api_context: str = "", api_sources: list = None) -> str:
     name = bot_config.get("name", "Assistant")
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
     custom_instructions = bot_config.get("custom_instructions", "")
@@ -531,12 +570,18 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         parts.append(f"ADDITIONAL INSTRUCTIONS:\n{custom_instructions}")
 
     # Anti-fabrication rule — always included
-    if bot_config.get("api_query_enabled"):
+    if api_context:
+        # Already injected above — just reinforce the no-fabrication rule
+        parts.append(
+            "RULE: NEVER fabricate data. NEVER generate fake JSON, API responses, or made-up numbers. "
+            "Only present data that comes from the API results or Knowledge Base provided above."
+        )
+    elif bot_config.get("api_query_enabled"):
         parts.append(
             "IMPORTANT — LIVE API CAPABILITY:\n"
-            "You can query the configured API to get live data. When a user asks you to look up "
-            "a transaction, account, block, or any live data, ask them for the specific identifier "
-            "(hash, address, etc.) if they haven't provided one, and the system will make the API call for you.\n"
+            "You can query configured APIs to get live data. When a user asks for real-time data, "
+            "ask them for the specific identifier (hash, address, etc.) if they haven't provided one, "
+            "and the system will make the API call for you.\n"
             "NEVER fabricate or invent data. If you present data, it must come from an actual API response "
             "provided to you. NEVER generate fake JSON, made-up hashes, or invented numbers."
         )
@@ -544,6 +589,21 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         parts.append(
             "RULE: NEVER fabricate data. NEVER generate fake JSON, API responses, or made-up numbers. "
             "If you don't have specific data, help the user with documentation and curl commands instead."
+        )
+
+    # Inject live API context when present — unified KB + API reasoning
+    if api_context:
+        source_list = ", ".join(api_sources or [])
+        parts.append(
+            "LIVE API DATA — USE THIS ALONGSIDE THE KNOWLEDGE BASE:\n"
+            "The system has made live API calls on behalf of the user. The raw results are below.\n"
+            "Use documented field descriptions and response schemas to interpret the data accurately.\n"
+            "Combine this live data with relevant Knowledge Base information to form a single, "
+            "coherent answer. Do NOT return raw JSON — summarize the data in natural language.\n"
+            "If an API call returned an error, explain what went wrong using the documented error codes.\n"
+            "NEVER fabricate data beyond what is shown below.\n\n"
+            f"{api_context}\n\n"
+            f"Sources: {source_list}"
         )
 
     if passive_mode and allow_skip:
@@ -893,6 +953,36 @@ async def _call_ollama(session_id: str, user_message: str, system_prompt: str,
     in_tok = int(data.get("prompt_eval_count") or 0) or _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
     out_tok = int(data.get("eval_count") or 0) or _estimate_tokens(text)
     return text, in_tok, out_tok
+async def _call_openai(session_id: str, user_message: str, system_prompt: str,
+                       instance_id: str, model: str, api_key: str) -> tuple:
+    """LLM call via direct OpenAI SDK. Returns (text, in_tok, out_tok) using real usage."""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured for this instance")
+    api_model = ALLOWED_OPENAI_MODELS.get(model)
+    if not api_model:
+        raise HTTPException(status_code=500, detail=f"Model '{model}' is not in the OpenAI allowlist")
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key)
+    key = f"{session_id}_{instance_id}_openai_{model}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+    messages = [{"role": "system", "content": system_prompt}] + history
+    try:
+        resp = await client.chat.completions.create(model=api_model, messages=messages, max_tokens=8096)
+    except Exception as e:
+        err_str = str(e)
+        if "authentication" in err_str.lower() or "api key" in err_str.lower():
+            raise HTTPException(status_code=401, detail=f"OpenAI auth failed: {err_str[:200]}")
+        if "rate" in err_str.lower() or "429" in err_str:
+            raise HTTPException(status_code=429, detail=f"OpenAI rate limit: {err_str[:200]}")
+        raise HTTPException(status_code=502, detail=f"OpenAI API error: {err_str[:200]}")
+    text = resp.choices[0].message.content or ""
+    history.append({"role": "assistant", "content": text})
+    llm_history[key] = history[-40:]
+    usage = resp.usage
+    in_tok = usage.prompt_tokens if usage else _estimate_tokens(system_prompt) + _estimate_tokens(user_message)
+    out_tok = usage.completion_tokens if usage else _estimate_tokens(text)
+    return text, in_tok, out_tok
 async def call_claude(session_id: str, user_message: str, system_prompt: str,
                       instance_id: str = "default", platform: str = "web") -> str:
     """Multi-provider LLM dispatcher. Routes to Emergent / Anthropic-direct / Ollama based on
@@ -901,6 +991,21 @@ async def call_claude(session_id: str, user_message: str, system_prompt: str,
     cfg = await _resolve_llm_config(instance_id)
     provider = (cfg.get("provider") or "emergent").lower()
     retry_count = 0
+
+    if provider == "openai":
+        model = cfg.get("model") or DEFAULT_OPENAI_MODEL
+        api_key = cfg.get("openai_api_key") or ""
+        try:
+            text, in_tok, out_tok = await _call_openai(session_id, user_message, system_prompt, instance_id, model, api_key)
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", True, 0, False, None, in_tok, out_tok)
+            return text
+        except HTTPException:
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "openai_error")
+            raise
+        except Exception as e:
+            logger.error(f"OpenAI call failed: {e}")
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}", f"openai:{model}", False, 0, False, "unknown")
+            raise HTTPException(status_code=500, detail="AI service temporarily unavailable. Please try again in a moment.")
 
     if provider == "anthropic":
         model_short = cfg.get("model") or DEFAULT_ANTHROPIC_MODEL
@@ -1019,6 +1124,18 @@ LLM_PRICING = {
     # Legacy 3.5
     "claude-3-5-haiku-20241022":   {"in": 0.80,  "out": 4.00},
     "claude-3-5-sonnet-20241022":  {"in": 3.00,  "out": 15.00},
+    # OpenAI
+    "gpt-4o":         {"in": 2.50,  "out": 10.00},
+    "gpt-4.1":        {"in": 2.00,  "out": 8.00},
+    "gpt-4.1-mini":   {"in": 0.40,  "out": 1.60},
+    "gpt-5":          {"in": 5.00,  "out": 20.00},
+    "gpt-5-mini":     {"in": 1.00,  "out": 4.00},
+    "gpt-5.4":        {"in": 3.00,  "out": 12.00},
+    "gpt-5.4-mini":   {"in": 0.60,  "out": 2.40},
+    "gpt-5.5":        {"in": 5.00,  "out": 20.00},
+    "gpt-5.6-terra":  {"in": 5.00,  "out": 20.00},
+    "o3":             {"in": 10.00, "out": 40.00},
+    "o4-mini":        {"in": 1.10,  "out": 4.40},
 }
 DEFAULT_PRICING = {"in": 3.00, "out": 15.00}  # Sonnet-equivalent
 def _estimate_tokens(text: str) -> int:
@@ -1158,6 +1275,54 @@ async def _stream_ollama(session_id: str, user_message: str, system_prompt: str,
     return generate(), finalize
 
 
+async def _stream_openai(session_id: str, user_message: str, system_prompt: str,
+                         instance_id: str, model: str, api_key: str):
+    """Yield text chunks from OpenAI streaming API. Returns (async_generator, finalize_fn)."""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured for this instance")
+    api_model = ALLOWED_OPENAI_MODELS.get(model)
+    if not api_model:
+        raise HTTPException(status_code=500, detail=f"Model '{model}' not in allowlist")
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key)
+    key = f"{session_id}_{instance_id}_openai_{model}"
+    history = llm_history.get(key) or []
+    history.append({"role": "user", "content": user_message})
+    messages = [{"role": "system", "content": system_prompt}] + history
+
+    full_text_parts = []
+    in_tok = 0
+    out_tok = 0
+
+    async def generate():
+        nonlocal in_tok, out_tok
+        try:
+            stream = await client.chat.completions.create(
+                model=api_model, messages=messages, max_tokens=8096, stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    full_text_parts.append(delta.content)
+                    yield delta.content
+                if hasattr(chunk, "usage") and chunk.usage:
+                    in_tok = chunk.usage.prompt_tokens or 0
+                    out_tok = chunk.usage.completion_tokens or 0
+        except Exception as e:
+            logger.error(f"OpenAI stream error: {e}")
+            yield f"\n[Error: OpenAI service error: {str(e)[:100]}]"
+
+    async def finalize():
+        full = "".join(full_text_parts)
+        history.append({"role": "assistant", "content": full})
+        llm_history[key] = history[-40:]
+        if not in_tok:
+            return full, _estimate_tokens(system_prompt + user_message), _estimate_tokens(full)
+        return full, in_tok, out_tok
+
+    return generate(), finalize
+
+
 async def _simulate_stream(text: str):
     """Yield a pre-fetched response in word-sized chunks to simulate streaming."""
     words = text.split(" ")
@@ -1188,18 +1353,17 @@ async def stream_chat_response(session_id: str, user_message: str, instance_id: 
         await save_conversation(session_id, user_message, response, platform=platform, instance_id=instance_id)
         return
 
-    # Try live API query first (non-streamable — simulate)
-    api_response = await _try_api_query(user_message, bot_config, knowledge, instance_id, session_id)
-    if api_response:
-        async for chunk in _simulate_stream(api_response):
-            yield await _sse_event("token", {"token": chunk})
-        yield await _sse_event("done", {"full_response": api_response})
-        await save_conversation(session_id, user_message, api_response, platform=platform, instance_id=instance_id)
-        return
+    # Try live API query — returns (api_context, sources) or None
+    api_result = await _try_api_query(user_message, bot_config, knowledge, instance_id, session_id)
+    api_context = ""
+    api_sources = []
+    if api_result:
+        api_context, api_sources = api_result
 
-    # LLM streaming
+    # LLM streaming — unified KB + API context
     tone = await get_tone_examples_text(instance_id, bot_config)
-    system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
+    system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+                                       api_context=api_context, api_sources=api_sources)
     cfg = await _resolve_llm_config(instance_id)
     provider = (cfg.get("provider") or "emergent").lower()
 
@@ -1214,6 +1378,16 @@ async def stream_chat_response(session_id: str, user_message: str, instance_id: 
             full_response, in_tok, out_tok = await finalize()
             await _log_llm_usage(instance_id, session_id, platform, f"anthropic:{model_short}",
                                  f"anthropic:{model_short}", True, 0, False, None, in_tok, out_tok)
+
+        elif provider == "openai":
+            model = cfg.get("model") or DEFAULT_OPENAI_MODEL
+            api_key = cfg.get("openai_api_key") or ""
+            gen, finalize = await _stream_openai(session_id, user_message, system_prompt, instance_id, model, api_key)
+            async for chunk in gen:
+                yield await _sse_event("token", {"token": chunk})
+            full_response, in_tok, out_tok = await finalize()
+            await _log_llm_usage(instance_id, session_id, platform, f"openai:{model}",
+                                 f"openai:{model}", True, 0, False, None, in_tok, out_tok)
 
         elif provider == "ollama":
             model = cfg.get("model") or DEFAULT_OLLAMA_MODEL
@@ -1521,13 +1695,15 @@ async def start_shared_discord_bot(token: str):
                     # In passive mode, allow the LLM to skip unless the user @mentioned the bot or DM'd it
                     allow_skip = passive_mode and not is_mentioned and not is_dm
                     # Try live API query first
-                    api_response = await _try_api_query(user_text, bot_config, knowledge, instance_id, session_id)
-                    if api_response:
-                        response = api_response
-                    else:
-                        system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
-                        async with message.channel.typing():
-                            response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
+                    api_result = await _try_api_query(user_text, bot_config, knowledge, instance_id, session_id)
+                    api_context = ""
+                    api_sources = []
+                    if api_result:
+                        api_context, api_sources = api_result
+                    system_prompt = build_system_prompt(bot_config, knowledge, tone, passive_mode=passive_mode, allow_skip=allow_skip, knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+                                                       api_context=api_context, api_sources=api_sources)
+                    async with message.channel.typing():
+                        response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
                     # Passive mode: detect [SKIP] sentinel and stay silent
                     if allow_skip and response and response.strip().upper().startswith("[SKIP]"):
                         logger.info(f"[PASSIVE] instance={instance_id[:12]} channel={channel_id} — skipped (no confident answer)")
@@ -1913,17 +2089,22 @@ async def get_instance_llm_config(instance_id: str, current_user: dict = Depends
         raise HTTPException(status_code=404, detail="Instance not found")
     cfg = inst.get("llm_config") or {}
     provider = cfg.get("provider") or "emergent"
-    key = cfg.get("anthropic_api_key") or ""
+    anthropic_key = cfg.get("anthropic_api_key") or ""
+    openai_key = cfg.get("openai_api_key") or ""
     return {
         "provider": provider,
         "model": cfg.get("model") or "",
-        "anthropic_api_key_set": bool(key),
-        "anthropic_api_key_preview": (key[:7] + "…" + key[-4:]) if len(key) > 12 else "",
+        "anthropic_api_key_set": bool(anthropic_key),
+        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
+        "openai_api_key_set": bool(openai_key),
+        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
         "ollama_base_url": cfg.get("ollama_base_url") or "",
         "allowed_anthropic_models": list(ALLOWED_ANTHROPIC_MODELS.keys()),
+        "allowed_openai_models": list(ALLOWED_OPENAI_MODELS.keys()),
         "default_models": {
             "emergent": DEFAULT_EMERGENT_MODEL,
             "anthropic": DEFAULT_ANTHROPIC_MODEL,
+            "openai": DEFAULT_OPENAI_MODEL,
             "ollama": DEFAULT_OLLAMA_MODEL,
         },
     }
@@ -1935,8 +2116,8 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
     if inst is None:
         raise HTTPException(status_code=404, detail="Instance not found")
     provider = (body.provider or "").lower()
-    if provider not in ("emergent", "anthropic", "ollama"):
-        raise HTTPException(status_code=400, detail="provider must be one of: emergent, anthropic, ollama")
+    if provider not in ("emergent", "anthropic", "ollama", "openai"):
+        raise HTTPException(status_code=400, detail="provider must be one of: emergent, anthropic, ollama, openai")
     existing = inst.get("llm_config") or {}
     model = (body.model or "").strip() or None
     # Reject API keys accidentally pasted into the Model field (sk-, bbk_, etc.)
@@ -1944,11 +2125,14 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
         raise HTTPException(status_code=400, detail="Model must be a model name (e.g. claude-sonnet-4-5), not an API key.")
     if provider == "anthropic" and model and model not in ALLOWED_ANTHROPIC_MODELS:
         raise HTTPException(status_code=400, detail=f"Anthropic model must be one of: {list(ALLOWED_ANTHROPIC_MODELS.keys())}")
+    if provider == "openai" and model and model not in ALLOWED_OPENAI_MODELS:
+        raise HTTPException(status_code=400, detail=f"OpenAI model must be one of: {list(ALLOWED_OPENAI_MODELS.keys())}")
     new_cfg = {
         "provider": provider,
         "model": model,
         # Preserve existing key when caller omits it (so admins can update model without re-pasting the secret)
         "anthropic_api_key": (body.anthropic_api_key.strip() if body.anthropic_api_key else None) or existing.get("anthropic_api_key"),
+        "openai_api_key": (body.openai_api_key.strip() if body.openai_api_key else None) or existing.get("openai_api_key"),
         "ollama_base_url": (body.ollama_base_url or "").strip() or None,
     }
     await db.bot_instances.update_one(
@@ -2042,67 +2226,60 @@ async def unassign_user(instance_id: str, user_id: str, current_user: dict = Dep
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Instance not found")
     return {"success": True}
-# ==================== LIVE API QUERY ENGINE ====================
+# ==================== UNIFIED API QUERY ENGINE ====================
 
-API_ROUTE_PROMPT = """You are an API routing assistant. Given a user's question and a list of available API endpoints, decide if the question requires calling an API endpoint.
+import api_integrations as _api_mod
 
-RULES:
-- Only route to GET endpoints (never POST/PUT/DELETE)
-- Only route if the user is asking for LIVE DATA (balances, transactions, staking info, current prices, etc.)
-- If the user is asking about HOW the API works or WHAT endpoints exist, do NOT route — that's a documentation question
-- If you can't determine the right endpoint or parameters, do NOT route
+API_ROUTE_PROMPT = """You are an API routing engine. Given a user question and available API endpoints, decide whether a live API call is needed and if so, which endpoints to call.
 
-Respond with ONLY valid JSON (no markdown, no explanation). Either:
-{{"action": "call_api", "method": "GET", "path": "/api/accounts/stake1abc123", "reason": "Looking up account info"}}
-OR
-{{"action": "skip", "reason": "Documentation question, not a live data request"}}
-
-Available endpoints:
+AVAILABLE ENDPOINTS:
 {endpoints}
 
-User question: {question}"""
+USER QUESTION: {question}
+
+Respond with JSON only. Examples:
+- No API needed: {{"action": "none", "reason": "This is a knowledge question"}}
+- Single API call: {{"action": "call_api", "calls": [{{"endpoint_id": "abc123", "parameters": {{"pool_id": "pool1xyz"}}}}]}}
+- Multiple calls: {{"action": "call_api", "calls": [{{"endpoint_id": "abc", "parameters": {{}}}}, {{"endpoint_id": "def", "parameters": {{}}}}]}}
+
+Rules:
+- Only select from the AVAILABLE ENDPOINTS listed above by their [endpoint_id].
+- Fill in parameter values from the user's question when possible.
+- If the user provides an address, hash, pool ID, etc., use it as a parameter value.
+- Maximum {max_calls} API calls per question.
+- If unsure whether an API call helps, prefer "none".
+- Output ONLY valid JSON, no explanation."""
 
 
-async def _try_api_query(user_message: str, bot_config: dict, knowledge_context: str, instance_id: str, session_id: str) -> Optional[str]:
-    """Attempt to route a user question to a live API call. Returns enriched response or None."""
-    # Check if API querying is enabled for this instance
-    if not bot_config.get("api_query_enabled"):
+async def _try_api_query(user_message: str, bot_config: dict, knowledge_context: str, instance_id: str, session_id: str):
+    """Unified API orchestrator. Queries enabled endpoints across all integrations.
+    Returns (api_context_str, source_list) if API data was fetched, or None."""
+
+    endpoints = await api_integrations_routes.get_enabled_endpoints_for_instance(instance_id)
+    if not endpoints:
         return None
-    base_url = (bot_config.get("api_base_url") or "").strip().rstrip("/")
-    api_key_header = (bot_config.get("api_key_header") or "").strip()
-    api_key_value = (bot_config.get("api_key_value") or "").strip()
-    if not base_url:
+
+    endpoint_listing = build_endpoint_selection_context(endpoints)
+    if not endpoint_listing.strip():
         return None
 
-    # Extract endpoint list from knowledge context for the router
-    endpoint_lines = []
-    for line in knowledge_context.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("GET /api/") or stripped.startswith("POST /api/"):
-            endpoint_lines.append(stripped.split("\n")[0][:200])
-    if not endpoint_lines:
-        logger.info(f"[API_QUERY] No endpoint lines found in knowledge context ({len(knowledge_context)} chars)")
-        return None
-    logger.info(f"[API_QUERY] Found {len(endpoint_lines)} endpoints in context, routing question: {user_message[:80]}")
+    logger.info(f"[API_QUERY] {len(endpoints)} enabled endpoints, routing: {user_message[:80]}")
 
-    # Step 1: Ask LLM to route the question to an endpoint
+    # Step 1: Ask LLM which endpoints to call
     route_prompt = API_ROUTE_PROMPT.format(
-        endpoints="\n".join(endpoint_lines[:100]),
-        question=user_message
+        endpoints=endpoint_listing[:12000],
+        question=user_message,
+        max_calls=_api_mod.MAX_API_CALLS_PER_MESSAGE,
     )
     try:
         route_response = await call_claude(
             f"{session_id}_route", user_message, route_prompt,
             instance_id=instance_id, platform="api_router"
         )
-        # Parse JSON from response
-        import json as _json
         clean = route_response.strip()
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        # Fix smart quotes that LLMs sometimes produce
         clean = clean.replace("\u201c", '"').replace("\u201d", '"').replace("\u2018", "'").replace("\u2019", "'")
-        # Try to extract JSON from the response if it contains extra text
         json_start = clean.find("{")
         json_end = clean.rfind("}") + 1
         if json_start >= 0 and json_end > json_start:
@@ -2110,71 +2287,61 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
         route = _json.loads(clean)
         if not isinstance(route, dict):
             return None
-        logger.info(f"[API_QUERY] Route decision: {route.get('action')} — {route.get('reason', '')[:80]}")
+        logger.info(f"[API_QUERY] Route: {route.get('action')} — {route.get('reason', '')[:80]}")
     except Exception as e:
-        logger.warning(f"[API_QUERY] Route parsing failed: {e} | raw: {route_response[:200] if 'route_response' in dir() else 'N/A'}")
+        logger.warning(f"[API_QUERY] Route parse failed: {e}")
         return None
 
-    if route.get("action") != "call_api":
+    if route.get("action") not in ("call_api",):
         return None
 
-    path = route.get("path", "")
-    if not path.startswith("/api/"):
-        return None
-    # Safety: GET only
-    if route.get("method", "GET").upper() != "GET":
+    calls = route.get("calls", [])
+    if not calls:
         return None
 
-    # Step 2: Make the actual API call
-    full_url = f"{base_url}{path}"
-    headers = {"Accept": "application/json"}
-    if api_key_header and api_key_value:
-        headers[api_key_header] = api_key_value
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get(full_url, headers=headers)
-        if resp.status_code != 200:
-            logger.warning(f"[API_QUERY] API returned {resp.status_code}: {resp.text[:200]}")
-            if resp.status_code == 404:
-                return (
-                    f"I queried `GET {path}` but the resource was **not found** (404).\n\n"
-                    f"This usually means:\n"
-                    f"- The transaction hash, address, or ID doesn't exist in the database\n"
-                    f"- The identifier might be from a different network (testnet vs mainnet)\n"
-                    f"- There may be a typo in the identifier\n\n"
-                    f"Double-check the value and try again. You can also verify it on the explorer at the base URL."
-                )
-            elif resp.status_code == 401:
-                return f"I tried to query `{path}` but got **Unauthorized** (401). The API key may be missing or invalid — check the API Key Value in Bot Settings."
-            elif resp.status_code == 429:
-                return f"I tried to query `{path}` but got **rate limited** (429). Please wait a moment and try again."
-            else:
-                return f"I tried to query `{path}` but got an error (HTTP {resp.status_code}). The API may require different parameters or the resource may not exist."
-        api_data = resp.text[:8000]  # Cap response size
-    except Exception as e:
-        logger.warning(f"[API_QUERY] HTTP error: {e}")
+    # Step 2: Execute via registered endpoint system
+    results = await api_integrations_routes.execute_selected_endpoints(calls, instance_id)
+    if not results:
         return None
 
-    # Step 3: Ask LLM to explain the API response
-    explain_prompt = (
-        f"You queried the API endpoint `GET {path}` and received the following response data.\n"
-        f"Explain the data clearly to the user in a helpful, readable format. "
-        f"Use tables, bullet points, or sections as appropriate. "
-        f"If the data is large, summarize the key points.\n"
-        f"Do NOT make up data — only use what's in the API response below.\n\n"
-        f"API Response:\n{api_data}"
-    )
-    try:
-        explanation = await call_claude(
-            f"{session_id}_explain", user_message, explain_prompt,
-            instance_id=instance_id, platform="api_query"
-        )
-        source_note = f"\n\n---\n*Live data from `GET {path}`*"
-        return explanation + source_note
-    except Exception as e:
-        logger.warning(f"[API_QUERY] Explain failed: {e}")
-        return f"I queried `{path}` successfully but couldn't format the response. Raw data:\n```json\n{api_data[:2000]}\n```"
+    # Step 3: Build combined context for the final LLM answer
+    api_context_parts = []
+    sources = []
+    has_data = False
+
+    for r in results:
+        if r.get("error"):
+            api_context_parts.append(f"API ERROR: {r['error']}")
+            continue
+        ep = r.get("endpoint", {})
+        result = r.get("result", {})
+        schema_ctx = r.get("schema_context", "")
+
+        if result.get("success"):
+            has_data = True
+            data_str = _json.dumps(result.get("data", ""), indent=2)[:8000]
+            part = f"--- API RESULT: {ep['method']} {ep['path']} ---\n"
+            if schema_ctx:
+                part += f"Schema info:\n{schema_ctx}\n\n"
+            part += f"HTTP {result.get('status', 200)} — Response data:\n{data_str}"
+            api_context_parts.append(part)
+            sources.append(f"`{ep['method']} {ep['path']}`")
+        else:
+            status = result.get("status", 0)
+            error = result.get("error", "Unknown error")
+            err_schema = (ep.get("error_responses") or {}).get(str(status), {})
+            err_desc = err_schema.get("description", "")
+            part = f"--- API ERROR: {ep['method']} {ep['path']} → HTTP {status} ---\n"
+            if err_desc:
+                part += f"Documented error: {err_desc}\n"
+            part += f"Error: {error}"
+            api_context_parts.append(part)
+            sources.append(f"`{ep['method']} {ep['path']}` (error)")
+
+    if not has_data and not api_context_parts:
+        return None
+
+    return "\n\n".join(api_context_parts), sources
 
 
 # ==================== CHAT (PUBLIC) ====================
@@ -2188,15 +2355,18 @@ async def send_chat_message(body: ChatMessage):
     if knowledge == "__NO_KB__":
         response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
     else:
-        # Try live API query first
-        api_response = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
-        if api_response:
-            response = api_response
-        else:
-            tone = await get_tone_examples_text(instance_id, bot_config)
-            system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=bot_config.get("knowledge_gate", "strict"))
-            response = await call_claude(session_id, body.message, system_prompt,
-                                        instance_id=instance_id, platform="web")
+        # Unified KB + API reasoning: gather API context, then let the LLM synthesize
+        api_result = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
+        api_context = ""
+        api_sources = []
+        if api_result:
+            api_context, api_sources = api_result
+        tone = await get_tone_examples_text(instance_id, bot_config)
+        system_prompt = build_system_prompt(bot_config, knowledge, tone,
+                                           knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+                                           api_context=api_context, api_sources=api_sources)
+        response = await call_claude(session_id, body.message, system_prompt,
+                                    instance_id=instance_id, platform="web")
     await save_conversation(session_id, body.message, response, platform="web", instance_id=instance_id)
     return {"response": response, "session_id": session_id}
 
@@ -2446,16 +2616,18 @@ async def external_chat(body: ExternalChatRequest, request: Request):
     if knowledge == "__NO_KB__":
         response = "I don't have any knowledge base configured yet."
     else:
-        # Try live API query first
-        api_response = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
-        if api_response:
-            response = api_response
-        else:
-            tone = await get_tone_examples_text(instance_id, bot_config)
-            gate = bot_config.get("knowledge_gate", "strict")
-            system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate)
-            response = await call_claude(session_id, body.message, system_prompt,
-                                        instance_id=instance_id, platform="api")
+        # Unified KB + API reasoning
+        api_result = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
+        api_context = ""
+        api_sources = []
+        if api_result:
+            api_context, api_sources = api_result
+        tone = await get_tone_examples_text(instance_id, bot_config)
+        gate = bot_config.get("knowledge_gate", "strict")
+        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate,
+                                           api_context=api_context, api_sources=api_sources)
+        response = await call_claude(session_id, body.message, system_prompt,
+                                    instance_id=instance_id, platform="api")
 
     await save_conversation(session_id, body.message, response, platform="api", instance_id=instance_id)
     return {
