@@ -17,13 +17,6 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - **AI**: Emergent Universal Key (Claude/GPT), BYOK OpenAI
 - **Integrations**: Discord.py, external REST APIs
 
-## Key DB Collections
-- `api_integrations`: integration configs with encrypted credentials
-- `api_endpoints`: endpoint definitions with schemas, parameters, docs
-- `api_diagnostics_history`: diagnostic run results with timestamps, pass/fail
-- `llm_usage`: LLM token tracking per API key
-- `api_request_logs`: external API call logs
-
 ## Implemented Features (Completed)
 
 ### Phase 1 — Core Platform
@@ -36,7 +29,7 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 ### Phase 2 — API Integration System
 - Multi-API integration CRUD with encrypted credentials
 - Endpoint management with OpenAPI/Swagger auto-discovery
-- Smart connection probing (prefers param-free endpoints, uses example values for parameterised ones, 2MB doc limit)
+- Smart connection probing (prefers param-free endpoints, uses example values, 2MB doc limit)
 - Unified AI orchestrator: LLM routes questions → selects endpoints → executes APIs → merges KB+API context
 - API request logging and activity tracking
 
@@ -46,28 +39,18 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - Emergent Universal Key as default provider
 
 ### Phase 4 — API Intelligence Diagnostics
-- **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation
-- **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints
-- **Endpoint Execution Test** (API call): Executes real endpoint, validates response against schema
-- **Unified KB+API Reasoning Test** (LLM + API): Full pipeline trace with LLM context verification
-- **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test
-- **Diagnostic History**: Timestamped records of all diagnostic runs
+- Passive Documentation Scan, AI Discovery Test, Execution Test, Unified KB+API Reasoning Test
+- Instance-Wide Summary, Diagnostic History, Documentation Gap Report (exportable Markdown)
 
-### Phase 4.1 — Diagnostics Accuracy Fix
-- Generic schemas (`{type: "object"}` without properties) correctly NOT counted as covered
-- Contextual warnings for "no fields defined" in field description metrics
+### Phase 5 — Critical Pipeline Fixes (Nov 2026)
+**Bug 1 — __NO_KB__ bail-out blocked ALL API calls:**
+All 4 chat paths (streaming, non-streaming, v1 API, Discord) returned a hard-coded "no KB" message and exited before reaching `_try_api_query`. Fixed: only bail when no KB AND no enabled API integrations exist.
 
-### Phase 4.2 — Response Size Limits & Connection Probing Fix
-- Separate `MAX_DOC_RESPONSE_SIZE` (2MB) for documentation downloads; `MAX_RESPONSE_SIZE` (500KB) for API execution
-- Test-connection prefers parameter-free endpoints, uses example/default values for parameterised ones
-- 14 regression tests covering size limits, schema validation, diagnostic accuracy
+**Bug 2 — build_system_prompt refused questions when no KB + API data:**
+`__NO_KB__` forced the LLM to refuse ALL questions even when API context was provided. Fixed: when no KB but API data is present, the system prompt instructs the LLM to use the API data.
 
-### Phase 4.3 — Documentation Gap Report
-- `GET /integrations/{id}/diagnostics/gap-report` returns a full Markdown report
-- Lists every missing item per category (response schemas, field descriptions, parameters, examples, errors)
-- Groups gaps by endpoint for easy provider communication
-- Includes actionable recommendations
-- "Gap Report" download button in the diagnostics panel (appears after scan)
+**Bug 3 — Endpoint listing truncation hid 60+ endpoints from LLM:**
+With enriched documentation, the endpoint listing grew to 33,745 chars but was truncated at 12,000. All `txs`, `pools`, `scripts` and later-alphabet endpoints were invisible. Fixed: compact listing format (33K → 10K chars) drops optional parameter details and descriptions, keeping only path params and required query params. Raised limit to 30K.
 
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)

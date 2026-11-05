@@ -514,15 +514,24 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
     parts = [f"You are {name}. {persona}"]
 
     if knowledge_context == "__NO_KB__":
-        parts.append(
-            "IMPORTANT — NO KNOWLEDGE BASE CONFIGURED:\n"
-            "This bot instance does not have any knowledge base entries configured yet.\n"
-            "You MUST NOT answer questions using your general knowledge.\n"
-            "For ANY question, respond with something like:\n"
-            "\"I don't have any knowledge base configured yet. Please check back later "
-            "or contact the administrator to set up my knowledge base.\"\n"
-            "Be polite and brief. Do not attempt to answer the question."
-        )
+        if api_context:
+            # No KB but live API data is available — instruct the LLM to use the API data
+            parts.append(
+                "KNOWLEDGE BASE STATUS: No knowledge base is configured for this bot instance.\n"
+                "However, live API integrations are active and have returned data (see below).\n"
+                "Answer the user's question using ONLY the API data provided.\n"
+                "NEVER fabricate data or supplement with your general knowledge."
+            )
+        else:
+            parts.append(
+                "IMPORTANT — NO KNOWLEDGE BASE CONFIGURED:\n"
+                "This bot instance does not have any knowledge base entries configured yet.\n"
+                "You MUST NOT answer questions using your general knowledge.\n"
+                "For ANY question, respond with something like:\n"
+                "\"I don't have any knowledge base configured yet. Please check back later "
+                "or contact the administrator to set up my knowledge base.\"\n"
+                "Be polite and brief. Do not attempt to answer the question."
+            )
     elif knowledge_context:
         if knowledge_gate == "strict":
             parts.append(
@@ -1395,7 +1404,12 @@ async def stream_chat_response(session_id: str, user_message: str, instance_id: 
     bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
     knowledge = await search_knowledge(user_message, instance_id)
 
-    if knowledge == "__NO_KB__":
+    # Check if API integrations are available for this instance
+    has_api_integrations = await db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
         response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
         async for chunk in _simulate_stream(response):
             yield await _sse_event("token", {"token": chunk})
@@ -1736,7 +1750,13 @@ async def start_shared_discord_bot(token: str):
 
                 bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
                 knowledge = await search_knowledge(user_text, instance_id)
-                if knowledge == "__NO_KB__":
+
+                # Check if API integrations exist for this instance
+                has_api_integrations = await db.api_integrations.count_documents(
+                    {"instance_id": instance_id, "enabled": True}
+                ) > 0
+
+                if knowledge == "__NO_KB__" and not has_api_integrations:
                     bot_name = bot_config.get("name", "I")
                     response = f"I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
                 else:
@@ -2334,7 +2354,7 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
 
     # Step 1: Ask LLM which endpoints to call
     route_prompt = API_ROUTE_PROMPT.format(
-        endpoints=endpoint_listing[:12000],
+        endpoints=endpoint_listing[:30000],
         question=user_message,
         max_calls=_api_mod.MAX_API_CALLS_PER_MESSAGE,
     )
@@ -2419,7 +2439,13 @@ async def send_chat_message(body: ChatMessage):
     instance_id = body.instance_id or "default"
     bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
     knowledge = await search_knowledge(body.message, instance_id)
-    if knowledge == "__NO_KB__":
+
+    # Check if API integrations are available
+    has_api_integrations = await db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
         response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator to set up my knowledge base."
     else:
         # Unified KB + API reasoning: gather API context, then let the LLM synthesize
@@ -2849,7 +2875,11 @@ async def external_chat(body: ExternalChatRequest, request: Request):
     bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
     knowledge = await search_knowledge(body.message, instance_id)
 
-    if knowledge == "__NO_KB__":
+    has_api_integrations = await db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
         response = "I don't have any knowledge base configured yet."
     else:
         # Unified KB + API reasoning

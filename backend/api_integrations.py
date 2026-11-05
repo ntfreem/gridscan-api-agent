@@ -436,20 +436,26 @@ def _normalize_schema_dict(d: dict) -> dict:
 # ── Endpoint Selection Prompt ────────────────────────────────────────────
 
 def build_endpoint_selection_context(endpoints: list[dict]) -> str:
-    """Build a concise endpoint listing for the LLM to select from."""
+    """Build a compact endpoint listing for LLM routing. Shows only essential info
+    to maximise the number of endpoints visible within the context window."""
     lines = []
     for ep in endpoints:
         if not ep.get("enabled") or not ep.get("executable"):
             continue
-        params_desc = ""
-        if ep.get("parameters"):
-            param_strs = []
-            for p in ep["parameters"]:
-                req = " (required)" if p.get("required") else ""
-                param_strs.append(f"{p['name']}: {p.get('type', 'string')}{req} — {p.get('description', '')}")
-            params_desc = " | Params: " + "; ".join(param_strs)
+        summary = ep.get("summary") or ep.get("description", "")
+        # For routing, show only path parameters and required query params
+        path_params = [p for p in (ep.get("parameters") or []) if p.get("in") == "path"]
+        req_query = [p for p in (ep.get("parameters") or []) if p.get("in") == "query" and p.get("required")]
+        params_str = ""
+        if path_params or req_query:
+            ps = []
+            for p in path_params:
+                ps.append(f"{p['name']}: {p.get('type', 'string')} (path)")
+            for p in req_query:
+                ps.append(f"{p['name']}: {p.get('type', 'string')} (required)")
+            params_str = " | " + "; ".join(ps)
 
-        line = f"[{ep['id']}] {ep['method']} {ep['path']} — {ep.get('summary') or ep.get('description', '')}{params_desc}"
+        line = f"[{ep['id']}] {ep['method']} {ep['path']} — {summary}{params_str}"
         lines.append(line)
     return "\n".join(lines)
 

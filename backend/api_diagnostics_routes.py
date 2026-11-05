@@ -190,7 +190,7 @@ async def discovery_test(integration_id: str, body: DiscoveryTestRequest, reques
 
     # Use the REAL routing prompt — same as _try_api_query
     route_prompt = _api_route_prompt.format(
-        endpoints=endpoint_listing[:12000],
+        endpoints=endpoint_listing[:30000],
         question=body.question,
         max_calls=MAX_API_CALLS_PER_MESSAGE,
     )
@@ -412,7 +412,7 @@ async def unified_test(integration_id: str, body: UnifiedTestRequest, request: R
     route_json = None
     if endpoints and endpoint_listing.strip():
         route_prompt = _api_route_prompt.format(
-            endpoints=endpoint_listing[:12000],
+            endpoints=endpoint_listing[:30000],
             question=body.question,
             max_calls=MAX_API_CALLS_PER_MESSAGE,
         )
