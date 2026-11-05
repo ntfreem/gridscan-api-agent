@@ -2147,7 +2147,19 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
         if f"_{instance_id}_" in k:
             llm_history.pop(k, None)
     logger.info(f"[LLM] instance={instance_id} provider={provider} model={model}")
-    return {"success": True}
+    # Return the saved config (masked) for consistency
+    anthropic_key = new_cfg.get("anthropic_api_key") or ""
+    openai_key = new_cfg.get("openai_api_key") or ""
+    return {
+        "success": True,
+        "provider": provider,
+        "model": model or "",
+        "anthropic_api_key_set": bool(anthropic_key),
+        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
+        "openai_api_key_set": bool(openai_key),
+        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
+        "ollama_base_url": new_cfg.get("ollama_base_url") or "",
+    }
 @api_router.post("/admin/instances/{instance_id}/llm-config/test")
 async def test_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
     """Send a one-shot 'ping' through the configured provider to verify credentials work."""

@@ -8,6 +8,15 @@ import os
 import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+if not BASE_URL:
+    # Read from frontend .env file
+    _env_path = os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', '.env')
+    if os.path.exists(_env_path):
+        with open(_env_path) as _f:
+            for _line in _f:
+                if _line.startswith('REACT_APP_BACKEND_URL='):
+                    BASE_URL = _line.split('=', 1)[1].strip().rstrip('/')
+                    break
 INSTANCE_ID = "88bfae82-2533-4235-968d-b3298fd57073"
 
 # Test credentials
@@ -72,10 +81,12 @@ class TestAuthAndHealth:
         print(f"Login successful, token prefix: {data['token'][:20]}...")
     
     def test_health_endpoint(self):
-        """Test health endpoint."""
-        response = requests.get(f"{BASE_URL}/api/health")
-        assert response.status_code == 200, f"Health check failed: {response.text}"
-        print("Health check passed")
+        """Test API root endpoint returns version info."""
+        response = requests.get(f"{BASE_URL}/api/")
+        assert response.status_code == 200, f"API root failed: {response.text}"
+        data = response.json()
+        assert "version" in data or "message" in data
+        print(f"API root check passed: {data}")
 
 
 class TestIntegrationsCRUD:

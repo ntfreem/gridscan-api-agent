@@ -417,7 +417,8 @@ async def test_endpoint(body: EndpointTestRequest, request: Request):
     await _log_api_request(instance_id, body.integration_id, body.endpoint_id,
                            result.get("status", 0), result.get("duration_ms", 0),
                            result.get("success", False), result.get("error"),
-                           result.get("response_size", 0))
+                           result.get("response_size", 0),
+                           endpoint_path=f"{ep.get('method','')} {ep.get('path','')}")
     return result
 
 
@@ -457,7 +458,7 @@ async def execute_endpoint(integration: dict, endpoint: dict, parameters: dict =
 # Activity Logging & Stats
 # ══════════════════════════════════════════════════════════════════════════
 
-async def _log_api_request(instance_id, integration_id, endpoint_id, status, duration_ms, success, error, response_size):
+async def _log_api_request(instance_id, integration_id, endpoint_id, status, duration_ms, success, error, response_size, endpoint_path=""):
     try:
         db = _require_db()
         await db.api_request_logs.insert_one({
@@ -465,6 +466,7 @@ async def _log_api_request(instance_id, integration_id, endpoint_id, status, dur
             "instance_id": instance_id,
             "integration_id": integration_id,
             "endpoint_id": endpoint_id,
+            "endpoint_path": endpoint_path,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "http_status": status,
             "duration_ms": duration_ms,
@@ -564,7 +566,8 @@ async def execute_selected_endpoints(selections: list[dict], instance_id: str) -
             instance_id, intg["id"], ep_id,
             result.get("status", 0), result.get("duration_ms", 0),
             result.get("success", False), result.get("error"),
-            result.get("response_size", 0)
+            result.get("response_size", 0),
+            endpoint_path=f"{ep.get('method','')} {ep.get('path','')}"
         )
         schema_ctx = build_schema_context(ep, str(result.get("status", 200)))
         results.append({
