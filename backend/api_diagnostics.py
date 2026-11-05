@@ -390,3 +390,277 @@ def evaluate_discovery_result(route_json: dict, endpoints: list,
         "correctness": correctness,
         "correctness_evaluated": expected_endpoint_id is not None,
     }
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Exportable Documentation Gap Report
+# ══════════════════════════════════════════════════════════════════════════
+
+def generate_gap_report(endpoints: list, integration: dict) -> str:
+    """Generate a complete Markdown gap report with every missing item listed.
+    Unlike the passive scan (truncated for UI), this iterates ALL endpoints."""
+    lines = []
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    name = integration.get("name", "Unknown")
+    base = integration.get("base_url", "")
+    doc_type = integration.get("doc_source_type", "unknown")
+
+    total = len(endpoints)
+    enabled = sum(1 for e in endpoints if e.get("enabled"))
+
+    # ── Header ───────────────────────────────────────────────────────────
+    lines.append(f"# Documentation Gap Report — {name}")
+    lines.append(f"")
+    lines.append(f"Generated: {now}")
+    lines.append(f"Base URL: `{base}`")
+    lines.append(f"Documentation source: **{doc_type}**")
+    lines.append(f"Endpoints: **{total}** total, **{enabled}** enabled")
+    lines.append("")
+
+    # Full scan for score
+    scan = run_passive_scan(endpoints, integration)
+    lines.append(f"**Overall documentation score: {scan['overall_score']}/100**")
+    lines.append("")
+
+    # ── Summary table ────────────────────────────────────────────────────
+    lines.append("## Coverage Summary")
+    lines.append("")
+    lines.append("| Category | Covered | Total | Percentage | Status |")
+    lines.append("|---|---|---|---|---|")
+    labels = {
+        "response_schema_coverage": "Response Schemas",
+        "field_description_coverage": "Field Descriptions",
+        "parameter_documentation": "Parameter Descriptions",
+        "endpoint_description_coverage": "Endpoint Descriptions",
+        "response_example_coverage": "Response Examples",
+        "error_documentation_coverage": "Error Documentation",
+    }
+    for key, label in labels.items():
+        m = scan["metrics"].get(key, {})
+        cov, tot, pct = m.get("covered", 0), m.get("total", 0), m.get("percentage", 0)
+        status = "PASS" if pct >= 75 else ("WARN" if pct >= 25 else "FAIL")
+        lines.append(f"| {label} | {cov} | {tot} | {pct}% | {status} |")
+    lines.append("")
+
+    # ── Per-category detailed gaps ───────────────────────────────────────
+
+    # 1) Response schemas
+    schema_gaps = _full_schema_gaps(endpoints)
+    if schema_gaps:
+        lines.append("## Response Schema Gaps")
+        lines.append("")
+        lines.append("These endpoints lack detailed response field definitions.")
+        lines.append("The OpenAPI `responses.content.schema.properties` should describe every field returned.")
+        lines.append("")
+        for g in schema_gaps:
+            lines.append(f"- `{g['method']} {g['path']}` — {g['reason']}")
+        lines.append("")
+
+    # 2) Field descriptions
+    field_gaps = _full_field_gaps(endpoints)
+    if field_gaps["no_fields"]:
+        lines.append("## Field Description Gaps")
+        lines.append("")
+        lines.append("No response fields are defined in any schema, so field descriptions cannot be evaluated.")
+        lines.append("**Action**: Define `properties` in your response schemas first, then add `description` to each field.")
+        lines.append("")
+    elif field_gaps["undescribed"]:
+        lines.append("## Field Description Gaps")
+        lines.append("")
+        lines.append(f"{len(field_gaps['undescribed'])} field(s) lack descriptions.")
+        lines.append("Add a `description` to each property in your response schema.")
+        lines.append("")
+        by_ep = {}
+        for f in field_gaps["undescribed"]:
+            by_ep.setdefault(f["path"], []).append(f["field"])
+        for ep_path, fields in by_ep.items():
+            lines.append(f"- `{ep_path}`: {', '.join(f'`{f}`' for f in fields)}")
+        lines.append("")
+        if field_gaps["missing_units"]:
+            lines.append(f"Additionally, {len(field_gaps['missing_units'])} field(s) could benefit from `unit` annotations (e.g., `\"unit\": \"lovelace\"`).")
+            lines.append("")
+
+    # 3) Parameter descriptions
+    param_gaps = _full_param_gaps(endpoints)
+    if param_gaps:
+        lines.append("## Parameter Description Gaps")
+        lines.append("")
+        lines.append(f"{len(param_gaps)} parameter(s) lack descriptions.")
+        lines.append("Add a `description` to each parameter in your OpenAPI spec.")
+        lines.append("")
+        by_ep = {}
+        for p in param_gaps:
+            by_ep.setdefault(p["path"], []).append(p)
+        for ep_path, params in by_ep.items():
+            param_list = ", ".join(
+                f"`{p['param']}` ({'required' if p['required'] else 'optional'}, in {p['in']})"
+                for p in params
+            )
+            lines.append(f"- `{ep_path}`: {param_list}")
+        lines.append("")
+
+    # 4) Endpoint descriptions
+    desc_gaps = _full_desc_gaps(endpoints)
+    if desc_gaps:
+        lines.append("## Endpoint Description Gaps")
+        lines.append("")
+        lines.append(f"{len(desc_gaps)} endpoint(s) lack a summary or description.")
+        lines.append("")
+        for g in desc_gaps:
+            lines.append(f"- `{g['method']} {g['path']}`")
+        lines.append("")
+
+    # 5) Response examples
+    example_gaps = _full_example_gaps(endpoints)
+    if example_gaps:
+        lines.append("## Response Example Gaps")
+        lines.append("")
+        lines.append(f"{len(example_gaps)} endpoint(s) lack response examples.")
+        lines.append("Add an `example` block to `responses.content.application/json` in your OpenAPI spec.")
+        lines.append("")
+        for g in example_gaps:
+            lines.append(f"- `{g['method']} {g['path']}`")
+        lines.append("")
+
+    # 6) Error documentation
+    error_gaps = _full_error_gaps(endpoints)
+    if error_gaps:
+        lines.append("## Error Documentation Gaps")
+        lines.append("")
+        lines.append(f"{len(error_gaps)} endpoint(s) lack error response documentation.")
+        lines.append("Document expected error responses (400, 401, 404, 422, 500) in your OpenAPI spec.")
+        lines.append("")
+        for g in error_gaps:
+            lines.append(f"- `{g['method']} {g['path']}`")
+        lines.append("")
+
+    # ── Recommendations ──────────────────────────────────────────────────
+    lines.append("## Recommendations")
+    lines.append("")
+    recs = []
+    sm = scan["metrics"]
+    if sm["response_schema_coverage"]["percentage"] < 100:
+        recs.append(
+            "**Define response schemas**: Replace generic `{type: object}` with detailed `properties` "
+            "blocks describing every field the endpoint returns, including type, description, and format."
+        )
+    if sm["field_description_coverage"].get("no_fields_defined"):
+        recs.append(
+            "**Add field definitions first**: Response schemas have no `properties` defined. "
+            "Add fields before descriptions can be evaluated."
+        )
+    elif sm["field_description_coverage"]["percentage"] < 100:
+        recs.append(
+            "**Describe response fields**: Add `description` text to every property in your response schemas. "
+            "Include `unit` where applicable (e.g., `\"unit\": \"lovelace\"`)."
+        )
+    if sm["parameter_documentation"]["percentage"] < 100:
+        recs.append(
+            "**Document parameters**: Add `description` to every path, query, and header parameter. "
+            "Include `example` or `default` values to help API consumers."
+        )
+    if sm["response_example_coverage"]["percentage"] < 100:
+        recs.append(
+            "**Add response examples**: Provide `example` objects in your response schemas "
+            "so API consumers can see expected response shapes."
+        )
+    if sm["error_documentation_coverage"]["percentage"] < 100:
+        recs.append(
+            "**Document error responses**: Describe common error codes (400, 401, 404, 422, 500) "
+            "with descriptions and example error bodies."
+        )
+    for i, r in enumerate(recs, 1):
+        lines.append(f"{i}. {r}")
+    if not recs:
+        lines.append("No gaps detected — documentation coverage is complete.")
+    lines.append("")
+
+    lines.append("---")
+    lines.append(f"*Report generated by BridgeBot API Intelligence Diagnostics*")
+
+    return "\n".join(lines)
+
+
+# ── Full-list helpers (no truncation, used only by gap report) ───────────
+
+def _full_schema_gaps(endpoints: list) -> list:
+    gaps = []
+    for ep in endpoints:
+        schemas = ep.get("response_schema") or {}
+        if not schemas:
+            gaps.append({"method": ep["method"], "path": ep["path"],
+                         "reason": "No response schema defined"})
+            continue
+        has_properties = False
+        for s in schemas.values():
+            if not isinstance(s, dict):
+                continue
+            sc = s.get("schema", {})
+            if sc.get("properties"):
+                has_properties = True
+                break
+            items = sc.get("items", {}) if isinstance(sc.get("items"), dict) else {}
+            if items.get("properties"):
+                has_properties = True
+                break
+        if not has_properties:
+            gaps.append({"method": ep["method"], "path": ep["path"],
+                         "reason": "Schema is generic (no field definitions)"})
+    return gaps
+
+
+def _full_field_gaps(endpoints: list) -> dict:
+    undescribed = []
+    missing_units = []
+    total_fields = 0
+    for ep in endpoints:
+        for _code, resp in (ep.get("response_schema") or {}).items():
+            schema = resp.get("schema", {}) if isinstance(resp, dict) else {}
+            props = schema.get("properties", {})
+            if not props:
+                items = schema.get("items", {})
+                props = items.get("properties", {}) if isinstance(items, dict) else {}
+            for fname, finfo in props.items():
+                total_fields += 1
+                if not finfo.get("description"):
+                    undescribed.append({
+                        "path": f"{ep['method']} {ep['path']}",
+                        "field": fname, "type": finfo.get("type", "unknown"),
+                    })
+                if not finfo.get("unit") and finfo.get("type") in ("number", "integer"):
+                    missing_units.append({
+                        "path": f"{ep['method']} {ep['path']}", "field": fname,
+                    })
+    return {"undescribed": undescribed, "missing_units": missing_units,
+            "no_fields": total_fields == 0}
+
+
+def _full_param_gaps(endpoints: list) -> list:
+    gaps = []
+    for ep in endpoints:
+        for p in (ep.get("parameters") or []):
+            if not p.get("description"):
+                gaps.append({
+                    "path": f"{ep['method']} {ep['path']}",
+                    "param": p.get("name", ""),
+                    "in": p.get("in", ""),
+                    "required": p.get("required", False),
+                })
+    return gaps
+
+
+def _full_desc_gaps(endpoints: list) -> list:
+    return [{"method": ep["method"], "path": ep["path"]}
+            for ep in endpoints
+            if not ep.get("summary") and not ep.get("description")]
+
+
+def _full_example_gaps(endpoints: list) -> list:
+    return [{"method": ep["method"], "path": ep["path"]}
+            for ep in endpoints if not ep.get("response_examples")]
+
+
+def _full_error_gaps(endpoints: list) -> list:
+    return [{"method": ep["method"], "path": ep["path"]}
+            for ep in endpoints if not ep.get("error_responses")]

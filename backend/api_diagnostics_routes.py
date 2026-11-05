@@ -124,6 +124,42 @@ async def passive_scan(integration_id: str, request: Request):
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 1b. Documentation Gap Report  (FREE — exportable Markdown)
+# ══════════════════════════════════════════════════════════════════════════
+
+@router.get("/integrations/{integration_id}/diagnostics/gap-report")
+async def gap_report(integration_id: str, request: Request):
+    """Generate a full documentation gap report as downloadable Markdown."""
+    from fastapi.responses import Response
+
+    db = _require_db()
+    instance_id = await _get_instance_access(request)
+
+    intg = await db.api_integrations.find_one(
+        {"id": integration_id, "instance_id": instance_id},
+        {"_id": 0, "auth_encrypted_value": 0},
+    )
+    if not intg:
+        raise HTTPException(404, "Integration not found")
+
+    endpoints = await db.api_endpoints.find(
+        {"integration_id": integration_id, "instance_id": instance_id}, {"_id": 0}
+    ).to_list(1000)
+
+    markdown = diag.generate_gap_report(endpoints, intg)
+
+    safe_name = (intg.get("name") or "integration").replace(" ", "_").lower()
+
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}_gap_report.md"',
+        },
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 2. AI Endpoint Discovery Test  (ACTIVE — costs LLM tokens)
 # ══════════════════════════════════════════════════════════════════════════
 

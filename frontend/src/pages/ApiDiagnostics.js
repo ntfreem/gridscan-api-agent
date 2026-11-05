@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Activity, Shield, Zap, Brain, FileText, AlertTriangle, CheckCircle,
   XCircle, Play, RefreshCw, ChevronDown, ChevronRight, Search,
-  Clock, Database, Globe, Cpu, BarChart3, Eye, Info, Loader2
+  Clock, Database, Globe, Cpu, BarChart3, Eye, Info, Loader2, Download
 } from "lucide-react";
 import { colors, fonts, T, radius } from "../theme";
 
@@ -335,6 +335,29 @@ export default function ApiDiagnostics({ integrationId, integrationName }) {
     } finally { setUnifiedLoading(false); }
   };
 
+  // ── Gap Report Download ────────────────────────────────────────────────
+  const [reportLoading, setReportLoading] = useState(false);
+  const downloadGapReport = async () => {
+    setReportLoading(true);
+    try {
+      const r = await api.get(`/integrations/${integrationId}/diagnostics/gap-report`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([r.data], { type: "text/markdown" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(integrationName || "integration").replace(/\s+/g, "_").toLowerCase()}_gap_report.md`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success("Gap report downloaded");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to generate report");
+    } finally { setReportLoading(false); }
+  };
+
   const enabledEps = endpoints.filter(e => e.enabled && e.executable);
 
   return (
@@ -345,11 +368,16 @@ export default function ApiDiagnostics({ integrationId, integrationName }) {
         icon={<FileText size={14} color={colors.brand.light} />}
         defaultOpen={true}
         badge={<CostTag type="free" />}
-        actions={
+        actions={<>
+          {scan && (
+            <ActionBtn data-testid="download-gap-report-btn" onClick={downloadGapReport} loading={reportLoading}>
+              <Download size={11} /> Gap Report
+            </ActionBtn>
+          )}
           <ActionBtn onClick={runScan} loading={scanLoading} variant="primary">
             <Search size={11} /> Run Scan
           </ActionBtn>
-        }
+        </>}
       >
         {!scan ? (
           <p style={{ color: colors.text.muted, fontSize: "12px" }}>

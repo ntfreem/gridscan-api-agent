@@ -36,7 +36,7 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 ### Phase 2 — API Integration System
 - Multi-API integration CRUD with encrypted credentials
 - Endpoint management with OpenAPI/Swagger auto-discovery
-- Smart connection probing (tests doc URLs and endpoints, not just root)
+- Smart connection probing (prefers param-free endpoints, uses example values for parameterised ones, 2MB doc limit)
 - Unified AI orchestrator: LLM routes questions → selects endpoints → executes APIs → merges KB+API context
 - API request logging and activity tracking
 
@@ -45,7 +45,7 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - API key analytics dashboard (token usage, costs, latency)
 - Emergent Universal Key as default provider
 
-### Phase 4 — API Intelligence Diagnostics (Nov 2026)
+### Phase 4 — API Intelligence Diagnostics
 - **Passive Documentation Scan** (FREE): Response schema coverage, field description coverage, parameter documentation, endpoint descriptions, response examples, error documentation
 - **AI Endpoint Discovery Test** (LLM tokens): Natural-language question → LLM selects endpoints
 - **Endpoint Execution Test** (API call): Executes real endpoint, validates response against schema
@@ -53,15 +53,21 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord and Web bots with
 - **Instance-Wide Summary**: KB sources, integrations, endpoints, doc coverage, LLM provider, last unified test
 - **Diagnostic History**: Timestamped records of all diagnostic runs
 
-### Phase 4.1 — Diagnostics Accuracy Fix (Nov 2026)
+### Phase 4.1 — Diagnostics Accuracy Fix
 - Generic schemas (`{type: "object"}` without properties) correctly NOT counted as covered
 - Contextual warnings for "no fields defined" in field description metrics
 
-### Phase 4.2 — Response Size Limits & Connection Probing Fix (Nov 2026)
-- **Root cause**: `safe_api_request` enforced a hard 500KB limit on ALL responses. The enriched GridScan OpenAPI spec is 578KB, which caused "Response too large" failures on test-connection (which probed the doc URL).
-- **Fix**: Introduced `MAX_DOC_RESPONSE_SIZE` (2MB) for documentation downloads; `MAX_RESPONSE_SIZE` (500KB) preserved for ordinary API execution.
-- **Connection probing**: Now prefers parameter-free endpoints (e.g., `/api/assets`) over parameterised ones (e.g., `/api/accounts/{stake_address}`). When parameterised endpoints must be used, extracts example/default values from the parameter schema instead of using "test" as a placeholder. Distinguishes expected 400/404 validation failures from actual connectivity failures.
-- **Regression tests**: 14 new tests covering large OpenAPI docs, normal API size limits, schema validation, diagnostic accuracy, and doc import.
+### Phase 4.2 — Response Size Limits & Connection Probing Fix
+- Separate `MAX_DOC_RESPONSE_SIZE` (2MB) for documentation downloads; `MAX_RESPONSE_SIZE` (500KB) for API execution
+- Test-connection prefers parameter-free endpoints, uses example/default values for parameterised ones
+- 14 regression tests covering size limits, schema validation, diagnostic accuracy
+
+### Phase 4.3 — Documentation Gap Report
+- `GET /integrations/{id}/diagnostics/gap-report` returns a full Markdown report
+- Lists every missing item per category (response schemas, field descriptions, parameters, examples, errors)
+- Groups gaps by endpoint for easy provider communication
+- Includes actionable recommendations
+- "Gap Report" download button in the diagnostics panel (appears after scan)
 
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
