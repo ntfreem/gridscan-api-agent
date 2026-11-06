@@ -11,6 +11,7 @@ beautifulsoup4==4.14.3
 black==26.1.0
 boto3==1.42.58
 botocore==1.42.58
+brotli==1.2.1
 certifi==2026.2.25
 cffi==2.0.0
 charset-normalizer==3.4.4
@@ -93,6 +94,7 @@ pymongo==4.5.0
 pyparsing==3.3.2
 PyPDF2==3.0.1
 pytest==9.0.2
+pytest-asyncio==1.4.1.post1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 python-jose==3.5.0
@@ -133,3 +135,4 @@ websockets==16.0
 xlsxwriter==3.2.9
 yarl==1.23.0
 zipp==3.23.0
+zstandard==0.25.0

@@ -3323,6 +3323,21 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             text = soup.get_text(separator="\n", strip=True)
 
         text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+        # ── Content quality guard: detect corrupted/binary content ──
+        if text:
+            null_count = text.count('\x00')
+            replacement_count = text.count('\ufffd')
+            total_bad = null_count + replacement_count
+            if total_bad > len(text) * 0.05:  # >5% corrupted chars
+                logger.warning(f"[SCRAPE] Corrupted content detected for {entry.url}: "
+                              f"{null_count} null bytes, {replacement_count} replacement chars in {len(text)} chars")
+                raise HTTPException(status_code=422, detail=(
+                    "The scraped content appears corrupted (binary/encoding issue). "
+                    "This usually means the server returned compressed content that couldn't be decoded. "
+                    "Please try again — this has likely been fixed."
+                ))
+
         if not page_title:
             from bs4 import BeautifulSoup as BS2
             soup2 = BS2(html_text or "", "html.parser")
