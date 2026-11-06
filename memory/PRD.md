@@ -66,6 +66,8 @@ The URL scraper sent `Accept-Encoding: gzip, deflate, br` but the `brotli` libra
 - **Content Viewer**: New full-page `/admin/knowledge/view` route shows the exact stored content per KB source, with search, part navigation, character stats, and corruption detection. Documents character limits (8K chunks, 60K context window, top-5 search, 2.5K per-source cap).
 - **View Links**: KB source titles are clickable → opens content viewer. Eye icon button added per row.
 - **Selective Re-scrape**: Per-source refresh button (circular arrow) on each URL row. Deletes old chunks and re-scrapes fresh content with spinner feedback. Endpoint: `POST /knowledge/sources/url/rescrape`.
+- **Crawl Path Prefix Fix**: `_extract_subpage_urls` now uses parent directory as prefix (e.g. `/start-building/choose-your-tools/` → prefix `/start-building`), so sibling pages are correctly discovered. Previously used exact path which found 0 sub-pages for leaf URLs.
+- **SSE Error Handling**: Frontend `consumeSSE` now checks `resp.ok` and surfaces HTTP errors instead of silently clearing the form.
 - **Bulk Re-scrape**: "Refresh All URLs" button in KB sources header re-scrapes every URL source via SSE streaming with real-time progress bar showing current page, success/fail counts, and percent complete.
 - **Crawl Progress Bar**: Sub-page crawling now uses SSE streaming with real-time progress bar instead of a simple spinner. Shows discovered sub-pages, current page being scraped, and success/fail counts.
 - **Search Quality Boost**: `search_knowledge` limit bumped from 5 → 12 chunks per query. The 60K char context cap is the real constraint, giving broader recall without overflow.

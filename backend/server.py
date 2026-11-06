@@ -3439,10 +3439,15 @@ def _extract_subpage_urls(html: str, base_url: str, max_depth_path: str = "") ->
     soup = BeautifulSoup(html, "html.parser")
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc
-    # Use the parent path as prefix filter (e.g. /docs/developers/ stays within that section)
-    path_prefix = max_depth_path or parsed_base.path.rstrip("/")
-    if not path_prefix:
-        path_prefix = "/"
+    # Use parent directory as prefix so sibling pages are discovered.
+    # e.g. /docs/curriculum/start-building/choose-your-tools/ → /docs/curriculum/start-building
+    raw_path = parsed_base.path.rstrip("/")
+    if max_depth_path:
+        path_prefix = max_depth_path
+    elif "/" in raw_path:
+        path_prefix = raw_path.rsplit("/", 1)[0]
+    else:
+        path_prefix = raw_path or "/"
 
     seen = set()
     urls = []

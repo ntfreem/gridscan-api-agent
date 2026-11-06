@@ -308,6 +308,10 @@ export default function KnowledgeBase() {
       },
       body: payload ? JSON.stringify(payload) : undefined,
     });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "Unknown error");
+      throw new Error(errText);
+    }
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
