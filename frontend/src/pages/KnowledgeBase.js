@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
@@ -200,6 +201,7 @@ function EditModal({ source, onClose, onSaved }) {
 
 export default function KnowledgeBase() {
   const { selectedInstance } = useAuth();
+  const navigate = useNavigate();
   const instanceId = selectedInstance?.id;
   const [activeTab, setActiveTab] = useState("faq");
   const [sources, setSources] = useState([]);
@@ -207,7 +209,7 @@ export default function KnowledgeBase() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [faq, setFaq] = useState({ title: "", content: "", priority: 0 });
-  const [urlEntry, setUrlEntry] = useState({ url: "", title: "", priority: 0, auth_username: "", auth_password: "" });
+  const [urlEntry, setUrlEntry] = useState({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1 });
   const [docTitle, setDocTitle] = useState("");
   const [docPriority, setDocPriority] = useState(0);
   const [scraping, setScraping] = useState(false);
@@ -246,9 +248,21 @@ export default function KnowledgeBase() {
       const payload = { url: urlEntry.url, title: urlEntry.title, priority: urlEntry.priority };
       if (urlEntry.auth_username?.trim()) payload.auth_username = urlEntry.auth_username.trim();
       if (urlEntry.auth_password?.trim()) payload.auth_password = urlEntry.auth_password.trim();
-      await api.post(`/knowledge/sources/url`, payload);
-      toast.success("URL scraped and saved successfully");
-      setUrlEntry({ url: "", title: "", priority: 0, auth_username: "", auth_password: "" });
+
+      if (urlEntry.crawl_subpages) {
+        payload.crawl_subpages = true;
+        payload.crawl_depth = urlEntry.crawl_depth;
+        const r = await api.post(`/knowledge/sources/url/crawl`, payload);
+        const data = r.data;
+        const ok = data.scraped?.length || 0;
+        const fail = data.failed?.length || 0;
+        if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+        else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
+      } else {
+        await api.post(`/knowledge/sources/url`, payload);
+        toast.success("URL scraped and saved successfully");
+      }
+      setUrlEntry({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1 });
       loadSources();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed to scrape URL"); }
     finally { setScraping(false); }
@@ -490,6 +504,55 @@ export default function KnowledgeBase() {
               <label style={T.label}>Priority</label>
               <PrioritySelector value={urlEntry.priority} onChange={v => setUrlEntry(p => ({ ...p, priority: v }))} />
             </div>
+            {/* Crawl sub-pages option */}
+            <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Network size={14} color={urlEntry.crawl_subpages ? colors.brand.cyan : colors.text.muted} />
+                  <div>
+                    <label style={{ ...T.label, margin: 0, fontSize: "13px" }}>Crawl Sub-pages</label>
+                    <p style={{ ...T.hint, marginTop: "2px", marginBottom: 0, fontSize: "11px" }}>
+                      Also scrape linked pages under the same URL path
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUrlEntry(p => ({ ...p, crawl_subpages: !p.crawl_subpages }))}
+                  data-testid="crawl-toggle"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: urlEntry.crawl_subpages ? colors.brand.success : colors.text.muted, padding: 0 }}
+                >
+                  {urlEntry.crawl_subpages ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                </button>
+              </div>
+              {urlEntry.crawl_subpages && (
+                <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+                  <label style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary }}>Depth:</label>
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    {[1, 2, 3].map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setUrlEntry(p => ({ ...p, crawl_depth: d }))}
+                        data-testid={`depth-${d}`}
+                        style={{
+                          padding: "5px 14px", borderRadius: "6px", fontSize: "12px", fontFamily: fonts.mono,
+                          border: `1px solid ${urlEntry.crawl_depth === d ? colors.brand.cyan : colors.border.default}`,
+                          backgroundColor: urlEntry.crawl_depth === d ? "rgba(96,165,250,0.08)" : "transparent",
+                          color: urlEntry.crawl_depth === d ? colors.brand.cyan : colors.text.secondary,
+                          cursor: "pointer", transition: "all 0.2s",
+                        }}
+                      >
+                        {d} {d === 1 ? "level" : "levels"}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                    max 50 pages per crawl
+                  </span>
+                </div>
+              )}
+            </div>
             <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
                 <Lock size={12} color={colors.text.muted} />
@@ -511,8 +574,8 @@ export default function KnowledgeBase() {
             </div>
             <div>
               <button onClick={scrapeUrl} disabled={scraping} data-testid="url-scrape-btn" style={{ ...T.btnPrimary, opacity: scraping ? 0.6 : 1 }}>
-                {scraping ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
-                {scraping ? "Scraping..." : "Scrape & Save"}
+                {scraping ? <Loader2 size={14} className="animate-spin" /> : urlEntry.crawl_subpages ? <Network size={14} /> : <Globe size={14} />}
+                {scraping ? (urlEntry.crawl_subpages ? "Crawling..." : "Scraping...") : (urlEntry.crawl_subpages ? "Crawl & Save" : "Scrape & Save")}
               </button>
             </div>
           </div>
@@ -696,7 +759,23 @@ export default function KnowledgeBase() {
                   {/* Title + metadata */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: 500, color: colors.text.primary }}>
+                      <span
+                        onClick={() => {
+                          const isGroup = (source.total_parts || 1) > 1;
+                          if (isGroup && source.group_id) {
+                            navigate(`/admin/knowledge/view?group=${encodeURIComponent(source.group_id)}`);
+                          } else if (source.parts?.[0]) {
+                            navigate(`/admin/knowledge/view?id=${source.parts[0]}`);
+                          }
+                        }}
+                        data-testid="view-source-content"
+                        style={{
+                          fontFamily: fonts.body, fontSize: "13px", fontWeight: 500, color: colors.text.primary,
+                          cursor: "pointer", transition: "color 0.2s",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = colors.brand.cyan}
+                        onMouseLeave={e => e.currentTarget.style.color = colors.text.primary}
+                      >
                         {source.title}
                       </span>
                       <PartsBadge parts={source.total_parts} />
@@ -791,6 +870,19 @@ export default function KnowledgeBase() {
 
                   {/* Actions */}
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      onClick={() => {
+                        if (isGroup && source.group_id) navigate(`/admin/knowledge/view?group=${encodeURIComponent(source.group_id)}`);
+                        else if (source.parts?.[0]) navigate(`/admin/knowledge/view?id=${source.parts[0]}`);
+                      }}
+                      data-testid="view-content-btn"
+                      title="View stored content"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.color = colors.brand.cyan}
+                      onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}
+                    >
+                      <Eye size={14} />
+                    </button>
                     {!isGroup && source.parts?.length === 1 && (
                       <button onClick={() => setEditing({ ...source, id: source.parts[0] })} data-testid="edit-source-btn"
                         style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s" }}

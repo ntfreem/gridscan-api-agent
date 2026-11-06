@@ -25,6 +25,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import Docs from "@/pages/Docs";
 import ApiIntegrations from "@/pages/ApiIntegrations";
 import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
+import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
 import "@/App.css";
 
 function ProtectedRoute({ children }) {
@@ -68,6 +69,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="knowledge" element={<KnowledgeBase />} />
+        <Route path="knowledge/view" element={<KnowledgeContentViewer />} />
         <Route path="conversations" element={<Conversations />} />
         <Route path="settings" element={<BotSettings />} />
         <Route path="analytics" element={<Analytics />} />

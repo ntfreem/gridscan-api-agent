@@ -226,6 +226,8 @@ class URLEntry(BaseModel):
     priority: Optional[int] = 0
     auth_username: Optional[str] = None
     auth_password: Optional[str] = None
+    crawl_subpages: Optional[bool] = False
+    crawl_depth: Optional[int] = 1  # 1 = one level, 2 = two levels
 
 class ChatMessage(BaseModel):
     message: str
@@ -3022,6 +3024,42 @@ async def add_faq(entry: FAQEntry, instance_id: str = Depends(get_instance_acces
     doc.pop("_id", None)
     return doc
 
+@api_router.get("/knowledge/sources/{source_id}/content")
+async def get_source_content(source_id: str, instance_id: str = Depends(get_instance_access)):
+    """Return full stored content for a single KB source."""
+    source = await db.knowledge_sources.find_one(
+        {"id": source_id, "instance_id": instance_id}, {"_id": 0}
+    )
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return source
+
+@api_router.get("/knowledge/sources/group/{group_id}/content")
+async def get_group_content(group_id: str, instance_id: str = Depends(get_instance_access)):
+    """Return full stored content for all parts of a grouped source."""
+    chunks = await db.knowledge_sources.find(
+        {"group_id": group_id, "instance_id": instance_id}, {"_id": 0}
+    ).sort([("created_at", 1)]).to_list(100)
+    if not chunks:
+        raise HTTPException(status_code=404, detail="Source group not found")
+    return {
+        "group_id": group_id,
+        "title": re.sub(r'\s*\(part \d+/\d+\)$', '', chunks[0].get("title", "")),
+        "url": chunks[0].get("url", ""),
+        "type": chunks[0].get("type", ""),
+        "total_parts": len(chunks),
+        "total_chars": sum(len(c.get("content", "")) for c in chunks),
+        "parts": [
+            {
+                "id": c["id"],
+                "title": c.get("title", ""),
+                "content": c.get("content", ""),
+                "char_count": len(c.get("content", "")),
+            }
+            for c in chunks
+        ],
+    }
+
 def _split_into_chunks(text: str, max_chunk: int = 8000) -> list:
     """Split large text into chunks, preferring section/Q&A boundaries."""
     if len(text) <= max_chunk:
@@ -3380,6 +3418,142 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"URL scraping failed: {str(e)}")
+
+def _extract_subpage_urls(html: str, base_url: str, max_depth_path: str = "") -> list:
+    """Extract same-domain sub-page URLs from HTML. Filters to same path prefix."""
+    from bs4 import BeautifulSoup
+    from urllib.parse import urljoin, urlparse
+    soup = BeautifulSoup(html, "html.parser")
+    parsed_base = urlparse(base_url)
+    base_domain = parsed_base.netloc
+    # Use the parent path as prefix filter (e.g. /docs/developers/ stays within that section)
+    path_prefix = max_depth_path or parsed_base.path.rstrip("/")
+    if not path_prefix:
+        path_prefix = "/"
+
+    seen = set()
+    urls = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        # Skip anchors, javascript, mailto, etc.
+        if href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        full_url = urljoin(base_url, href)
+        parsed = urlparse(full_url)
+        # Same domain only
+        if parsed.netloc != base_domain:
+            continue
+        # Clean URL (remove fragment/query)
+        clean = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
+        if not clean or clean in seen:
+            continue
+        # Must be under the same path prefix
+        if not parsed.path.startswith(path_prefix):
+            continue
+        # Skip the base URL itself
+        if clean.rstrip("/") == base_url.rstrip("/"):
+            continue
+        # Skip common non-content paths
+        skip = False
+        for seg in ["/api/", "/static/", "/assets/", "/_next/", "/cdn-cgi/"]:
+            if seg in parsed.path:
+                skip = True
+                break
+        if skip:
+            continue
+        seen.add(clean)
+        urls.append(clean)
+    return urls
+
+@api_router.post("/knowledge/sources/url/crawl")
+async def crawl_url_source(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
+    """Scrape a URL and optionally crawl its sub-pages up to the configured depth."""
+    results = {"scraped": [], "failed": [], "total_pages": 0}
+
+    # Scrape the root page first
+    try:
+        root_result = await scrape_url_source(
+            URLEntry(url=entry.url, title=entry.title, priority=entry.priority,
+                     auth_username=entry.auth_username, auth_password=entry.auth_password,
+                     crawl_subpages=False),
+            instance_id
+        )
+        results["scraped"].append({"url": entry.url, "status": "ok"})
+    except Exception as e:
+        results["failed"].append({"url": entry.url, "error": str(e)})
+        return results
+
+    if not entry.crawl_subpages:
+        results["total_pages"] = 1
+        return results
+
+    depth = min(entry.crawl_depth or 1, 3)  # Cap at 3 levels
+    # Fetch the root HTML to discover sub-pages
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+    }
+    auth = None
+    if entry.auth_username and entry.auth_password:
+        auth = httpx.BasicAuth(entry.auth_username, entry.auth_password)
+
+    visited = {entry.url.rstrip("/")}
+    to_crawl = []  # list of (url, current_depth)
+
+    # Discover level-1 sub-pages
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, auth=auth) as http:
+            resp = await http.get(entry.url, headers=headers)
+            if resp.status_code == 200:
+                sub_urls = _extract_subpage_urls(resp.text, entry.url)
+                for u in sub_urls:
+                    if u.rstrip("/") not in visited:
+                        to_crawl.append((u, 1))
+                        visited.add(u.rstrip("/"))
+    except Exception as e:
+        logger.warning(f"[CRAWL] Failed to discover sub-pages: {e}")
+
+    # Crawl discovered sub-pages
+    MAX_PAGES = 50  # Safety cap per crawl
+    page_count = 1  # root already scraped
+    for crawl_url, current_depth in to_crawl:
+        if page_count >= MAX_PAGES:
+            logger.warning(f"[CRAWL] Hit page limit ({MAX_PAGES}) for {entry.url}")
+            break
+        try:
+            await scrape_url_source(
+                URLEntry(url=crawl_url, priority=entry.priority,
+                         auth_username=entry.auth_username, auth_password=entry.auth_password,
+                         crawl_subpages=False),
+                instance_id
+            )
+            results["scraped"].append({"url": crawl_url, "status": "ok"})
+            page_count += 1
+
+            # If we need to go deeper, discover sub-pages of this page
+            if current_depth < depth:
+                try:
+                    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, auth=auth) as http:
+                        resp = await http.get(crawl_url, headers=headers)
+                        if resp.status_code == 200:
+                            deeper_urls = _extract_subpage_urls(resp.text, crawl_url, entry.url.rstrip("/").rsplit("/", 1)[0] if "/" in entry.url else "")
+                            for u in deeper_urls:
+                                if u.rstrip("/") not in visited:
+                                    to_crawl.append((u, current_depth + 1))
+                                    visited.add(u.rstrip("/"))
+                except Exception:
+                    pass
+
+            # Small delay to be respectful to the target server
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            err_msg = str(getattr(e, 'detail', e))
+            results["failed"].append({"url": crawl_url, "error": err_msg})
+            logger.warning(f"[CRAWL] Failed to scrape {crawl_url}: {err_msg}")
+
+    results["total_pages"] = page_count
+    return results
 @api_router.post("/knowledge/sources/upload")
 async def upload_document(
     file: UploadFile = File(...),

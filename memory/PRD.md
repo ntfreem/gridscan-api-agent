@@ -55,6 +55,17 @@ With enriched documentation, the endpoint listing grew to 33,745 chars but was t
 **Bug 4 — LLM recites curl commands from KB instead of executing APIs (P0):**
 `build_system_prompt` only checked the legacy `bot_config.api_query_enabled` flag to decide whether to tell the LLM it can call APIs. Newer instances use the `api_integrations` collection (checked via `has_api_integrations`), but this was never passed into the function. Result: the LLM was never told it could make API calls, so when KB contained API documentation with curl examples, it regurgitated them. Fixed: added `has_api_integrations` parameter to `build_system_prompt`, unified the gate (`api_query_enabled OR has_api_integrations`), added explicit anti-hallucination guardrails ("DO NOT recite curl commands or API docs"), updated all 4 call sites (streaming, non-streaming, v1 API, Discord). Also removed the harmful fallback text "help the user with documentation and curl commands instead."
 
+**Bug 5 — API Capability Summary for meta-questions:**
+When the LLM router returned "none" (no specific API call needed), `_try_api_query` returned `None`, losing all endpoint information. The LLM then answered meta-questions ("how many endpoints do you have?") from incomplete KB docs instead of the live system. Fixed: when router returns "none" but endpoints exist, returns a capability summary with accurate endpoint counts and categories.
+
+**Bug 6 — Brotli-encoded pages stored as binary garbage (P0):**
+The URL scraper sent `Accept-Encoding: gzip, deflate, br` but the `brotli` library was not installed. When CDNs (cardano.org) returned Brotli-compressed responses, httpx couldn't decode them → `resp.text` interpreted compressed bytes as UTF-8 → stored as binary garbage. Fixed: installed `brotli` and `zstandard` packages. Added content quality guard that rejects content with >5% null/replacement bytes.
+
+### Phase 6 — Scraper Improvements & Content Viewer (current)
+- **Sub-page Crawler**: New `/api/knowledge/sources/url/crawl` endpoint crawls same-domain sub-pages up to configurable depth (1-3 levels, max 50 pages). Frontend toggle + depth selector in URL scraper form.
+- **Content Viewer**: New full-page `/admin/knowledge/view` route shows the exact stored content per KB source, with search, part navigation, character stats, and corruption detection. Documents character limits (8K chunks, 60K context window, top-5 search, 2.5K per-source cap).
+- **View Links**: KB source titles are clickable → opens content viewer. Eye icon button added per row.
+
 ## Backlog
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)
