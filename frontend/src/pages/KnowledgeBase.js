@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
@@ -90,6 +90,57 @@ function PartsBadge({ parts }) {
     }}>
       <Layers size={9} />{parts} parts
     </span>
+  );
+}
+
+function ScrapeProgressBar({ progress, onCancel }) {
+  if (!progress) return null;
+  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  return (
+    <div data-testid="scrape-progress-bar" style={{
+      padding: "16px 20px", backgroundColor: colors.bg.base, borderRadius: "10px",
+      border: `1px solid ${colors.border.subtle}`, marginBottom: "16px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Loader2 size={14} color={colors.brand.cyan} className="animate-spin" />
+          <span style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.primary, fontWeight: 500 }}>
+            {progress.message || "Processing..."}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {progress.scraped > 0 && (
+            <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.success }}>
+              {progress.scraped} done
+            </span>
+          )}
+          {progress.failed > 0 && (
+            <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.error }}>
+              {progress.failed} failed
+            </span>
+          )}
+          <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted }}>
+            {progress.current}/{progress.total}
+          </span>
+        </div>
+      </div>
+      {/* Progress bar track */}
+      <div style={{
+        height: "6px", borderRadius: "3px", backgroundColor: "rgba(255,255,255,0.06)",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%", borderRadius: "3px", width: `${pct}%`,
+          backgroundColor: progress.failed > 0 ? colors.brand.warning : colors.brand.cyan,
+          transition: "width 0.3s ease",
+        }} />
+      </div>
+      {progress.url && (
+        <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, marginTop: "6px", marginBottom: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {progress.url}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -213,6 +264,8 @@ export default function KnowledgeBase() {
   const [docTitle, setDocTitle] = useState("");
   const [docPriority, setDocPriority] = useState(0);
   const [scraping, setScraping] = useState(false);
+  const [scrapeProgress, setScrapeProgress] = useState(null);
+  const [bulkRescraping, setBulkRescraping] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -241,9 +294,44 @@ export default function KnowledgeBase() {
     finally { setLoading(false); }
   };
 
+  // SSE stream consumer helper
+  const consumeSSE = async (url, payload, { onProgress, onComplete, onError }) => {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const instanceHeader = selectedInstance?.id || "";
+    const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}${url}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Instance-ID": instanceHeader,
+      },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const dataLine = line.replace(/^data: /, "").trim();
+        if (!dataLine) continue;
+        try {
+          const data = JSON.parse(dataLine);
+          if (data.type === "complete") { onComplete?.(data); return; }
+          else if (data.type === "page_done" || data.type === "progress" || data.type === "discovered") { onProgress?.(data); }
+        } catch { /* skip malformed events */ }
+      }
+    }
+  };
+
   const scrapeUrl = async () => {
     if (!urlEntry.url.trim()) { toast.error("URL is required"); return; }
     setScraping(true);
+    setScrapeProgress(null);
     try {
       const payload = { url: urlEntry.url, title: urlEntry.title, priority: urlEntry.priority };
       if (urlEntry.auth_username?.trim()) payload.auth_username = urlEntry.auth_username.trim();
@@ -252,12 +340,26 @@ export default function KnowledgeBase() {
       if (urlEntry.crawl_subpages) {
         payload.crawl_subpages = true;
         payload.crawl_depth = urlEntry.crawl_depth;
-        const r = await api.post(`/knowledge/sources/url/crawl`, payload);
-        const data = r.data;
-        const ok = data.scraped?.length || 0;
-        const fail = data.failed?.length || 0;
-        if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
-        else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
+        setScrapeProgress({ current: 0, total: 1, message: "Starting crawl...", scraped: 0, failed: 0, url: urlEntry.url });
+        await consumeSSE("/api/knowledge/sources/url/crawl-stream", payload, {
+          onProgress: (data) => {
+            setScrapeProgress(prev => ({
+              ...prev,
+              current: data.current || prev?.current || 0,
+              total: data.total || prev?.total || 1,
+              message: data.message || prev?.message,
+              scraped: data.scraped ?? prev?.scraped ?? 0,
+              failed: data.failed ?? prev?.failed ?? 0,
+              url: data.url || prev?.url,
+            }));
+          },
+          onComplete: (data) => {
+            const ok = data.scraped || 0;
+            const fail = data.failed || 0;
+            if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+            else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
+          },
+        });
       } else {
         await api.post(`/knowledge/sources/url`, payload);
         toast.success("URL scraped and saved successfully");
@@ -265,7 +367,37 @@ export default function KnowledgeBase() {
       setUrlEntry({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1 });
       loadSources();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed to scrape URL"); }
-    finally { setScraping(false); }
+    finally { setScraping(false); setScrapeProgress(null); }
+  };
+
+  const bulkRescrape = async () => {
+    const urlCount = sources.filter(s => s.type === "url").length;
+    if (urlCount === 0) { toast.error("No URL sources to re-scrape"); return; }
+    if (!window.confirm(`Re-scrape all ${urlCount} URL sources? This will replace existing content with fresh data.`)) return;
+    setBulkRescraping(true);
+    setScrapeProgress({ current: 0, total: urlCount, message: "Starting bulk re-scrape...", scraped: 0, failed: 0, url: "" });
+    try {
+      await consumeSSE("/api/knowledge/sources/bulk-rescrape", null, {
+        onProgress: (data) => {
+          setScrapeProgress(prev => ({
+            ...prev,
+            current: data.current || prev?.current || 0,
+            total: data.total || prev?.total || urlCount,
+            message: data.message || prev?.message,
+            scraped: data.scraped ?? prev?.scraped ?? 0,
+            failed: data.failed ?? prev?.failed ?? 0,
+            url: data.url || prev?.url,
+          }));
+        },
+        onComplete: (data) => {
+          const ok = data.scraped || 0;
+          const fail = data.failed || 0;
+          toast.success(`Re-scraped ${ok} URL${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+          loadSources();
+        },
+      });
+    } catch (e) { toast.error("Bulk re-scrape failed"); }
+    finally { setBulkRescraping(false); setScrapeProgress(null); loadSources(); }
   };
 
   const uploadFile = async () => {
@@ -573,12 +705,14 @@ export default function KnowledgeBase() {
               </div>
             </div>
             <div>
-              <button onClick={scrapeUrl} disabled={scraping} data-testid="url-scrape-btn" style={{ ...T.btnPrimary, opacity: scraping ? 0.6 : 1 }}>
+              <button onClick={scrapeUrl} disabled={scraping || bulkRescraping} data-testid="url-scrape-btn" style={{ ...T.btnPrimary, opacity: (scraping || bulkRescraping) ? 0.6 : 1 }}>
                 {scraping ? <Loader2 size={14} className="animate-spin" /> : urlEntry.crawl_subpages ? <Network size={14} /> : <Globe size={14} />}
                 {scraping ? (urlEntry.crawl_subpages ? "Crawling..." : "Scraping...") : (urlEntry.crawl_subpages ? "Crawl & Save" : "Scrape & Save")}
               </button>
             </div>
           </div>
+          {/* SSE Progress Bar */}
+          {scrapeProgress && <ScrapeProgressBar progress={scrapeProgress} />}
         </div>
       )}
 
@@ -650,11 +784,38 @@ export default function KnowledgeBase() {
                 </select>
               </div>
             )}
+            {sources.some(s => s.type === "url") && (
+              <button
+                onClick={bulkRescrape}
+                disabled={bulkRescraping || scraping}
+                data-testid="bulk-rescrape-btn"
+                title="Re-scrape all URL sources to refresh content"
+                style={{
+                  padding: "5px 12px", borderRadius: "8px", fontSize: "11px", fontFamily: fonts.body, fontWeight: "600",
+                  backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+                  color: bulkRescraping ? colors.text.muted : colors.text.secondary,
+                  cursor: bulkRescraping ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: "5px", transition: "all 0.2s",
+                }}
+                onMouseEnter={e => { if (!bulkRescraping) { e.currentTarget.style.borderColor = colors.brand.cyan; e.currentTarget.style.color = colors.brand.cyan; } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border.default; e.currentTarget.style.color = colors.text.secondary; }}
+              >
+                {bulkRescraping ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                {bulkRescraping ? "Re-scraping..." : "Refresh All URLs"}
+              </button>
+            )}
             <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0 }}>
               Sorted by priority
             </p>
           </div>
         </div>
+
+        {/* Bulk rescrape progress bar */}
+        {bulkRescraping && scrapeProgress && (
+          <div style={{ padding: "0 20px", paddingTop: "12px" }}>
+            <ScrapeProgressBar progress={scrapeProgress} />
+          </div>
+        )}
 
         {/* Bulk action bar */}
         {selected.size > 0 && (

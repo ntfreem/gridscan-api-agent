@@ -383,7 +383,7 @@ async def test_api_query(body: dict, instance_id: str = Depends(get_instance_acc
 
 # ==================== KNOWLEDGE / TONE HELPERS ====================
 
-async def search_knowledge(query: str, instance_id: str, limit: int = 5) -> str:
+async def search_knowledge(query: str, instance_id: str, limit: int = 12) -> str:
     try:
         # ── Step 1: Try MongoDB text search for relevance ──
         text_results = []
@@ -3554,6 +3554,153 @@ async def crawl_url_source(entry: URLEntry, instance_id: str = Depends(get_insta
 
     results["total_pages"] = page_count
     return results
+
+@api_router.post("/knowledge/sources/url/crawl-stream")
+async def crawl_url_source_stream(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
+    """SSE version of crawl that streams progress events."""
+    async def event_stream():
+        import json as _json
+        def ev(data):
+            return f"data: {_json.dumps(data)}\n\n"
+
+        results = {"scraped": [], "failed": []}
+
+        # Scrape root page
+        yield ev({"type": "progress", "current": 0, "total": 1, "message": f"Scraping root page...", "url": entry.url})
+        try:
+            await scrape_url_source(
+                URLEntry(url=entry.url, title=entry.title, priority=entry.priority,
+                         auth_username=entry.auth_username, auth_password=entry.auth_password, crawl_subpages=False),
+                instance_id
+            )
+            results["scraped"].append(entry.url)
+            yield ev({"type": "page_done", "url": entry.url, "status": "ok", "scraped": len(results["scraped"]), "failed": len(results["failed"])})
+        except Exception as e:
+            results["failed"].append(entry.url)
+            yield ev({"type": "page_done", "url": entry.url, "status": "error", "error": str(getattr(e, "detail", e)), "scraped": len(results["scraped"]), "failed": len(results["failed"])})
+            yield ev({"type": "complete", "scraped": len(results["scraped"]), "failed": len(results["failed"]), "total": 1})
+            return
+
+        if not entry.crawl_subpages:
+            yield ev({"type": "complete", "scraped": len(results["scraped"]), "failed": len(results["failed"]), "total": 1})
+            return
+
+        depth = min(entry.crawl_depth or 1, 3)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml", "Accept-Encoding": "gzip, deflate, br",
+        }
+        auth = httpx.BasicAuth(entry.auth_username, entry.auth_password) if entry.auth_username and entry.auth_password else None
+
+        # Discover sub-pages
+        yield ev({"type": "progress", "current": 1, "total": 1, "message": "Discovering sub-pages..."})
+        visited = {entry.url.rstrip("/")}
+        to_crawl = []
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, auth=auth) as http:
+                resp = await http.get(entry.url, headers=headers)
+                if resp.status_code == 200:
+                    sub_urls = _extract_subpage_urls(resp.text, entry.url)
+                    for u in sub_urls:
+                        if u.rstrip("/") not in visited:
+                            to_crawl.append((u, 1))
+                            visited.add(u.rstrip("/"))
+        except Exception:
+            pass
+
+        total = 1 + len(to_crawl)
+        yield ev({"type": "discovered", "total": total, "subpages": len(to_crawl)})
+
+        MAX_PAGES = 50
+        page_count = 1
+        for crawl_url, current_depth in to_crawl:
+            if page_count >= MAX_PAGES:
+                break
+            yield ev({"type": "progress", "current": page_count + 1, "total": min(total, MAX_PAGES), "message": f"Scraping page {page_count + 1}/{min(total, MAX_PAGES)}...", "url": crawl_url})
+            try:
+                await scrape_url_source(
+                    URLEntry(url=crawl_url, priority=entry.priority,
+                             auth_username=entry.auth_username, auth_password=entry.auth_password, crawl_subpages=False),
+                    instance_id
+                )
+                results["scraped"].append(crawl_url)
+                page_count += 1
+                yield ev({"type": "page_done", "url": crawl_url, "status": "ok", "scraped": len(results["scraped"]), "failed": len(results["failed"])})
+            except Exception as e:
+                results["failed"].append(crawl_url)
+                yield ev({"type": "page_done", "url": crawl_url, "status": "error", "error": str(getattr(e, "detail", e)), "scraped": len(results["scraped"]), "failed": len(results["failed"])})
+
+            if current_depth < depth:
+                try:
+                    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, auth=auth) as http:
+                        resp = await http.get(crawl_url, headers=headers)
+                        if resp.status_code == 200:
+                            deeper_urls = _extract_subpage_urls(resp.text, crawl_url, entry.url.rstrip("/").rsplit("/", 1)[0] if "/" in entry.url else "")
+                            for u in deeper_urls:
+                                if u.rstrip("/") not in visited:
+                                    to_crawl.append((u, current_depth + 1))
+                                    visited.add(u.rstrip("/"))
+                                    total += 1
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)
+
+        yield ev({"type": "complete", "scraped": len(results["scraped"]), "failed": len(results["failed"]), "total": page_count})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+@api_router.post("/knowledge/sources/bulk-rescrape")
+async def bulk_rescrape_sources(instance_id: str = Depends(get_instance_access)):
+    """Re-scrape all URL-type KB sources. Streams SSE progress."""
+    async def event_stream():
+        import json as _json
+        def ev(data):
+            return f"data: {_json.dumps(data)}\n\n"
+
+        # Get all unique URLs for this instance
+        sources = await db.knowledge_sources.find(
+            {"instance_id": instance_id, "type": "url"}, {"url": 1, "group_id": 1, "id": 1, "_id": 0}
+        ).to_list(1000)
+
+        # Deduplicate by URL
+        unique_urls = {}
+        for s in sources:
+            url = s.get("url", "")
+            if url and url not in unique_urls:
+                unique_urls[url] = []
+            if url:
+                unique_urls[url].append(s.get("id"))
+
+        total = len(unique_urls)
+        if total == 0:
+            yield ev({"type": "complete", "scraped": 0, "failed": 0, "total": 0, "message": "No URL sources found"})
+            return
+
+        yield ev({"type": "discovered", "total": total, "message": f"Found {total} unique URLs to re-scrape"})
+
+        scraped = 0
+        failed = 0
+        for i, (url, old_ids) in enumerate(unique_urls.items()):
+            yield ev({"type": "progress", "current": i + 1, "total": total, "message": f"Re-scraping {i + 1}/{total}...", "url": url})
+            try:
+                # Delete old documents for this URL
+                await db.knowledge_sources.delete_many({"instance_id": instance_id, "url": url})
+                # Re-scrape
+                await scrape_url_source(
+                    URLEntry(url=url, crawl_subpages=False), instance_id
+                )
+                scraped += 1
+                yield ev({"type": "page_done", "url": url, "status": "ok", "scraped": scraped, "failed": failed})
+            except Exception as e:
+                failed += 1
+                err = str(getattr(e, "detail", e))
+                logger.warning(f"[BULK-RESCRAPE] Failed {url}: {err}")
+                yield ev({"type": "page_done", "url": url, "status": "error", "error": err, "scraped": scraped, "failed": failed})
+            await asyncio.sleep(0.3)
+
+        yield ev({"type": "complete", "scraped": scraped, "failed": failed, "total": total})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 @api_router.post("/knowledge/sources/upload")
 async def upload_document(
     file: UploadFile = File(...),
