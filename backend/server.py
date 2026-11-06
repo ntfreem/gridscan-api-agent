@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Depends, Header, Response, Cookie, Request
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Depends, Header, Response, Cookie, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3256,6 +3256,19 @@ async def _try_cloudscraper(url: str) -> tuple:
         tag.decompose()
     text = soup.get_text(separator="\n", strip=True)
     return (html, text)
+@api_router.post("/knowledge/sources/url/rescrape")
+async def rescrape_single_url(body: dict = Body(...), instance_id: str = Depends(get_instance_access)):
+    """Delete old chunks for a URL and re-scrape it fresh."""
+    url = body.get("url", "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    # Delete existing documents for this URL
+    deleted = await db.knowledge_sources.delete_many({"instance_id": instance_id, "url": url})
+    logger.info(f"[RESCRAPE] Deleted {deleted.deleted_count} old chunks for {url}")
+    # Re-scrape
+    result = await scrape_url_source(URLEntry(url=url, crawl_subpages=False), instance_id)
+    return {"status": "ok", "url": url, "deleted_old": deleted.deleted_count, "result": result}
+
 @api_router.post("/knowledge/sources/url")
 async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_instance_access)):
     try:

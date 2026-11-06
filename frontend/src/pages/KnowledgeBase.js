@@ -266,6 +266,7 @@ export default function KnowledgeBase() {
   const [scraping, setScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState(null);
   const [bulkRescraping, setBulkRescraping] = useState(false);
+  const [rescrapingUrl, setRescrapingUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -398,6 +399,17 @@ export default function KnowledgeBase() {
       });
     } catch (e) { toast.error("Bulk re-scrape failed"); }
     finally { setBulkRescraping(false); setScrapeProgress(null); loadSources(); }
+  };
+
+  const rescrapeSource = async (source) => {
+    if (!source.url) return;
+    setRescrapingUrl(source.url);
+    try {
+      await api.post(`/knowledge/sources/url/rescrape`, { url: source.url });
+      toast.success(`Re-scraped "${source.title || source.url}" successfully`);
+      loadSources();
+    } catch (e) { toast.error(e.response?.data?.detail || "Re-scrape failed"); }
+    finally { setRescrapingUrl(null); }
   };
 
   const uploadFile = async () => {
@@ -1044,6 +1056,19 @@ export default function KnowledgeBase() {
                     >
                       <Eye size={14} />
                     </button>
+                    {source.type === "url" && source.url && (
+                      <button
+                        onClick={() => rescrapeSource(source)}
+                        disabled={rescrapingUrl === source.url}
+                        data-testid="rescrape-source-btn"
+                        title="Re-scrape this URL to refresh content"
+                        style={{ background: "none", border: "none", cursor: rescrapingUrl === source.url ? "not-allowed" : "pointer", color: rescrapingUrl === source.url ? colors.brand.cyan : colors.text.secondary, padding: "4px", transition: "color 0.2s" }}
+                        onMouseEnter={e => { if (rescrapingUrl !== source.url) e.currentTarget.style.color = colors.brand.success; }}
+                        onMouseLeave={e => { if (rescrapingUrl !== source.url) e.currentTarget.style.color = colors.text.secondary; }}
+                      >
+                        {rescrapingUrl === source.url ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      </button>
+                    )}
                     {!isGroup && source.parts?.length === 1 && (
                       <button onClick={() => setEditing({ ...source, id: source.parts[0] })} data-testid="edit-source-btn"
                         style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px", transition: "color 0.2s" }}
