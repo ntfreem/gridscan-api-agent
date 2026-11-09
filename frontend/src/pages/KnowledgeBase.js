@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
@@ -271,6 +271,7 @@ export default function KnowledgeBase() {
   const [editing, setEditing] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryInput, setCategoryInput] = useState("");
+  const [collapsedCategories, setCollapsedCategories] = useState(new Set());
   const [selected, setSelected] = useState(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -606,6 +607,32 @@ export default function KnowledgeBase() {
     ? sources.filter(s => (s.category || "") === categoryFilter)
     : sources;
 
+  // Group sources by category for collapsible rendering
+  const groupedSources = useMemo(() => {
+    const groups = {};
+    filteredSources.forEach(source => {
+      const cat = source.category || "Uncategorized";
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(source);
+    });
+    // Sort categories: named first (alphabetical), Uncategorized last
+    const sorted = Object.entries(groups).sort(([a], [b]) => {
+      if (a === "Uncategorized") return 1;
+      if (b === "Uncategorized") return -1;
+      return a.localeCompare(b);
+    });
+    return sorted;
+  }, [filteredSources]);
+
+  const toggleCategory = (cat) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
   // Clear selection when filter changes to avoid stale hidden selections
   useEffect(() => { setSelected(new Set()); }, [categoryFilter]);
 
@@ -921,7 +948,49 @@ export default function KnowledgeBase() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {filteredSources.map((source, idx) => {
+            {groupedSources.map(([category, catSources]) => {
+              const isCollapsed = collapsedCategories.has(category);
+              const catChars = catSources.reduce((sum, s) => sum + (s.total_chars || 0), 0);
+              return (
+                <div key={category}>
+                  {/* Category header — only show if there are multiple categories */}
+                  {groupedSources.length > 1 && (
+                    <div
+                      onClick={() => toggleCategory(category)}
+                      data-testid={`category-group-${category}`}
+                      style={{
+                        padding: "10px 20px", cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: "10px",
+                        backgroundColor: "rgba(96,165,250,0.03)",
+                        borderBottom: `1px solid ${colors.border.faint}`,
+                        transition: "background-color 0.15s",
+                        userSelect: "none",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(96,165,250,0.06)"}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(96,165,250,0.03)"}
+                    >
+                      <ChevronRight
+                        size={14}
+                        color={colors.text.muted}
+                        style={{ transition: "transform 0.2s", transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)" }}
+                      />
+                      {isCollapsed
+                        ? <FolderClosed size={14} color={colors.brand.light} />
+                        : <FolderOpen size={14} color={colors.brand.light} />}
+                      <span style={{ fontFamily: fonts.heading, fontSize: "12px", fontWeight: 600, color: colors.text.primary, letterSpacing: "0.02em" }}>
+                        {category}
+                      </span>
+                      <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                        {catSources.length} source{catSources.length !== 1 ? "s" : ""}
+                      </span>
+                      <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                        {catChars > 1000 ? `${(catChars / 1000).toFixed(1)}k` : catChars} chars
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Source rows — hidden when collapsed */}
+                  {!isCollapsed && catSources.map((source, idx) => {
               const sourceKey = source.group_id || source.id || source.parts?.[0] || idx;
               const isGroup = (source.total_parts || 1) > 1;
               const totalChars = source.total_chars || 0;
@@ -1107,6 +1176,9 @@ export default function KnowledgeBase() {
                       <Trash2 size={15} />
                     </button>
                   </div>
+                </div>
+              );
+            })}
                 </div>
               );
             })}
