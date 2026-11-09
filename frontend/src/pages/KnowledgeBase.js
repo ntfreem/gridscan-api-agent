@@ -297,7 +297,7 @@ export default function KnowledgeBase() {
 
   // SSE stream consumer helper
   const consumeSSE = async (url, payload, { onProgress, onComplete, onError }) => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token = localStorage.getItem("bf_token");
     const instanceHeader = selectedInstance?.id || "";
     const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}${url}`, {
       method: "POST",
@@ -345,26 +345,47 @@ export default function KnowledgeBase() {
       if (urlEntry.crawl_subpages) {
         payload.crawl_subpages = true;
         payload.crawl_depth = urlEntry.crawl_depth;
-        setScrapeProgress({ current: 0, total: 1, message: "Starting crawl...", scraped: 0, failed: 0, url: urlEntry.url });
-        await consumeSSE("/api/knowledge/sources/url/crawl-stream", payload, {
-          onProgress: (data) => {
-            setScrapeProgress(prev => ({
-              ...prev,
-              current: data.current || prev?.current || 0,
-              total: data.total || prev?.total || 1,
-              message: data.message || prev?.message,
-              scraped: data.scraped ?? prev?.scraped ?? 0,
-              failed: data.failed ?? prev?.failed ?? 0,
-              url: data.url || prev?.url,
-            }));
-          },
-          onComplete: (data) => {
-            const ok = data.scraped || 0;
-            const fail = data.failed || 0;
-            if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
-            else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
-          },
-        });
+        let sseWorked = false;
+        try {
+          // Try SSE stream for real-time progress
+          setScrapeProgress({ current: 0, total: 1, message: "Starting crawl...", scraped: 0, failed: 0, url: urlEntry.url });
+          await consumeSSE("/api/knowledge/sources/url/crawl-stream", payload, {
+            onProgress: (data) => {
+              sseWorked = true;
+              setScrapeProgress(prev => ({
+                ...prev,
+                current: data.current || prev?.current || 0,
+                total: data.total || prev?.total || 1,
+                message: data.message || prev?.message,
+                scraped: data.scraped ?? prev?.scraped ?? 0,
+                failed: data.failed ?? prev?.failed ?? 0,
+                url: data.url || prev?.url,
+              }));
+            },
+            onComplete: (data) => {
+              sseWorked = true;
+              const ok = data.scraped || 0;
+              const fail = data.failed || 0;
+              if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+              else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
+            },
+          });
+        } catch {
+          // SSE failed (proxy buffering, network issue) — fall back to non-SSE endpoint
+          if (!sseWorked) {
+            setScrapeProgress({ current: 0, total: 1, message: "Crawling pages (progress unavailable)...", scraped: 0, failed: 0, url: urlEntry.url });
+            try {
+              const r = await api.post(`/knowledge/sources/url/crawl`, payload);
+              const data = r.data;
+              const ok = data.scraped?.length || 0;
+              const fail = data.failed?.length || 0;
+              if (ok > 0) toast.success(`Crawled ${ok} page${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+              else toast.error(`Crawl failed: ${fail} page${fail > 1 ? "s" : ""} could not be scraped`);
+            } catch (fallbackErr) {
+              toast.error(fallbackErr.response?.data?.detail || "Crawl failed");
+            }
+          }
+        }
       } else {
         await api.post(`/knowledge/sources/url`, payload);
         toast.success("URL scraped and saved successfully");
@@ -381,9 +402,11 @@ export default function KnowledgeBase() {
     if (!window.confirm(`Re-scrape all ${urlCount} URL sources? This will replace existing content with fresh data.`)) return;
     setBulkRescraping(true);
     setScrapeProgress({ current: 0, total: urlCount, message: "Starting bulk re-scrape...", scraped: 0, failed: 0, url: "" });
+    let sseWorked = false;
     try {
       await consumeSSE("/api/knowledge/sources/bulk-rescrape", null, {
         onProgress: (data) => {
+          sseWorked = true;
           setScrapeProgress(prev => ({
             ...prev,
             current: data.current || prev?.current || 0,
@@ -395,13 +418,28 @@ export default function KnowledgeBase() {
           }));
         },
         onComplete: (data) => {
+          sseWorked = true;
           const ok = data.scraped || 0;
           const fail = data.failed || 0;
           toast.success(`Re-scraped ${ok} URL${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
           loadSources();
         },
       });
-    } catch (e) { toast.error("Bulk re-scrape failed"); }
+    } catch {
+      // SSE failed — fall back to sequential individual re-scrapes
+      if (!sseWorked) {
+        const urlSources = sources.filter(s => s.type === "url" && s.url);
+        let ok = 0, fail = 0;
+        for (let i = 0; i < urlSources.length; i++) {
+          setScrapeProgress({ current: i + 1, total: urlSources.length, message: `Re-scraping ${i + 1}/${urlSources.length}...`, scraped: ok, failed: fail, url: urlSources[i].url });
+          try {
+            await api.post(`/knowledge/sources/url/rescrape`, { url: urlSources[i].url });
+            ok++;
+          } catch { fail++; }
+        }
+        toast.success(`Re-scraped ${ok} URL${ok > 1 ? "s" : ""} successfully${fail > 0 ? ` (${fail} failed)` : ""}`);
+      }
+    }
     finally { setBulkRescraping(false); setScrapeProgress(null); loadSources(); }
   };
 
@@ -700,25 +738,6 @@ export default function KnowledgeBase() {
                   </span>
                 </div>
               )}
-            </div>
-            <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
-                <Lock size={12} color={colors.text.muted} />
-                <label style={{ ...T.label, margin: 0, fontSize: "12px" }}>Authentication (optional)</label>
-              </div>
-              <p style={{ ...T.hint, marginTop: 0, marginBottom: "10px" }}>If the URL requires login, enter credentials below.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <div>
-                  <label style={{ ...T.label, fontSize: "11px" }}>Username / Email</label>
-                  <input style={T.input} value={urlEntry.auth_username} onChange={e => setUrlEntry(p => ({ ...p, auth_username: e.target.value }))}
-                    placeholder="username" data-testid="url-auth-username" onFocus={onFocus} onBlur={onBlur} />
-                </div>
-                <div>
-                  <label style={{ ...T.label, fontSize: "11px" }}>Password</label>
-                  <input style={T.input} type="password" value={urlEntry.auth_password} onChange={e => setUrlEntry(p => ({ ...p, auth_password: e.target.value }))}
-                    placeholder="password" data-testid="url-auth-password" onFocus={onFocus} onBlur={onBlur} />
-                </div>
-              </div>
             </div>
             <div>
               <button onClick={scrapeUrl} disabled={scraping || bulkRescraping} data-testid="url-scrape-btn" style={{ ...T.btnPrimary, opacity: (scraping || bulkRescraping) ? 0.6 : 1 }}>
