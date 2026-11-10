@@ -260,7 +260,7 @@ export default function KnowledgeBase() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [faq, setFaq] = useState({ title: "", content: "", priority: 0 });
-  const [urlEntry, setUrlEntry] = useState({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1 });
+  const [urlEntry, setUrlEntry] = useState({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1, category: "" });
   const [docTitle, setDocTitle] = useState("");
   const [docPriority, setDocPriority] = useState(0);
   const [scraping, setScraping] = useState(false);
@@ -342,6 +342,7 @@ export default function KnowledgeBase() {
       const payload = { url: urlEntry.url, title: urlEntry.title, priority: urlEntry.priority };
       if (urlEntry.auth_username?.trim()) payload.auth_username = urlEntry.auth_username.trim();
       if (urlEntry.auth_password?.trim()) payload.auth_password = urlEntry.auth_password.trim();
+      if (urlEntry.category?.trim()) payload.category = urlEntry.category.trim();
 
       if (urlEntry.crawl_subpages) {
         payload.crawl_subpages = true;
@@ -391,7 +392,7 @@ export default function KnowledgeBase() {
         await api.post(`/knowledge/sources/url`, payload);
         toast.success("URL scraped and saved successfully");
       }
-      setUrlEntry({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1 });
+      setUrlEntry({ url: "", title: "", priority: 0, auth_username: "", auth_password: "", crawl_subpages: false, crawl_depth: 1, category: "" });
       loadSources();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed to scrape URL"); }
     finally { setScraping(false); setScrapeProgress(null); }
@@ -716,6 +717,16 @@ export default function KnowledgeBase() {
             <div>
               <label style={T.label}>Priority</label>
               <PrioritySelector value={urlEntry.priority} onChange={v => setUrlEntry(p => ({ ...p, priority: v }))} />
+            </div>
+            <div>
+              <label style={T.label}>Category (optional)</label>
+              <input style={T.input} value={urlEntry.category} onChange={e => setUrlEntry(p => ({ ...p, category: e.target.value }))}
+                placeholder="e.g. Staking, API Docs, Getting Started" data-testid="url-category-input" onFocus={onFocus} onBlur={onBlur}
+                list="existing-categories" />
+              <datalist id="existing-categories">
+                {categories.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <p style={T.hint}>All scraped pages will be assigned this category</p>
             </div>
             {/* Crawl sub-pages option */}
             <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>

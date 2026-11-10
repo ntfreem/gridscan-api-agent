@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const { selectedInstance, user } = useAuth();
+  const instanceId = selectedInstance?.id;
 
   useEffect(() => {
     if (!selectedInstance) { setLoading(false); return; }
@@ -125,7 +126,7 @@ export default function Dashboard() {
               fontFamily: fonts.body, fontWeight: "500", textDecoration: "none",
               border: `1px solid rgba(96, 165, 250, 0.3)`, transition: "box-shadow 0.3s",
             }}>Add Knowledge Source</a>
-            <a href="/chat" target="_blank" rel="noopener noreferrer" data-testid="quick-test-chat" style={{
+            <a href={`/chat${instanceId ? `?instance=${instanceId}` : ""}`} target="_blank" rel="noopener noreferrer" data-testid="quick-test-chat" style={{
               display: "block", padding: "10px 16px", backgroundColor: colors.bg.panel,
               border: `1px solid ${colors.border.default}`, color: colors.text.primary, borderRadius: "6px",
               fontSize: "13px", fontFamily: fonts.body, fontWeight: "500", textDecoration: "none",
@@ -153,7 +154,7 @@ export default function Dashboard() {
             {conversations.length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ padding: "48px 20px", textAlign: "center", color: colors.text.secondary, fontFamily: fonts.body, fontSize: "14px" }}>
-                  No conversations yet — <a href="/chat" target="_blank" rel="noopener noreferrer" style={{ color: colors.brand.cyan }}>start a chat demo</a>
+                  No conversations yet — <a href={`/chat${instanceId ? `?instance=${instanceId}` : ""}`} target="_blank" rel="noopener noreferrer" style={{ color: colors.brand.cyan }}>start a chat demo</a>
                 </td>
               </tr>
             ) : conversations.map((conv) => (

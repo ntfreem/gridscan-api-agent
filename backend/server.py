@@ -228,6 +228,7 @@ class URLEntry(BaseModel):
     auth_password: Optional[str] = None
     crawl_subpages: Optional[bool] = False
     crawl_depth: Optional[int] = 1  # 1 = one level, 2 = two levels
+    category: Optional[str] = None
 
 class ChatMessage(BaseModel):
     message: str
@@ -603,6 +604,16 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
 
     if custom_instructions:
         parts.append(f"ADDITIONAL INSTRUCTIONS:\n{custom_instructions}")
+
+    # Code/JSON formatting instruction
+    parts.append(
+        "FORMATTING — CODE & JSON:\n"
+        "When your answer includes JSON, code snippets, API responses, configuration examples, "
+        "or any structured data, ALWAYS format them in fenced code blocks with the language tag. Example:\n"
+        "```json\n{\"key\": \"value\"}\n```\n"
+        "For inline code references (function names, field names, endpoints), use single backticks: `fieldName`.\n"
+        "Never output raw unformatted JSON or code."
+    )
 
     # Anti-fabrication rule — always included
     if api_context:
@@ -2462,10 +2473,20 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
 
 # ==================== CHAT (PUBLIC) ====================
 
+async def _resolve_chat_instance(provided_id: Optional[str]) -> str:
+    """Resolve instance_id for public chat endpoints.
+    Falls back to the first known instance when none is provided."""
+    if provided_id and provided_id != "default":
+        return provided_id
+    first = await db.bot_instances.find_one({}, {"id": 1})
+    if first:
+        return first["id"]
+    return provided_id or "default"
+
 @api_router.post("/chat/send")
 async def send_chat_message(body: ChatMessage):
     session_id = body.session_id or str(uuid.uuid4())
-    instance_id = body.instance_id or "default"
+    instance_id = await _resolve_chat_instance(body.instance_id)
     bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
     knowledge = await search_knowledge(body.message, instance_id)
 
@@ -2497,7 +2518,7 @@ async def send_chat_message(body: ChatMessage):
 async def stream_chat_message(body: ChatMessage):
     """Streaming version of /chat/send. Returns SSE (text/event-stream)."""
     session_id = body.session_id or str(uuid.uuid4())
-    instance_id = body.instance_id or "default"
+    instance_id = await _resolve_chat_instance(body.instance_id)
     return StreamingResponse(
         stream_chat_response(session_id, body.message, instance_id, platform="web"),
         media_type="text/event-stream",
@@ -3341,7 +3362,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
         if got_403 and not text and not html_text:
             raise HTTPException(status_code=403, detail="This website blocks automated scraping (Cloudflare/bot protection). Try adding the content manually as an FAQ entry instead.")
 
-        # ── Strategy 0: OpenAPI JSON spec detection ──
+        # ── Strategy 0: JSON content detection ──
         if not text and html_text:
             content_type = (resp.headers.get("content-type", "") if resp else "").lower()
             is_json = "application/json" in content_type or entry.url.rstrip("/").endswith(".json")
@@ -3353,6 +3374,13 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                         text = _parse_openapi_spec(json_data)
                         page_title = json_data.get("info", {}).get("title", "") or "API Spec"
                         logger.info(f"[SCRAPE] Parsed OpenAPI spec: {len(text)} chars for {entry.url}")
+                    else:
+                        # Non-OpenAPI JSON — store as formatted code block
+                        formatted = _json.dumps(json_data, indent=2, ensure_ascii=False)
+                        text = f"```json\n{formatted}\n```"
+                        if isinstance(json_data, dict):
+                            page_title = json_data.get("title", "") or json_data.get("name", "") or "JSON Data"
+                        logger.info(f"[SCRAPE] Stored JSON content: {len(text)} chars for {entry.url}")
                 except (ValueError, KeyError) as e:
                     logger.warning(f"[SCRAPE] JSON/OpenAPI parsing failed: {e}")
 
@@ -3365,12 +3393,42 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
             except Exception as e:
                 logger.warning(f"[SCRAPE] __NEXT_DATA__ extraction failed: {e}")
 
-        # ── Strategy 2: Standard BeautifulSoup extraction ──
+        # ── Strategy 2: Standard BeautifulSoup extraction with code block preservation ──
         if (not text or len(text) < 200) and html_text:
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html_text, "html.parser")
             for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
                 tag.decompose()
+
+            # Preserve <pre> and <code> blocks by replacing them with markdown-style fenced blocks
+            for pre_tag in soup.find_all("pre"):
+                # Get the language hint from class (e.g. class="language-json")
+                lang = ""
+                code_child = pre_tag.find("code")
+                source_el = code_child or pre_tag
+                for cls in (source_el.get("class") or []):
+                    if cls.startswith("language-") or cls.startswith("lang-"):
+                        lang = cls.split("-", 1)[1]
+                        break
+                code_text = source_el.get_text()
+                # Try to auto-detect JSON
+                if not lang and code_text.strip().startswith(("{", "[")):
+                    try:
+                        import json as _jtest
+                        _jtest.loads(code_text.strip())
+                        lang = "json"
+                    except Exception:
+                        pass
+                pre_tag.replace_with(f"\n```{lang}\n{code_text.strip()}\n```\n")
+
+            # Handle inline <code> tags
+            for code_tag in soup.find_all("code"):
+                code_text = code_tag.get_text()
+                if "\n" not in code_text and len(code_text) < 200:
+                    code_tag.replace_with(f"`{code_text}`")
+                else:
+                    code_tag.replace_with(f"\n```\n{code_text.strip()}\n```\n")
+
             text = soup.get_text(separator="\n", strip=True)
 
         text = re.sub(r'\n{3,}', '\n\n', text).strip()
@@ -3407,6 +3465,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                 "content": text, "url": entry.url, "instance_id": instance_id,
                 "priority": entry.priority or 0, "group_id": group_id, "total_parts": 1,
                 "is_active": True, "created_at": now,
+                "category": entry.category or "",
             }
             await db.knowledge_sources.insert_one(doc)
             doc.pop("_id", None)
@@ -3420,6 +3479,7 @@ async def scrape_url_source(entry: URLEntry, instance_id: str = Depends(get_inst
                     "content": chunk, "url": entry.url, "instance_id": instance_id,
                     "priority": entry.priority or 0, "group_id": group_id, "total_parts": len(chunks),
                     "is_active": True, "created_at": now,
+                    "category": entry.category or "",
                 }
                 await db.knowledge_sources.insert_one(doc)
                 doc.pop("_id", None)

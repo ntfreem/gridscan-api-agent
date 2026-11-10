@@ -1,17 +1,21 @@
-# BridgeBot Test Credentials
+# Test Credentials
 
 ## Admin Account
-- Username: `administrator`
-- Password: `Admin@123`
+- **Login field**: email_or_username
+- **Username**: administrator
+- **Email**: admin@bridgebot.tech
+- **Password**: Admin@123
+- **Role**: superadmin
 
-## Login Endpoint
-- POST `/api/auth/login`
-- Body: `{"email_or_username": "administrator", "password": "Admin@123"}`
+## Instance
+- **Name**: API Tester
+- **ID**: 88bfae82-2533-4235-968d-b3298fd57073
 
-## Instance ID
-- Fetch via: GET `/api/admin/instances` (with Bearer token)
-- Current preview instance: `88bfae82-2533-4235-968d-b3298fd57073` (may change)
+## App URL
+- **Preview**: https://rag-search-dev.preview.emergentagent.com
+- **API Base**: https://rag-search-dev.preview.emergentagent.com/api
 
-## Notes
-- Integration endpoints require `X-Instance-ID` header (frontend adds automatically from localStorage)
-- LLM provider defaults to "emergent" (Emergent Universal Key)
+## Auth Notes
+- Frontend stores JWT as `bf_token` in localStorage
+- Instance stored as `bf_instance_id` in localStorage
+- API requests use `Authorization: Bearer <token>` + `X-Instance-ID: <id>` headers

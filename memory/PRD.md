@@ -72,7 +72,12 @@ The URL scraper sent `Accept-Encoding: gzip, deflate, br` but the `brotli` libra
 - **Crawl Progress Bar**: Sub-page crawling now uses SSE streaming with real-time progress bar instead of a simple spinner. Shows discovered sub-pages, current page being scraped, and success/fail counts.
 - **Search Quality Boost**: `search_knowledge` limit bumped from 5 → 12 chunks per query. The 60K char context cap is the real constraint, giving broader recall without overflow.
 
+### Phase 7 — Conversations Bug Fix (Nov 2026)
+**Bug 7 — Conversations UI not updating (P0):**
+Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"default"` when not provided. The admin Conversations page queries by the real instance ID, so conversations from the Chat Demo page (which didn't pass `instance_id`) were invisible. Fixed: added `_resolve_chat_instance()` helper that resolves null/default to the first real instance from the DB. Also fixed Dashboard links ("Test Chat Demo", "start a chat demo") to include `?instance=<id>`. Migrated 4 existing "default" conversations to the real instance.
+
 ## Backlog
+- P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)
 - P2: Multi-server Discord feature
