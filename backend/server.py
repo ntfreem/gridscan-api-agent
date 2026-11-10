@@ -4280,8 +4280,9 @@ async def github_scan_repo(body: GitHubScanRequest, instance_id: str = Depends(g
     owner, repo = match.group(1), match.group(2)
 
     headers = {"Accept": "application/vnd.github.v3+json"}
-    if body.github_token:
-        headers["Authorization"] = f"Bearer {body.github_token}"
+    gh_token = (body.github_token or "").strip()
+    if gh_token:
+        headers["Authorization"] = f"Bearer {gh_token}"
 
     async with httpx.AsyncClient(timeout=60) as client:
         # Determine default branch if not specified
