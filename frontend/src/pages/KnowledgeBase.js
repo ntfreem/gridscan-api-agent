@@ -271,7 +271,7 @@ export default function KnowledgeBase() {
   const [editing, setEditing] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryInput, setCategoryInput] = useState("");
-  const [collapsedCategories, setCollapsedCategories] = useState(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState(null); // null = not yet initialized
   const [selected, setSelected] = useState(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -821,9 +821,16 @@ export default function KnowledgeBase() {
     return sorted;
   }, [filteredSources]);
 
+  // Initialize all categories as collapsed on first load
+  useEffect(() => {
+    if (collapsedCategories === null && groupedSources.length > 0) {
+      setCollapsedCategories(new Set(groupedSources.map(([cat]) => cat)));
+    }
+  }, [groupedSources, collapsedCategories]);
+
   const toggleCategory = (cat) => {
     setCollapsedCategories(prev => {
-      const next = new Set(prev);
+      const next = new Set(prev || []);
       if (next.has(cat)) next.delete(cat);
       else next.add(cat);
       return next;
@@ -1509,7 +1516,7 @@ export default function KnowledgeBase() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {groupedSources.map(([category, catSources]) => {
-              const isCollapsed = collapsedCategories.has(category);
+              const isCollapsed = collapsedCategories ? collapsedCategories.has(category) : true;
               const catChars = catSources.reduce((sum, s) => sum + (s.total_chars || 0), 0);
               return (
                 <div key={category}>
