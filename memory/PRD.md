@@ -76,6 +76,18 @@ The URL scraper sent `Accept-Encoding: gzip, deflate, br` but the `brotli` libra
 **Bug 7 — Conversations UI not updating (P0):**
 Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"default"` when not provided. The admin Conversations page queries by the real instance ID, so conversations from the Chat Demo page (which didn't pass `instance_id`) were invisible. Fixed: added `_resolve_chat_instance()` helper that resolves null/default to the first real instance from the DB. Also fixed Dashboard links ("Test Chat Demo", "start a chat demo") to include `?instance=<id>`. Migrated 4 existing "default" conversations to the real instance.
 
+### Phase 8 — Conversations Enhancements & Knowledge Gate Slider (Nov 2026)
+- **Auto-Refresh Feed**: Conversations page polls `GET /api/conversations/count` every 10 seconds. When new conversations arrive, a blue banner appears: "N new conversations — click to refresh". Clicking refreshes the list instantly.
+- **Conversation Search**: Search bar above conversation list with backend regex search on `messages.content`. Case-insensitive, shows match count, has Clear button to reset.
+- **Knowledge Gate Slider**: Replaced binary strict/flexible toggle with a 0-100% slider (step 5). Five graduated levels:
+  - 0-20%: **Strict** — KB only, refuses all external questions
+  - 21-40%: **Mostly Strict** — KB only, acknowledges gaps politely
+  - 41-60%: **Balanced** — KB first, general knowledge with clear disclaimer
+  - 61-80%: **Mostly Open** — KB preferred, general knowledge freely used
+  - 81-100%: **Fully Open** — uses everything, KB is a trusted reference
+  
+  Gradient slider bar (red → amber → yellow → cyan → green), dynamic label and description, backward-compatible with legacy `knowledge_gate` string field.
+
 ## Backlog
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)

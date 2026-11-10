@@ -201,7 +201,8 @@ class BotConfigUpdate(BaseModel):
     custom_instructions: Optional[str] = None
     tone_instructions: Optional[str] = None
     manual_tone_examples: Optional[List[dict]] = None
-    knowledge_gate: Optional[str] = None  # "strict" | "flexible"
+    knowledge_gate: Optional[str] = None  # "strict" | "flexible" (legacy) OR "0"-"100" percentage
+    knowledge_gate_pct: Optional[int] = None  # 0-100 percentage (preferred over knowledge_gate)
     api_query_enabled: Optional[bool] = None
     api_base_url: Optional[str] = None
     api_key_header: Optional[str] = None
@@ -507,12 +508,137 @@ async def get_tone_examples_text(instance_id: str, bot_config: dict = None) -> s
     if not parts:
         return ""
     return "\n\n---\n\n".join(parts[:5])
+def _resolve_gate_pct(bot_config: dict, knowledge_gate: str = "strict") -> int:
+    """Resolve knowledge gate percentage from bot_config or legacy string."""
+    pct = bot_config.get("knowledge_gate_pct")
+    if pct is not None:
+        return max(0, min(100, int(pct)))
+    return 0 if knowledge_gate == "strict" else 100
+
+def _gate_prompt_for_kb(pct: int, knowledge_context: str) -> str:
+    """Build the KB instruction block based on gate percentage (0-100)."""
+    if pct <= 20:
+        # Strict: KB only
+        return (
+            "KNOWLEDGE BASE — YOUR ONLY SOURCE OF TRUTH:\n"
+            "The following information is your ONLY source for answering questions. "
+            "When a user's question is answered by this knowledge base, respond with full confidence. "
+            "State facts directly. DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', "
+            "'you may want to verify', or 'I cannot confirm' when the answer is present here.\n\n"
+            f"KNOWLEDGE GATE — STRICT ({pct}%):\n"
+            "You MUST ONLY answer using the knowledge base content provided below. "
+            "NEVER supplement, expand, or fill gaps with your general AI training knowledge. "
+            "If the user asks about something NOT covered in the knowledge base below, say:\n"
+            "\"I don't have information about that in my knowledge base.\"\n"
+            "Do NOT offer information from your training data. Do NOT mention other tools, APIs, "
+            "services, or resources unless they are explicitly mentioned in the knowledge base below. "
+            "If you don't find it below, you don't know it.\n\n"
+            f"{knowledge_context}"
+        )
+    elif pct <= 40:
+        # Mostly strict: acknowledge gaps politely, still no external info
+        return (
+            "KNOWLEDGE BASE — PRIMARY SOURCE:\n"
+            "The following information is your primary source. Answer with full confidence when "
+            "the answer is here. State facts directly without hedging.\n\n"
+            f"KNOWLEDGE GATE — MOSTLY STRICT ({pct}%):\n"
+            "Answer ONLY from the knowledge base below. "
+            "If the user asks about something NOT covered, you may acknowledge the topic exists "
+            "and suggest they contact the admin for more information, but do NOT provide details "
+            "from your general training knowledge.\n"
+            "Example: \"I don't have details about that topic in my knowledge base yet. "
+            "The admin may be able to add more information about this.\"\n\n"
+            f"{knowledge_context}"
+        )
+    elif pct <= 60:
+        # Balanced: KB first, labeled general knowledge
+        return (
+            "KNOWLEDGE BASE — PRIMARY SOURCE:\n"
+            "The following information is verified and accurate. When a user's question is answered by "
+            "this knowledge base, respond with full confidence. State facts directly.\n\n"
+            f"KNOWLEDGE GATE — BALANCED ({pct}%):\n"
+            "Always check the knowledge base FIRST. If the answer is there, use it with confidence.\n"
+            "If the user asks about something NOT in the knowledge base, you MAY provide a brief answer "
+            "from your general knowledge BUT you MUST clearly label it. Prefix your answer with:\n"
+            "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
+            "Never mix KB facts with general knowledge in the same answer without labeling which is which.\n\n"
+            f"{knowledge_context}"
+        )
+    elif pct <= 80:
+        # Mostly flexible: KB preferred, general knowledge with light labels
+        return (
+            "KNOWLEDGE BASE — REFERENCE SOURCE:\n"
+            "The following is verified information. Prefer it when answering, and state KB facts "
+            "with full confidence.\n\n"
+            f"KNOWLEDGE GATE — MOSTLY OPEN ({pct}%):\n"
+            "Use the knowledge base as your preferred source. You may freely supplement with "
+            "your general knowledge when the KB doesn't cover a topic. When you use general knowledge, "
+            "a brief note like \"from my general knowledge\" is appreciated but not always required "
+            "for common facts.\n\n"
+            f"{knowledge_context}"
+        )
+    else:
+        # Fully open: everything available
+        return (
+            "KNOWLEDGE BASE — AVAILABLE REFERENCE:\n"
+            "The following is verified information from the knowledge base. Use it when relevant.\n\n"
+            f"KNOWLEDGE GATE — FULLY OPEN ({pct}%):\n"
+            "You may freely use both the knowledge base and your full general knowledge to answer "
+            "questions. The knowledge base content is verified and should be preferred when it covers "
+            "the topic, but you are not restricted to it. Answer naturally and helpfully.\n\n"
+            f"{knowledge_context}"
+        )
+
+def _gate_prompt_no_kb(pct: int) -> str:
+    """Build the instruction block when KB has no matching results."""
+    if pct <= 20:
+        return (
+            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+            f"KNOWLEDGE GATE — STRICT ({pct}%):\n"
+            "You MUST NOT answer the question using your general AI training knowledge.\n"
+            "Respond with something like:\n"
+            "\"I don't have information about that in my knowledge base. "
+            "Is there something else I can help you with?\"\n"
+            "Be polite and brief. Do NOT offer to search elsewhere or answer from general knowledge."
+        )
+    elif pct <= 40:
+        return (
+            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+            f"KNOWLEDGE GATE — MOSTLY STRICT ({pct}%):\n"
+            "You should NOT answer from general knowledge. You may acknowledge the topic and "
+            "suggest the admin could add more content about it.\n"
+            "Example: \"I don't have information about that yet. The admin may be able to help.\""
+        )
+    elif pct <= 60:
+        return (
+            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+            f"KNOWLEDGE GATE — BALANCED ({pct}%):\n"
+            "No results were found in the knowledge base. You MAY answer from your general knowledge, "
+            "but you MUST clearly tell the user the answer is NOT from the knowledge base. Prefix with:\n"
+            "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
+            "Keep it honest and transparent."
+        )
+    elif pct <= 80:
+        return (
+            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+            f"KNOWLEDGE GATE — MOSTLY OPEN ({pct}%):\n"
+            "No KB results were found. Feel free to answer from your general knowledge. "
+            "A brief mention that this isn't from the KB is appreciated but not mandatory."
+        )
+    else:
+        return (
+            "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
+            f"KNOWLEDGE GATE — FULLY OPEN ({pct}%):\n"
+            "No KB results. Answer freely from your general knowledge."
+        )
+
 def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_examples: str = "", passive_mode: bool = False, allow_skip: bool = False, knowledge_gate: str = "strict", api_context: str = "", api_sources: list = None, has_api_integrations: bool = False) -> str:
     name = bot_config.get("name", "Assistant")
     persona = bot_config.get("persona", "You are a helpful, friendly assistant.")
     custom_instructions = bot_config.get("custom_instructions", "")
     tone_instructions = bot_config.get("tone_instructions", "")
     api_enabled = bot_config.get("api_query_enabled", False) or has_api_integrations
+    gate_pct = _resolve_gate_pct(bot_config, knowledge_gate)
 
     parts = [f"You are {name}. {persona}"]
 
@@ -536,59 +662,9 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
                 "Be polite and brief. Do not attempt to answer the question."
             )
     elif knowledge_context:
-        if knowledge_gate == "strict":
-            parts.append(
-                "KNOWLEDGE BASE — YOUR ONLY SOURCE OF TRUTH:\n"
-                "The following information is your ONLY source for answering questions. "
-                "When a user's question is answered by this knowledge base, respond with full confidence. "
-                "State facts directly. DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure', "
-                "'you may want to verify', or 'I cannot confirm' when the answer is present here.\n\n"
-                "KNOWLEDGE GATE — STRICT RULE:\n"
-                "You MUST ONLY answer using the knowledge base content provided below. "
-                "NEVER supplement, expand, or fill gaps with your general AI training knowledge. "
-                "If the user asks about something NOT covered in the knowledge base below, say:\n"
-                "\"I don't have information about that in my knowledge base.\"\n"
-                "Do NOT offer information from your training data. Do NOT mention other tools, APIs, "
-                "services, or resources unless they are explicitly mentioned in the knowledge base below. "
-                "If you don't find it below, you don't know it.\n\n"
-                f"{knowledge_context}"
-            )
-        else:
-            # Flexible mode: KB-first, but can use general knowledge with clear labeling
-            parts.append(
-                "KNOWLEDGE BASE — PRIMARY SOURCE:\n"
-                "The following information is verified and accurate. When a user's question is answered by "
-                "this knowledge base, respond with full confidence. State facts directly. "
-                "DO NOT use hedging phrases like 'I think', 'I believe', 'I'm not sure' when the answer is present here.\n\n"
-                "KNOWLEDGE GATE — FLEXIBLE RULE:\n"
-                "Always check the knowledge base FIRST. If the answer is there, use it with confidence.\n"
-                "If the user asks about something NOT in the knowledge base, you MAY answer from your general "
-                "knowledge BUT you MUST clearly label it. Prefix your answer with:\n"
-                "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
-                "Never mix KB facts with general knowledge in the same answer without labeling which is which.\n\n"
-                f"{knowledge_context}"
-            )
+        parts.append(_gate_prompt_for_kb(gate_pct, knowledge_context))
     else:
-        if knowledge_gate == "strict":
-            parts.append(
-                "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
-                "KNOWLEDGE GATE — STRICT RULE:\n"
-                "You MUST NOT answer the question using your general AI training knowledge.\n"
-                "Respond with something like:\n"
-                "\"I don't have information about that in my knowledge base. "
-                "Is there something else I can help you with?\"\n"
-                "Be polite and brief. Do NOT offer to search elsewhere, expand your search, "
-                "or answer from general knowledge. Simply acknowledge you don't have the information."
-            )
-        else:
-            parts.append(
-                "KNOWLEDGE BASE RESULT: No matching entries were found for the user's query.\n\n"
-                "KNOWLEDGE GATE — FLEXIBLE RULE:\n"
-                "No results were found in the knowledge base. You MAY answer from your general knowledge, "
-                "but you MUST clearly tell the user the answer is NOT from the knowledge base. Prefix with:\n"
-                "\"This isn't in my knowledge base, but from my general knowledge:\"\n"
-                "Keep it honest and transparent."
-            )
+        parts.append(_gate_prompt_no_kb(gate_pct))
 
     if tone_examples:
         tone_header = "COMMUNICATION STYLE — MATCH THIS PRECISELY"
@@ -2552,8 +2628,24 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
         del update_data["api_key_value"]
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided")
-    if update_data.get("knowledge_gate") and update_data["knowledge_gate"] not in ("strict", "flexible"):
-        raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict' or 'flexible'")
+    # Knowledge gate: accept pct (0-100) or legacy string values
+    if "knowledge_gate_pct" in update_data:
+        pct = update_data.pop("knowledge_gate_pct")
+        if not (0 <= pct <= 100):
+            raise HTTPException(status_code=422, detail="knowledge_gate_pct must be 0-100")
+        update_data["knowledge_gate_pct"] = pct
+        # Keep legacy field in sync for backward compat
+        update_data["knowledge_gate"] = "strict" if pct <= 20 else "flexible"
+    elif "knowledge_gate" in update_data:
+        val = update_data["knowledge_gate"]
+        # Accept legacy string or numeric string
+        if val in ("strict", "flexible"):
+            update_data["knowledge_gate_pct"] = 0 if val == "strict" else 100
+        elif val.isdigit() and 0 <= int(val) <= 100:
+            update_data["knowledge_gate_pct"] = int(val)
+            update_data["knowledge_gate"] = "strict" if int(val) <= 20 else "flexible"
+        else:
+            raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict', 'flexible', or 0-100")
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
     # Mask api_key_value in response
@@ -3953,9 +4045,16 @@ async def get_knowledge_categories(instance_id: str = Depends(get_instance_acces
     return [c for c in cats if c and isinstance(c, str) and c.strip()]
 # ==================== CONVERSATIONS (PROTECTED) ====================
 
+@api_router.get("/conversations/count")
+async def get_conversations_count(instance_id: str = Depends(get_instance_access)):
+    """Lightweight endpoint for polling — returns only the total count."""
+    total = await db.conversations.count_documents({"instance_id": instance_id})
+    return {"total": total}
+
 @api_router.get("/conversations")
 async def get_conversations(
     platform: Optional[str] = None, approved: Optional[bool] = None,
+    search: Optional[str] = None,
     page: int = 1, limit: int = 20,
     instance_id: str = Depends(get_instance_access)
 ):
@@ -3964,6 +4063,8 @@ async def get_conversations(
         query["platform"] = platform
     if approved is not None:
         query["is_approved_for_training"] = approved
+    if search and search.strip():
+        query["messages.content"] = {"$regex": search.strip(), "$options": "i"}
     skip = (page - 1) * limit
     total = await db.conversations.count_documents(query)
     convs = await db.conversations.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)

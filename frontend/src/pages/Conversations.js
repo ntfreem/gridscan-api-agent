@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { CheckCircle, Trash2, X, ChevronRight, Lightbulb } from "lucide-react";
-import { colors, fonts, T, rowEnter, rowLeave } from "../theme";
+import { CheckCircle, Trash2, X, ChevronRight, Lightbulb, Search, RefreshCw } from "lucide-react";
+import { colors, fonts, T } from "../theme";
 
 function PlatformBadge({ platform }) {
   const c = platform === "discord"
     ? { bg: "rgba(88,101,242,0.12)", text: colors.brand.discord }
+    : platform === "api"
+    ? { bg: "rgba(52,211,153,0.12)", text: colors.brand.success }
     : { bg: "rgba(59,130,246,0.12)", text: colors.brand.blue };
   return <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontFamily: fonts.mono, textTransform: "uppercase", letterSpacing: "0.05em", backgroundColor: c.bg, color: c.text }}>{platform}</span>;
 }
@@ -39,20 +41,59 @@ export default function Conversations() {
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState({ platform: "", approved: "" });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
+  const [newCount, setNewCount] = useState(0);
+  const lastKnownTotal = useRef(0);
+  const pollRef = useRef(null);
 
-  const loadConversations = useCallback(() => {
+  const loadConversations = useCallback((showLoader = true) => {
     const params = new URLSearchParams({ limit: 50 });
     if (filter.platform) params.set("platform", filter.platform);
     if (filter.approved !== "") params.set("approved", filter.approved === "true");
-    setLoading(true);
+    if (searchQuery) params.set("search", searchQuery);
+    if (showLoader) setLoading(true);
     api.get(`/conversations?${params}`).then(r => {
       setConversations(r.data.conversations || []);
-      setTotal(r.data.total || 0);
+      const t = r.data.total || 0;
+      setTotal(t);
+      lastKnownTotal.current = t;
+      setNewCount(0);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [filter, instanceId]);
+  }, [filter, searchQuery, instanceId]);
 
-  useEffect(() => { loadConversations(); }, [loadConversations, instanceId]);
+  useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // Auto-refresh: poll count every 10 seconds
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      if (searchQuery) return; // Skip polling when searching
+      api.get("/conversations/count").then(r => {
+        const serverTotal = r.data.total || 0;
+        if (serverTotal > lastKnownTotal.current) {
+          setNewCount(serverTotal - lastKnownTotal.current);
+        }
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(pollRef.current);
+  }, [instanceId, searchQuery]);
+
+  const handleRefresh = () => {
+    setNewCount(0);
+    loadConversations();
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setSearchQuery(searchInput.trim());
+  };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
+  };
 
   const approve = async (sessionId, approved) => {
     try {
@@ -70,6 +111,8 @@ export default function Conversations() {
       toast.success("Conversation deleted");
       setConversations(prev => prev.filter(c => c.session_id !== sessionId));
       if (selected?.session_id === sessionId) setSelected(null);
+      lastKnownTotal.current = Math.max(0, lastKnownTotal.current - 1);
+      setTotal(prev => Math.max(0, prev - 1));
     } catch { toast.error("Failed to delete"); }
   };
 
@@ -98,8 +141,55 @@ export default function Conversations() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "24px", alignItems: "center" }}>
+      {/* Search Bar */}
+      <form onSubmit={handleSearch} style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div style={{ flex: 1, position: "relative" }}>
+            <Search size={14} color={colors.text.muted} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              data-testid="conversation-search-input"
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search conversations by message content..."
+              style={{
+                width: "100%", padding: "9px 12px 9px 34px", borderRadius: "10px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.surface,
+                color: colors.text.primary, fontFamily: fonts.body, fontSize: "13px",
+                outline: "none", transition: "border-color 0.2s",
+                boxSizing: "border-box",
+              }}
+              onFocus={e => e.target.style.borderColor = colors.brand.cyan}
+              onBlur={e => e.target.style.borderColor = colors.border.default}
+            />
+          </div>
+          <button data-testid="conversation-search-btn" type="submit" style={{
+            padding: "9px 16px", borderRadius: "10px", border: `1px solid ${colors.brand.blue}`,
+            backgroundColor: "rgba(59,130,246,0.1)", color: colors.brand.blue,
+            fontSize: "12px", fontFamily: fonts.body, fontWeight: "500", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "5px",
+          }}>
+            <Search size={12} /> Search
+          </button>
+          {searchQuery && (
+            <button data-testid="conversation-search-clear" onClick={clearSearch} style={{
+              padding: "9px 14px", borderRadius: "10px", border: `1px solid ${colors.border.default}`,
+              backgroundColor: "transparent", color: colors.text.secondary,
+              fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+            }}>
+              Clear
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <p style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.cyan, margin: "6px 0 0 2px" }}>
+            Showing results for &ldquo;{searchQuery}&rdquo; &mdash; {total} match{total !== 1 ? "es" : ""}
+          </p>
+        )}
+      </form>
+
+      {/* Filters + New Conversations Banner */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em" }}>Filter:</span>
         <button data-testid="filter-all" onClick={() => setFilter({ platform: "", approved: "" })} style={filterBtn(colors.text.secondary, !filter.platform && filter.approved === "")}>All</button>
         <button data-testid="filter-web" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "web" ? "" : "web" }))} style={filterBtn(colors.brand.blue, filter.platform === "web")}>Web</button>
@@ -108,13 +198,33 @@ export default function Conversations() {
         <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{total} total</span>
       </div>
 
+      {/* New conversations banner */}
+      {newCount > 0 && (
+        <button
+          data-testid="new-conversations-banner"
+          onClick={handleRefresh}
+          style={{
+            width: "100%", padding: "10px 16px", marginBottom: "16px", borderRadius: "10px",
+            border: `1px solid rgba(96,165,250,0.3)`, backgroundColor: "rgba(59,130,246,0.08)",
+            color: colors.brand.cyan, fontSize: "13px", fontFamily: fonts.body, fontWeight: "500",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <RefreshCw size={13} />
+          {newCount} new conversation{newCount > 1 ? "s" : ""} — click to refresh
+        </button>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1fr" : "1fr", gap: "20px" }}>
         {/* List */}
         <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden" }}>
           {loading ? (
             <div style={{ padding: "48px", textAlign: "center", color: colors.text.secondary, fontFamily: fonts.body }}>Loading...</div>
           ) : conversations.length === 0 ? (
-            <div style={{ padding: "48px", textAlign: "center", color: colors.text.secondary, fontFamily: fonts.body, fontSize: "14px" }}>No conversations found.</div>
+            <div style={{ padding: "48px", textAlign: "center", color: colors.text.secondary, fontFamily: fonts.body, fontSize: "14px" }}>
+              {searchQuery ? `No conversations matching "${searchQuery}".` : "No conversations found."}
+            </div>
           ) : conversations.map(conv => {
             const firstUserMsg = conv.messages?.find(m => m.role === "user");
             const firstBotMsg = conv.messages?.find(m => m.role === "assistant");

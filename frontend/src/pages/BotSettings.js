@@ -8,7 +8,7 @@ import { colors, fonts, T, onFocus, onBlur } from "../theme";
 export default function BotSettings() {
   const { selectedInstance } = useAuth();
   const instanceId = selectedInstance?.id;
-  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict" });
+  const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", knowledge_gate_pct: 0 });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
@@ -118,7 +118,7 @@ export default function BotSettings() {
 
   useEffect(() => {
     api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict" });
+      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0) });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
   }, [instanceId]);
@@ -353,38 +353,80 @@ export default function BotSettings() {
             </div>
           </div>
 
-          {/* ── Knowledge Gate — strict vs flexible ── */}
+          {/* ── Knowledge Gate — Percentage Slider ── */}
           <div data-testid="knowledge-gate-card" style={{ ...T.card, marginBottom: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <Shield size={14} color={config.knowledge_gate === "strict" ? colors.brand.error : colors.brand.warning} />
+              <Shield size={14} color={
+                config.knowledge_gate_pct <= 20 ? colors.brand.error
+                : config.knowledge_gate_pct <= 60 ? colors.brand.warning
+                : colors.brand.success
+              } />
               <p style={{ ...T.sectionTitle, margin: 0 }}>Knowledge Gate</p>
             </div>
-            <p style={T.sectionSub}>Controls whether the bot can use general AI knowledge when the answer isn&apos;t in the knowledge base.</p>
-            <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-              {[
-                { value: "strict", label: "Strict", icon: Shield, color: colors.brand.error, desc: "KB only — refuses questions not in the knowledge base" },
-                { value: "flexible", label: "Flexible", icon: ShieldOff, color: colors.brand.warning, desc: "KB first — falls back to general knowledge with a disclaimer" },
-              ].map(({ value, label, icon: Icon, color, desc }) => (
-                <button
-                  key={value}
-                  onClick={() => setConfig(p => ({ ...p, knowledge_gate: value }))}
-                  data-testid={`gate-${value}`}
-                  style={{
-                    flex: 1, padding: "12px 14px", borderRadius: "10px", cursor: "pointer",
-                    backgroundColor: config.knowledge_gate === value ? `${color}10` : colors.bg.base,
-                    border: `1.5px solid ${config.knowledge_gate === value ? color : colors.border.default}`,
-                    textAlign: "left", transition: "all 0.2s",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                    <Icon size={13} color={config.knowledge_gate === value ? color : colors.text.muted} />
-                    <span style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: config.knowledge_gate === value ? color : colors.text.secondary }}>{label}</span>
-                  </div>
-                  <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.4" }}>{desc}</p>
-                </button>
-              ))}
+            <p style={T.sectionSub}>Controls how much the bot can use general AI knowledge beyond the knowledge base. Drag the slider to adjust.</p>
+
+            {/* Gate Level Label */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "14px", marginBottom: "8px" }}>
+              <span style={{
+                fontFamily: fonts.heading, fontSize: "14px", fontWeight: "700",
+                color: config.knowledge_gate_pct <= 20 ? colors.brand.error
+                     : config.knowledge_gate_pct <= 40 ? "#f59e0b"
+                     : config.knowledge_gate_pct <= 60 ? colors.brand.warning
+                     : config.knowledge_gate_pct <= 80 ? colors.brand.cyan
+                     : colors.brand.success,
+              }}>
+                {config.knowledge_gate_pct <= 20 ? "Strict"
+                 : config.knowledge_gate_pct <= 40 ? "Mostly Strict"
+                 : config.knowledge_gate_pct <= 60 ? "Balanced"
+                 : config.knowledge_gate_pct <= 80 ? "Mostly Open"
+                 : "Fully Open"}
+              </span>
+              <span style={{ fontFamily: fonts.mono, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>
+                {config.knowledge_gate_pct}%
+              </span>
             </div>
-            <p style={{ ...T.hint, marginTop: "8px" }}>This is saved with your bot config. Click &ldquo;Save Settings&rdquo; in the left panel to apply.</p>
+
+            {/* Slider Track */}
+            <div style={{ position: "relative", height: "36px", display: "flex", alignItems: "center" }}>
+              <input
+                data-testid="knowledge-gate-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={config.knowledge_gate_pct}
+                onChange={e => {
+                  const pct = parseInt(e.target.value);
+                  setConfig(p => ({ ...p, knowledge_gate_pct: pct, knowledge_gate: pct <= 20 ? "strict" : "flexible" }));
+                }}
+                style={{
+                  width: "100%", height: "6px", borderRadius: "3px",
+                  appearance: "none", WebkitAppearance: "none",
+                  background: `linear-gradient(to right, ${colors.brand.error} 0%, #f59e0b 25%, ${colors.brand.warning} 50%, ${colors.brand.cyan} 75%, ${colors.brand.success} 100%)`,
+                  outline: "none", cursor: "pointer",
+                }}
+              />
+            </div>
+
+            {/* Scale Labels */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
+              <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>KB Only</span>
+              <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Fully Open</span>
+            </div>
+
+            {/* Description */}
+            <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5", marginTop: "10px", padding: "8px 10px", backgroundColor: colors.bg.base, borderRadius: "8px", border: `1px solid ${colors.border.faint}` }}>
+              {config.knowledge_gate_pct <= 20
+                ? "The bot only answers from the knowledge base. Questions not covered are politely declined."
+                : config.knowledge_gate_pct <= 40
+                ? "The bot answers from the knowledge base only but acknowledges topics it doesn't have info on."
+                : config.knowledge_gate_pct <= 60
+                ? "The bot prefers the knowledge base but can use general knowledge with a clear disclaimer."
+                : config.knowledge_gate_pct <= 80
+                ? "The bot freely supplements with general knowledge. KB is preferred but not required."
+                : "The bot uses the full range of its knowledge. KB content is treated as a trusted reference."}
+            </p>
+            <p style={{ ...T.hint, marginTop: "8px" }}>Click &ldquo;Save Settings&rdquo; in the left panel to apply.</p>
           </div>
 
           {/* ── External API Keys ── */}
