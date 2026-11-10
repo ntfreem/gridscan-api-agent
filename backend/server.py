@@ -4283,7 +4283,7 @@ async def github_scan_repo(body: GitHubScanRequest, instance_id: str = Depends(g
     if body.github_token:
         headers["Authorization"] = f"Bearer {body.github_token}"
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         # Determine default branch if not specified
         branch = body.branch
         if not branch:

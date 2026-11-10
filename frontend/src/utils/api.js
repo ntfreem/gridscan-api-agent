@@ -20,15 +20,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: redirect to login on 401
+// Response interceptor: redirect to login on genuine 401 auth failures
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      ["bf_token", "bf_user", "bf_instance", "bf_instance_id", "bf_instances"].forEach(k =>
-        localStorage.removeItem(k)
-      );
-      window.location.href = "/login";
+      // Only logout for real auth failures, not proxy/timeout errors
+      const detail = error.response?.data?.detail || "";
+      const isAuthError = ["Not authenticated", "Token expired", "Invalid token"].some(msg => detail.includes(msg));
+      if (isAuthError || !detail) {
+        ["bf_token", "bf_user", "bf_instance", "bf_instance_id", "bf_instances"].forEach(k =>
+          localStorage.removeItem(k)
+        );
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

@@ -391,13 +391,15 @@ export default function KnowledgeBase() {
         repo_url: ghUrl.trim(),
         branch: ghBranch.trim() || null,
         github_token: ghToken.trim() || null,
-      });
+      }, { timeout: 30000 }); // 30s timeout for large repos
       setGhScanResult(res.data);
-      // Pre-select all files
       setGhSelectedFiles(new Set(res.data.doc_files.map(f => f.path)));
       if (res.data.doc_count === 0) toast.info("No documentation files found in this repository.");
       else toast.success(`Found ${res.data.doc_count} documentation files`);
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed to scan repository"); }
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message || "Failed to scan repository";
+      toast.error(msg.includes("timeout") ? "Scan timed out — try again or use a GitHub token for faster access" : msg);
+    }
     finally { setGhScanning(false); }
   };
 
