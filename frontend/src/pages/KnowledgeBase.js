@@ -286,6 +286,7 @@ export default function KnowledgeBase() {
   // GitHub crawler state
   const [ghUrl, setGhUrl] = useState("");
   const [ghToken, setGhToken] = useState("");
+  const [ghUseToken, setGhUseToken] = useState(false);
   const [ghBranch, setGhBranch] = useState("");
   const [ghCategory, setGhCategory] = useState("");
   const [ghScanning, setGhScanning] = useState(false);
@@ -390,7 +391,7 @@ export default function KnowledgeBase() {
       const res = await api.post("/knowledge/sources/github/scan", {
         repo_url: ghUrl.trim(),
         branch: ghBranch.trim() || null,
-        github_token: ghToken.trim() || null,
+        github_token: ghUseToken && ghToken.trim() ? ghToken.trim() : null,
       }, { timeout: 30000 }); // 30s timeout for large repos
       setGhScanResult(res.data);
       setGhSelectedFiles(new Set(res.data.doc_files.map(f => f.path)));
@@ -442,7 +443,7 @@ export default function KnowledgeBase() {
         branch: ghScanResult?.branch || ghBranch.trim() || "main",
         files: [...ghSelectedFiles],
         category: ghCategory.trim() || null,
-        github_token: ghToken.trim() || null,
+        github_token: ghUseToken && ghToken.trim() ? ghToken.trim() : null,
       }, {
         onProgress: (data) => {
           if (data.type === "progress") {
@@ -1134,16 +1135,34 @@ export default function KnowledgeBase() {
                 </datalist>
               </div>
               <div>
-                <label style={T.label}>GitHub Token (for private repos)</label>
-                <input
-                  data-testid="gh-token"
-                  type="password"
-                  style={T.input}
-                  value={ghToken}
-                  onChange={e => setGhToken(e.target.value)}
-                  placeholder="ghp_xxxx (optional)"
-                  onFocus={onFocus} onBlur={onBlur}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <label style={{ ...T.label, margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                    onClick={() => setGhUseToken(p => !p)}>
+                    <input
+                      type="checkbox"
+                      checked={ghUseToken}
+                      onChange={e => setGhUseToken(e.target.checked)}
+                      data-testid="gh-use-token-toggle"
+                      style={{ width: "14px", height: "14px", accentColor: colors.brand.cyan, cursor: "pointer" }}
+                    />
+                    Private Repo Token
+                  </label>
+                </div>
+                {ghUseToken ? (
+                  <input
+                    data-testid="gh-token"
+                    type="password"
+                    style={T.input}
+                    value={ghToken}
+                    onChange={e => setGhToken(e.target.value)}
+                    placeholder="ghp_xxxx"
+                    onFocus={onFocus} onBlur={onBlur}
+                  />
+                ) : (
+                  <div style={{ padding: "9px 12px", borderRadius: "10px", border: `1px solid ${colors.border.faint}`, backgroundColor: colors.bg.base, fontSize: "11px", fontFamily: fonts.mono, color: colors.text.muted }}>
+                    Public access (no token)
+                  </div>
+                )}
               </div>
             </div>
             <div>
