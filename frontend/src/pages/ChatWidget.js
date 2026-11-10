@@ -14,6 +14,7 @@ export default function ChatWidget() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [botConfig, setBotConfig] = useState({ name: "Assistant" });
+  const [logoUrl, setLogoUrl] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const streamRef = useRef(null);
@@ -101,6 +102,13 @@ export default function ChatWidget() {
 
   useEffect(() => {
     axios.get(`${API}/admin/bot-config`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
+    // Probe for bot logo
+    const iid = instanceId || "default";
+    const img = new Image();
+    img.onload = () => setLogoUrl(`${API}/bot-logo/${iid}`);
+    img.onerror = () => setLogoUrl(null);
+    img.src = `${API}/bot-logo/${iid}`;
+
     const saved = sessionStorage.getItem(`widget_session_${instanceId || "default"}`);
     if (saved) {
       setSessionId(saved);
@@ -399,7 +407,9 @@ export default function ChatWidget() {
         {/* Header */}
         <div className="bb-header" data-testid="widget-header">
           <div className="bb-avatar">
-            <Bot size={16} color="#FFFFFF" />
+            {logoUrl
+              ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+              : <Bot size={16} color="#FFFFFF" />}
           </div>
           <div style={{ flex: 1 }}>
             <p className="bb-bot-name">{botConfig.name || "Assistant"}</p>
@@ -418,7 +428,9 @@ export default function ChatWidget() {
           {messages.length === 0 && !isLoading && (
             <div className="bb-empty">
               <div className="bb-empty-icon">
-                <Bot size={22} color="#FFFFFF" />
+                {logoUrl
+                  ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                  : <Bot size={22} color="#FFFFFF" />}
               </div>
               <p className="bb-empty-title">Hi there!</p>
               <p className="bb-empty-sub">Type a message to get started.</p>
@@ -429,7 +441,9 @@ export default function ChatWidget() {
             <div key={`${msg.role}-${msg.timestamp || i}`} className={`bb-msg-row ${msg.role === "user" ? "user" : "bot"}`}>
               {msg.role === "assistant" && (
                 <div className="bb-msg-avatar">
-                  <Bot size={11} color="#FFFFFF" />
+                  {logoUrl
+                    ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                    : <Bot size={11} color="#FFFFFF" />}
                 </div>
               )}
               <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
@@ -444,7 +458,9 @@ export default function ChatWidget() {
           {isLoading && !isStreaming && (
             <div className="bb-msg-row bot" data-testid="widget-typing-indicator">
               <div className="bb-msg-avatar">
-                <Bot size={11} color="#FFFFFF" />
+                {logoUrl
+                  ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                  : <Bot size={11} color="#FFFFFF" />}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                 <div className="bb-typing">

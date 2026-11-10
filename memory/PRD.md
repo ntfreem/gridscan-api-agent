@@ -140,3 +140,11 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 - **embed.js Enhancements**: Added `data-welcome` and `data-open` attribute support. Script fetches config from `/api/embed/config/{id}` for server-saved values. When `data-open="true"` or config has `default_open`, popup auto-expands on page load.
 - **ChatWidget.js**: Reads `welcome` URL param and displays it as the initial bot message (rendered with markdown). Falls back to embed config `welcome_message`. Old static "Hi! How can I help?" replaced with configurable greeting.
 - **EmbedCode.js Admin UI**: New "Widget Behavior" card above Theme Configurator with Expand on Load toggle, Welcome Message textarea (markdown), and Save Configuration button.
+
+
+### Phase 15 — Bot Logo / Avatar Upload (Nov 2026)
+- **Object Storage**: Integrated Emergent Managed Object Storage for file uploads. Init on startup with `CLAUDE_API_KEY`.
+- **Backend Endpoints**: `POST /api/admin/bot-logo` (upload, max 2MB, PNG/JPEG/WebP/GIF), `GET /api/bot-logo/{instance_id}` (public serve with caching), `DELETE /api/admin/bot-logo` (soft-delete), `POST /api/admin/bot-logo/discord-sync` (pushes logo as Discord bot avatar via Discord API).
+- **Bot Settings UI**: New "Bot Avatar" section in Identity card. Shows avatar preview, Upload/Replace, Remove, and "Sync to Discord" buttons.
+- **ChatWidget**: Logo replaces default Bot icon in header avatar, bot message avatars, typing indicator, and empty state. Falls back to Bot icon when no logo uploaded.
+- **embed.js**: Trigger button probes `/api/bot-logo/{instance}` on load; shows logo if available, falls back to chat SVG.

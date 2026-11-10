@@ -20,6 +20,7 @@ import httpx
 import hashlib
 import contextvars
 import time as _time
+import requests as _requests
 
 # Context variable to track which API key initiated a request (set in /v1/chat endpoints)
 _current_api_key_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar('api_key_id', default=None)
@@ -60,6 +61,49 @@ async def get_discord_credentials():
 
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client[DB_NAME]
+
+# ── Object Storage (Emergent Managed) ──────────────────────────────────
+_STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+_STORAGE_URL = _STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+_EMERGENT_KEY = os.environ.get("CLAUDE_API_KEY") or os.environ.get("EMERGENT_LLM_KEY") or ""
+_APP_NAME = "bridgebot"
+_storage_key: Optional[str] = None
+
+def _init_storage(force: bool = False) -> str:
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    resp = _requests.post(f"{_STORAGE_URL}/init", json={"emergent_key": _EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+def _put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = _init_storage()
+    resp = _requests.put(
+        f"{_STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120,
+    )
+    if resp.status_code == 404:
+        key = _init_storage(force=True)
+        resp = _requests.put(
+            f"{_STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+def _get_object(path: str):
+    key = _init_storage()
+    resp = _requests.get(f"{_STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code == 404:
+        key = _init_storage(force=True)
+        resp = _requests.get(f"{_STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+# ── End Object Storage ─────────────────────────────────────────────────
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -1949,6 +1993,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Index creation: {e}")
 
+    # Init object storage
+    try:
+        _init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.warning(f"Object storage init: {e}")
+
     # Seed admin user
     if not await db.users.find_one({"email": ADMIN_EMAIL}):
         hashed_pw = bcrypt.hashpw(ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
@@ -3091,6 +3142,105 @@ async def update_embed_config(body: EmbedConfigUpdate, instance_id: str = Depend
     config = await db.embed_configs.find_one({"instance_id": instance_id}, {"_id": 0})
     return config
 
+
+# ── Bot Logo Upload / Serve ──────────────────────────────────────────
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
+
+@api_router.post("/admin/bot-logo")
+async def upload_bot_logo(
+    file: UploadFile = File(...),
+    instance_id: str = Depends(get_instance_access),
+):
+    """Upload a bot logo/avatar image. Stored in object storage; path saved to bot_config."""
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, f"Image type {file.content_type} not allowed. Use PNG, JPEG, WebP, or GIF.")
+    data = await file.read()
+    if len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(400, f"Image too large ({len(data)//1024}KB). Max 2 MB.")
+
+    ext = file.filename.rsplit(".", 1)[-1] if "." in (file.filename or "") else "png"
+    path = f"{_APP_NAME}/logos/{instance_id}/{uuid.uuid4()}.{ext}"
+    try:
+        result = _put_object(path, data, file.content_type or "image/png")
+    except Exception as e:
+        logger.error(f"Logo upload failed: {e}")
+        raise HTTPException(500, "Failed to upload logo to storage")
+
+    storage_path = result.get("path", path)
+    await db.bot_config.update_one(
+        {"instance_id": instance_id},
+        {"$set": {"logo_path": storage_path, "logo_content_type": file.content_type}},
+        upsert=True,
+    )
+    return {"path": storage_path, "size": len(data)}
+
+
+@api_router.get("/bot-logo/{instance_id}")
+async def serve_bot_logo(instance_id: str):
+    """Public endpoint — serves the bot logo image for a given instance."""
+    config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0, "logo_path": 1, "logo_content_type": 1})
+    if not config or not config.get("logo_path"):
+        raise HTTPException(404, "No logo configured")
+    try:
+        data, ct = _get_object(config["logo_path"])
+    except Exception:
+        raise HTTPException(404, "Logo file not found in storage")
+    return Response(
+        content=data,
+        media_type=config.get("logo_content_type", ct),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@api_router.delete("/admin/bot-logo")
+async def delete_bot_logo(instance_id: str = Depends(get_instance_access)):
+    """Remove the bot logo (soft delete — clears reference, storage retains file)."""
+    await db.bot_config.update_one(
+        {"instance_id": instance_id},
+        {"$unset": {"logo_path": "", "logo_content_type": ""}},
+    )
+    return {"status": "deleted"}
+
+
+@api_router.post("/admin/bot-logo/discord-sync")
+async def sync_logo_to_discord(instance_id: str = Depends(get_instance_access)):
+    """Push the current bot logo as the Discord bot avatar."""
+    config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0, "logo_path": 1, "logo_content_type": 1})
+    if not config or not config.get("logo_path"):
+        raise HTTPException(400, "No logo uploaded. Upload a logo first.")
+    try:
+        data, ct = _get_object(config["logo_path"])
+    except Exception:
+        raise HTTPException(500, "Could not retrieve logo from storage")
+
+    # Get Discord bot token
+    discord_creds = await get_discord_credentials()
+    bot_token = discord_creds.get("bot_token", "")
+    if not bot_token:
+        raise HTTPException(400, "No Discord bot token configured. Set it in Discord App Setup.")
+
+    import base64 as _b64
+    mime = config.get("logo_content_type", "image/png")
+    encoded = _b64.b64encode(data).decode("utf-8")
+    avatar_data_uri = f"data:{mime};base64,{encoded}"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            "https://discord.com/api/v10/users/@me",
+            headers={"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"},
+            json={"avatar": avatar_data_uri},
+            timeout=30,
+        )
+    if resp.status_code == 200:
+        return {"status": "synced", "detail": "Discord bot avatar updated"}
+    else:
+        detail = resp.text[:200]
+        raise HTTPException(resp.status_code, f"Discord API error: {detail}")
+
+
+
 @api_router.get("/embed.js")
 async def serve_embed_script(request: Request, instance: str = "", mode: str = "popup"):
     """Serve the embeddable JavaScript loader with full theme support via data-* attributes.
@@ -3198,6 +3348,19 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   var chatSVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
   var closeSVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
 
+  // Bot logo — served from /api/bot-logo/{instance}
+  var logoUrl = ORIGIN + "/api/bot-logo/" + encodeURIComponent(INSTANCE);
+  var logoImg = new Image();
+  var hasLogo = false;
+  var openChatIcon = chatSVG;  // default fallback
+  logoImg.onload = function() {{
+    hasLogo = true;
+    openChatIcon = '<img src="' + logoUrl + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" />';
+    if (!isOpen) btn.innerHTML = openChatIcon;
+  }};
+  logoImg.onerror = function() {{ hasLogo = false; }};
+  logoImg.src = logoUrl;
+
   // Trigger button
   var btn = document.createElement("div");
   btn.className = "bb-embed-trigger";
@@ -3206,7 +3369,7 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
     "width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;" +
     "background:" + accentColor + ";box-shadow:0 4px 20px rgba(0,0,0,0.25);" +
     "transition:transform 0.2s ease,box-shadow 0.2s ease;animation:bb-pulse 2.5s ease-in-out infinite;";
-  btn.innerHTML = chatSVG;
+  btn.innerHTML = openChatIcon;
   btn.onmouseenter = function() {{ btn.style.transform = "scale(1.1)"; }};
   btn.onmouseleave = function() {{ btn.style.transform = "scale(1)"; }};
 
@@ -3248,7 +3411,7 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
     }} else {{
       panel.style.animation = "bb-slideDown 0.2s ease forwards";
       setTimeout(function() {{ panel.style.display = "none"; }}, 200);
-      btn.innerHTML = chatSVG;
+      btn.innerHTML = openChatIcon;
       btn.style.animation = "bb-pulse 2.5s ease-in-out infinite";
     }}
   }});

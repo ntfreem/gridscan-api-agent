@@ -1,0 +1,86 @@
+{
+  "summary": "Tested Bot Logo Upload feature - all backend APIs and frontend UI components working correctly. Logo upload, serve, delete, and Discord sync endpoints all functional. ChatWidget correctly displays uploaded logo in bot avatars with graceful fallback to default icon when no logo is uploaded.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bot_logo.py",
+    "/app/test_reports/pytest/iter49_bot_logo.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_bot_logo.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Re-uploaded test logo for instance 88bfae82-2533-4235-968d-b3298fd57073 after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bot Logo feature fully tested. The Bot Settings page at /admin/settings shows a 'Bot Avatar' section at the top of the Identity card with Upload/Replace/Remove/Sync to Discord buttons. Logo is stored in Emergent Managed object storage and served publicly at /api/bot-logo/{instance_id}. ChatWidget at /widget?instance=<id> displays the logo in header and bot message avatars. embed.js script probes for logo and sets trigger button image if found.",
+  "features_tested": [
+    {
+      "feature": "POST /api/admin/bot-logo - Upload logo",
+      "status": "PASS",
+      "details": "Accepts PNG/JPEG/WebP/GIF images up to 2MB, stores in object storage, saves path to bot_config"
+    },
+    {
+      "feature": "GET /api/bot-logo/{instance_id} - Serve logo (public)",
+      "status": "PASS",
+      "details": "Returns image with correct content-type, publicly accessible without auth"
+    },
+    {
+      "feature": "DELETE /api/admin/bot-logo - Remove logo",
+      "status": "PASS",
+      "details": "Removes logo reference from bot_config, subsequent GET returns 404"
+    },
+    {
+      "feature": "POST /api/admin/bot-logo/discord-sync - Sync to Discord",
+      "status": "PASS",
+      "details": "Requires logo to be uploaded first, attempts to update Discord bot avatar via API"
+    },
+    {
+      "feature": "File type validation",
+      "status": "PASS",
+      "details": "Rejects non-image files with 400 error"
+    },
+    {
+      "feature": "Authentication required for upload/delete",
+      "status": "PASS",
+      "details": "Returns 401 without auth token"
+    },
+    {
+      "feature": "Bot Settings page - Bot Avatar section",
+      "status": "PASS",
+      "details": "Shows avatar circle, Upload/Replace button, Remove button (when logo exists), Sync to Discord button"
+    },
+    {
+      "feature": "ChatWidget - Logo in header avatar",
+      "status": "PASS",
+      "details": "Header avatar shows uploaded logo image"
+    },
+    {
+      "feature": "ChatWidget - Logo in bot message avatars",
+      "status": "PASS",
+      "details": "Bot message avatars show uploaded logo image"
+    },
+    {
+      "feature": "ChatWidget - Graceful fallback",
+      "status": "PASS",
+      "details": "When no logo uploaded, shows default Bot SVG icon"
+    },
+    {
+      "feature": "embed.js - Logo loading logic",
+      "status": "PASS",
+      "details": "Script probes /api/bot-logo/{instance}, sets trigger button to logo on success, falls back to chat icon on error"
+    }
+  ]
+}

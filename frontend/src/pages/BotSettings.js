@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight, Upload, Image as ImageIcon, RefreshCw } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
@@ -40,6 +40,11 @@ export default function BotSettings() {
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeyRevealed, setNewKeyRevealed] = useState(null);
+
+  // Bot Logo
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [discordSyncing, setDiscordSyncing] = useState(false);
 
   useEffect(() => {
     if (!instanceId) return;
@@ -121,6 +126,13 @@ export default function BotSettings() {
       if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0) });
     }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
+    // Probe for bot logo
+    if (instanceId) {
+      const img = new Image();
+      img.onload = () => setLogoUrl(`/api/bot-logo/${instanceId}?t=${Date.now()}`);
+      img.onerror = () => setLogoUrl(null);
+      img.src = `/api/bot-logo/${instanceId}?t=${Date.now()}`;
+    }
   }, [instanceId]);
 
   const save = async () => {
@@ -152,6 +164,41 @@ export default function BotSettings() {
 
   const totalToneExamples = (config.manual_tone_examples?.length || 0) + approvedCount;
 
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Image must be under 2 MB"); return; }
+    setLogoUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await api.post("/admin/bot-logo", form, { headers: { "Content-Type": "multipart/form-data" } });
+      setLogoUrl(`/api/bot-logo/${instanceId}?t=${Date.now()}`);
+      toast.success("Logo uploaded");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed");
+    } finally { setLogoUploading(false); }
+  };
+
+  const handleLogoDelete = async () => {
+    try {
+      await api.delete("/admin/bot-logo");
+      setLogoUrl(null);
+      toast.success("Logo removed");
+    } catch { toast.error("Failed to remove logo"); }
+  };
+
+  const handleDiscordSync = async () => {
+    setDiscordSyncing(true);
+    try {
+      const r = await api.post("/admin/bot-logo/discord-sync");
+      toast.success(r.data?.detail || "Discord avatar updated");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to sync to Discord");
+    } finally { setDiscordSyncing(false); }
+  };
+
   const systemPromptPreview = [
     `You are ${config.name || "[Bot Name]"}. ${config.persona || "[Persona]"}`,
     `KNOWLEDGE BASE \u2014 AUTHORITATIVE SOURCE:\n[Verified knowledge snippets injected here at runtime]\n\u2192 Bot answers these with full confidence, no hedging`,
@@ -181,6 +228,75 @@ export default function BotSettings() {
           <div style={{ ...T.card, marginBottom: "20px" }}>
             <p style={T.sectionTitle}>Identity</p>
             <p style={T.sectionSub}>Define who the bot is and how it presents itself.</p>
+
+            {/* Bot Logo */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: "16px",
+              padding: "14px 16px", backgroundColor: colors.bg.base,
+              border: `1px solid ${colors.border.subtle}`, borderRadius: "12px",
+              marginBottom: "18px",
+            }} data-testid="bot-logo-section">
+              <div style={{
+                width: "56px", height: "56px", borderRadius: "50%", flexShrink: 0,
+                background: logoUrl ? "none" : `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.cyan})`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                overflow: "hidden", border: `2px solid ${colors.border.default}`,
+              }}>
+                {logoUrl
+                  ? <img src={logoUrl} alt="Bot Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <ImageIcon size={22} color="#fff" />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
+                  Bot Avatar
+                </p>
+                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 8px" }}>
+                  {logoUrl ? "Appears in chat bubbles and the embed launcher." : "Upload a logo for the chat widget and Discord bot."}
+                </p>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <label
+                    data-testid="upload-logo-btn"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                      padding: "5px 12px", borderRadius: "8px", fontSize: "11px",
+                      fontFamily: fonts.body, cursor: "pointer",
+                      backgroundColor: colors.brand.primary, color: "#fff",
+                      opacity: logoUploading ? 0.6 : 1,
+                    }}>
+                    <Upload size={12} />
+                    {logoUploading ? "Uploading..." : logoUrl ? "Replace" : "Upload"}
+                    <input type="file" accept="image/*" onChange={handleLogoUpload}
+                      disabled={logoUploading} style={{ display: "none" }} />
+                  </label>
+                  {logoUrl && (
+                    <>
+                      <button onClick={handleLogoDelete} data-testid="delete-logo-btn"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "5px",
+                          padding: "5px 12px", borderRadius: "8px", fontSize: "11px",
+                          fontFamily: fonts.body, cursor: "pointer",
+                          backgroundColor: "transparent", color: colors.brand.error,
+                          border: `1px solid ${colors.brand.error}30`,
+                        }}>
+                        <Trash2 size={11} /> Remove
+                      </button>
+                      <button onClick={handleDiscordSync} disabled={discordSyncing}
+                        data-testid="discord-sync-logo-btn"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "5px",
+                          padding: "5px 12px", borderRadius: "8px", fontSize: "11px",
+                          fontFamily: fonts.body, cursor: "pointer",
+                          backgroundColor: "#5865F2", color: "#fff",
+                          border: "none", opacity: discordSyncing ? 0.6 : 1,
+                        }}>
+                        <RefreshCw size={11} /> {discordSyncing ? "Syncing..." : "Sync to Discord"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div style={{ marginBottom: "18px" }}>
               <label style={T.label}>Bot Name *</label>
               <input style={T.input} value={config.name} onChange={e => setConfig(p => ({ ...p, name: e.target.value }))}
