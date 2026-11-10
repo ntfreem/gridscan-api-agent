@@ -88,6 +88,12 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
   
   Gradient slider bar (red → amber → yellow → cyan → green), dynamic label and description, backward-compatible with legacy `knowledge_gate` string field.
 
+### Phase 9 — Gate Presets, KB Export/Import/Share (Nov 2026)
+- **Gate Presets**: Three quick-pick buttons above the slider — Conservative (10%), Balanced (50%), Open (85%). One click sets the slider and description. Active preset is highlighted with matching color border.
+- **KB Export**: `GET /api/knowledge/export` returns portable JSON (strips instance_id). Frontend button triggers file download as `kb-export-YYYY-MM-DD.json`.
+- **KB Import**: `POST /api/knowledge/import` accepts sources array + optional `overwrite` flag. Overwrite uses soft-delete (deactivates existing sources with `archived_at` timestamp). Merge mode skips duplicates by ID.
+- **Share KB Across Bots**: `POST /api/knowledge/share` copies selected or all sources to another instance. Modal picker shows all available instances. Group IDs are regenerated for target instance to maintain chunked source grouping. Bulk action bar includes "Share Selected" button.
+
 ## Backlog
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)

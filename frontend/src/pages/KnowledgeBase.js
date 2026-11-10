@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
@@ -276,6 +276,13 @@ export default function KnowledgeBase() {
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const fileRef = useRef(null);
+  const importRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [allInstances, setAllInstances] = useState([]);
+  const [shareTarget, setShareTarget] = useState("");
+  const [sharing, setSharing] = useState(false);
 
   const loadSources = useCallback(() => {
     api.get(`/knowledge/sources`).then(r => setSources(r.data)).catch(() => {});
@@ -283,6 +290,83 @@ export default function KnowledgeBase() {
   }, [instanceId]);
 
   useEffect(() => { loadSources(); }, [loadSources, instanceId]);
+
+  // ── Export / Import / Share handlers ──
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get("/knowledge/export");
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kb-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${res.data.count} sources`);
+    } catch { toast.error("Export failed"); }
+    finally { setExporting(false); }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.sources || !Array.isArray(data.sources)) {
+        toast.error("Invalid export file — missing 'sources' array");
+        setImporting(false);
+        return;
+      }
+      const overwrite = window.confirm(
+        `Import ${data.sources.length} sources?\n\nChoose OK to REPLACE existing KB (old sources will be deactivated).\nChoose Cancel to MERGE (add alongside existing).`
+      );
+      const res = await api.post("/knowledge/import", { sources: data.sources, overwrite });
+      toast.success(`Imported ${res.data.imported} sources${res.data.skipped ? `, skipped ${res.data.skipped} duplicates` : ""}`);
+      loadSources();
+    } catch (err) {
+      if (err instanceof SyntaxError) toast.error("Invalid JSON file");
+      else toast.error(err.response?.data?.detail || "Import failed");
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = "";
+    }
+  };
+
+  const openShareModal = async () => {
+    try {
+      const res = await api.get("/admin/instances");
+      const others = res.data.filter(i => i.id !== instanceId);
+      if (others.length === 0) {
+        toast.error("No other bot instances to share with. Create another instance first.");
+        return;
+      }
+      setAllInstances(others);
+      setShareTarget(others[0]?.id || "");
+      setShowShareModal(true);
+    } catch { toast.error("Failed to load instances"); }
+  };
+
+  const handleShare = async () => {
+    if (!shareTarget) { toast.error("Select a target instance"); return; }
+    const sourceIds = selected.size > 0
+      ? [...selected].flatMap(id => {
+          const s = sources.find(src => (src.group_id || src.id) === id);
+          return s?.parts || [s?.id];
+        }).filter(Boolean)
+      : sources.flatMap(s => s.parts || [s.id]);
+    if (sourceIds.length === 0) { toast.error("No sources to share"); return; }
+    setSharing(true);
+    try {
+      const res = await api.post("/knowledge/share", { source_ids: sourceIds, target_instance_id: shareTarget });
+      toast.success(`Shared ${res.data.copied} sources to "${res.data.target_name}"`);
+      setShowShareModal(false);
+      setSelected(new Set());
+    } catch (err) { toast.error(err.response?.data?.detail || "Share failed"); }
+    finally { setSharing(false); }
+  };
 
   const addFaq = async () => {
     if (!faq.title.trim() || !faq.content.trim()) { toast.error("Title and content are required"); return; }
@@ -648,6 +732,98 @@ export default function KnowledgeBase() {
       <p style={T.overline}>Knowledge Management</p>
       <h1 style={T.h1}>Knowledge Base</h1>
 
+      {/* KB Tools: Export / Import / Share */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap", alignItems: "center" }}>
+        <button data-testid="kb-export-btn" onClick={handleExport} disabled={exporting || sources.length === 0}
+          style={{
+            padding: "7px 14px", borderRadius: "10px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "500",
+            backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+            color: sources.length === 0 ? colors.text.muted : colors.text.secondary,
+            cursor: sources.length === 0 ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: "6px", transition: "all 0.2s",
+          }}>
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          Export KB
+        </button>
+        <button data-testid="kb-import-btn" onClick={() => importRef.current?.click()} disabled={importing}
+          style={{
+            padding: "7px 14px", borderRadius: "10px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "500",
+            backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+            color: colors.text.secondary, cursor: importing ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: "6px", transition: "all 0.2s",
+          }}>
+          {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+          {importing ? "Importing..." : "Import KB"}
+        </button>
+        <button data-testid="kb-share-btn" onClick={openShareModal}
+          style={{
+            padding: "7px 14px", borderRadius: "10px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "500",
+            backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+            color: sources.length === 0 ? colors.text.muted : colors.text.secondary,
+            cursor: sources.length === 0 ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: "6px", transition: "all 0.2s",
+          }}
+          disabled={sources.length === 0}>
+          <Share2 size={13} />
+          {selected.size > 0 ? `Share ${selected.size} Selected` : "Share to Instance"}
+        </button>
+        <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportFile} />
+        {sources.length > 0 && (
+          <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted }}>
+            {sources.length} source{sources.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowShareModal(false)}>
+          <div onClick={e => e.stopPropagation()} data-testid="share-modal" style={{
+            width: "100%", maxWidth: "420px", backgroundColor: colors.bg.surface,
+            border: `1px solid ${colors.border.default}`, borderRadius: "14px", padding: "28px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Share2 size={16} color={colors.brand.cyan} />
+                <h2 style={{ fontFamily: fonts.heading, fontSize: "17px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                  Share Knowledge Base
+                </h2>
+              </div>
+              <button onClick={() => setShowShareModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.secondary }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, marginBottom: "16px", lineHeight: "1.5" }}>
+              {selected.size > 0
+                ? `Copy ${selected.size} selected source${selected.size > 1 ? "s" : ""} to another bot instance.`
+                : `Copy all ${sources.length} KB sources to another bot instance.`}
+            </p>
+            <label style={T.label}>Target Instance</label>
+            <select data-testid="share-target-select" value={shareTarget} onChange={e => setShareTarget(e.target.value)}
+              style={{ ...T.input, cursor: "pointer", marginBottom: "20px" }}>
+              {allInstances.map(inst => (
+                <option key={inst.id} value={inst.id}>{inst.name || inst.id.slice(0, 12)}</option>
+              ))}
+            </select>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button data-testid="share-confirm-btn" onClick={handleShare} disabled={sharing}
+                style={{ ...T.btnPrimary, flex: 1, opacity: sharing ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                {sharing ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
+                {sharing ? "Sharing..." : "Share Now"}
+              </button>
+              <button onClick={() => setShowShareModal(false)}
+                style={{ padding: "9px 18px", borderRadius: "10px", fontSize: "13px", fontFamily: fonts.body, backgroundColor: "transparent", border: `1px solid ${colors.border.default}`, color: colors.text.secondary, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: "flex", gap: "4px", marginBottom: "24px", borderBottom: `1px solid ${colors.border.default}`, paddingBottom: "0" }}>
         {tabs.map(({ id, label, icon: Icon }) => (
@@ -947,6 +1123,18 @@ export default function KnowledgeBase() {
                 style={{ padding: "5px 10px", borderRadius: "8px", fontSize: "12px", fontFamily: fonts.body, backgroundColor: "transparent", border: `1px solid ${colors.border.default}`, color: colors.text.secondary, cursor: "pointer" }}
               >
                 Cancel
+              </button>
+              <div style={{ width: "1px", height: "20px", backgroundColor: colors.border.default, margin: "0 4px" }} />
+              <button
+                onClick={openShareModal}
+                data-testid="bulk-share-btn"
+                style={{
+                  padding: "5px 14px", borderRadius: "8px", fontSize: "12px", fontFamily: fonts.body, fontWeight: "600",
+                  backgroundColor: "rgba(96,165,250,0.08)", border: `1px solid rgba(96,165,250,0.3)`, color: colors.brand.cyan, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "5px",
+                }}
+              >
+                <Share2 size={12} />Share Selected
               </button>
             </div>
           </div>

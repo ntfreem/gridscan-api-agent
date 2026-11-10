@@ -363,7 +363,31 @@ export default function BotSettings() {
               } />
               <p style={{ ...T.sectionTitle, margin: 0 }}>Knowledge Gate</p>
             </div>
-            <p style={T.sectionSub}>Controls how much the bot can use general AI knowledge beyond the knowledge base. Drag the slider to adjust.</p>
+            <p style={T.sectionSub}>Controls how much the bot can use general AI knowledge beyond the knowledge base. Drag the slider or pick a preset.</p>
+
+            {/* Quick Presets */}
+            <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+              {[
+                { label: "Conservative", pct: 10, color: colors.brand.error, desc: "KB only" },
+                { label: "Balanced", pct: 50, color: colors.brand.warning, desc: "KB + labeled general" },
+                { label: "Open", pct: 85, color: colors.brand.success, desc: "Free to answer" },
+              ].map(preset => (
+                <button
+                  key={preset.label}
+                  data-testid={`gate-preset-${preset.label.toLowerCase()}`}
+                  onClick={() => setConfig(p => ({ ...p, knowledge_gate_pct: preset.pct, knowledge_gate: preset.pct <= 20 ? "strict" : "flexible" }))}
+                  style={{
+                    flex: 1, padding: "8px 10px", borderRadius: "10px", cursor: "pointer",
+                    backgroundColor: config.knowledge_gate_pct === preset.pct ? `${preset.color}12` : colors.bg.base,
+                    border: `1.5px solid ${config.knowledge_gate_pct === preset.pct ? preset.color : colors.border.default}`,
+                    textAlign: "center", transition: "all 0.2s ease",
+                  }}
+                >
+                  <span style={{ display: "block", fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: config.knowledge_gate_pct === preset.pct ? preset.color : colors.text.secondary }}>{preset.label}</span>
+                  <span style={{ display: "block", fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, marginTop: "2px" }}>{preset.desc}</span>
+                </button>
+              ))}
+            </div>
 
             {/* Gate Level Label */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "14px", marginBottom: "8px" }}>

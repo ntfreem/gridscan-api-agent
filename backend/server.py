@@ -3125,6 +3125,105 @@ async def get_knowledge_sources(instance_id: str = Depends(get_instance_access))
         grouped_list.append(g)
     result = sorted(grouped_list + ungrouped, key=lambda x: (-x.get("priority", 0), x.get("created_at", "") or ""))
     return result
+
+# ── KB Export / Import / Share ──
+
+@api_router.get("/knowledge/export")
+async def export_knowledge_base(instance_id: str = Depends(get_instance_access)):
+    """Export all KB sources for this instance as a downloadable JSON."""
+    sources = await db.knowledge_sources.find(
+        {"instance_id": instance_id}, {"_id": 0}
+    ).to_list(5000)
+    # Strip instance-specific fields so the file is portable
+    export_data = []
+    for s in sources:
+        entry = {k: v for k, v in s.items() if k not in ("instance_id",)}
+        export_data.append(entry)
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "source_instance_id": instance_id,
+        "count": len(export_data),
+        "sources": export_data,
+    }
+
+
+class KBImportPayload(BaseModel):
+    sources: list
+    overwrite: bool = False  # If true, delete existing KB first
+
+
+@api_router.post("/knowledge/import")
+async def import_knowledge_base(payload: KBImportPayload, instance_id: str = Depends(get_instance_access)):
+    """Import KB sources from an export file. Optionally deactivates existing KB first."""
+    if not payload.sources:
+        raise HTTPException(status_code=400, detail="No sources to import")
+    if payload.overwrite:
+        # Soft-delete: deactivate existing sources instead of hard-deleting
+        await db.knowledge_sources.update_many(
+            {"instance_id": instance_id},
+            {"$set": {"is_active": False, "archived_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    imported = 0
+    skipped = 0
+    for s in payload.sources:
+        # Assign new IDs and bind to current instance
+        s.pop("_id", None)
+        s.pop("instance_id", None)
+        old_id = s.pop("id", None)
+        if not payload.overwrite and old_id:
+            exists = await db.knowledge_sources.find_one({"id": old_id, "instance_id": instance_id})
+            if exists:
+                skipped += 1
+                continue
+        new_id = old_id if old_id and payload.overwrite else str(uuid.uuid4())
+        doc = {**s, "id": new_id, "instance_id": instance_id, "imported_at": datetime.now(timezone.utc).isoformat()}
+        # Regenerate group_id if the source had one
+        if "group_id" in doc and payload.overwrite:
+            pass  # keep original group_id for overwrite scenario
+        await db.knowledge_sources.insert_one(doc)
+        imported += 1
+    return {"imported": imported, "skipped": skipped, "total": len(payload.sources)}
+
+
+class KBSharePayload(BaseModel):
+    source_ids: list[str]  # list of source/part IDs to share
+    target_instance_id: str
+
+
+@api_router.post("/knowledge/share")
+async def share_knowledge_sources(payload: KBSharePayload, instance_id: str = Depends(get_instance_access)):
+    """Copy selected KB sources from current instance to another instance."""
+    if payload.target_instance_id == instance_id:
+        raise HTTPException(status_code=400, detail="Cannot share to the same instance")
+    # Verify target instance exists
+    target = await db.bot_instances.find_one({"id": payload.target_instance_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Target instance not found")
+    # Fetch selected sources
+    sources = await db.knowledge_sources.find(
+        {"instance_id": instance_id, "id": {"$in": payload.source_ids}}, {"_id": 0}
+    ).to_list(5000)
+    if not sources:
+        raise HTTPException(status_code=404, detail="No matching sources found")
+    # Generate new group_ids for chunked sources so they stay grouped in the target
+    old_group_to_new = {}
+    copied = 0
+    for s in sources:
+        new_doc = {k: v for k, v in s.items()}
+        new_doc["id"] = str(uuid.uuid4())
+        new_doc["instance_id"] = payload.target_instance_id
+        new_doc["shared_from"] = instance_id
+        new_doc["shared_at"] = datetime.now(timezone.utc).isoformat()
+        old_gid = new_doc.get("group_id")
+        if old_gid:
+            if old_gid not in old_group_to_new:
+                old_group_to_new[old_gid] = str(uuid.uuid4())
+            new_doc["group_id"] = old_group_to_new[old_gid]
+        await db.knowledge_sources.insert_one(new_doc)
+        copied += 1
+    return {"copied": copied, "target_instance": payload.target_instance_id, "target_name": target.get("name", "")}
+
 @api_router.post("/knowledge/sources/faq")
 async def add_faq(entry: FAQEntry, instance_id: str = Depends(get_instance_access)):
     doc = {
