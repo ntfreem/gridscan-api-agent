@@ -213,7 +213,7 @@ export default function EmbedCode() {
       <h1 style={T.h1}>Embed Your Chatbot</h1>
 
       {/* Method Selector */}
-      <div data-testid="method-tabs" style={{ display: "flex", gap: "12px", marginBottom: "24px" }}>
+      <div data-testid="method-tabs" style={{ display: "flex", gap: "12px", marginBottom: "24px", maxWidth: "1100px" }}>
         {METHOD_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeMethod === tab.id;
@@ -236,7 +236,7 @@ export default function EmbedCode() {
         })}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 420px) minmax(0, 1fr)", gap: "24px", maxWidth: "1100px" }}>
         {/* Left Column */}
         <div>
           {/* Theme Configurator */}
@@ -374,7 +374,8 @@ export default function EmbedCode() {
             <div style={{
               backgroundColor: activeMethod === "inline" ? "#f8fafc" : colors.bg.base,
               border: `1px solid ${colors.border.subtle}`, borderRadius: "8px",
-              overflow: "hidden", height: "520px", position: "relative",
+              height: "520px", position: "relative",
+              maxWidth: "100%", overflow: "hidden",
             }}>
               {activeMethod === "popup" && (
                 <div style={{ height: "100%", position: "relative", background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)", padding: "20px" }}>
