@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Copy, Check, Code2, Globe, Monitor, Paintbrush, MessageCircle, Layout, Maximize, ChevronDown, ExternalLink, Link2, RefreshCw } from "lucide-react";
+import { Copy, Check, Code2, Globe, Monitor, Paintbrush, MessageCircle, Layout, Maximize, ChevronDown, ExternalLink, Link2, RefreshCw, MessageSquareText, ToggleLeft, ToggleRight } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 import api from "../utils/api";
 
@@ -101,6 +101,10 @@ export default function EmbedCode() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [theme, setTheme] = useState({ ...DEFAULT_THEME });
   const [previewKey, setPreviewKey] = useState(0);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [savedWelcomeMessage, setSavedWelcomeMessage] = useState("");
+  const [defaultOpen, setDefaultOpen] = useState(false);
+  const [savedDefaultOpen, setSavedDefaultOpen] = useState(false);
 
   const origin = window.location.origin;
 
@@ -109,7 +113,8 @@ export default function EmbedCode() {
     .filter(([, v]) => v && v.trim())
     .map(([k, v]) => `${k}=${encodeURIComponent(v.trim())}`)
     .join("&");
-  const widgetUrl = `${origin}/widget?instance=${instanceId}&mode=${activeMethod}${themeQuery ? "&" + themeQuery : ""}`;
+  const welcomeQuery = welcomeMessage ? `&welcome=${encodeURIComponent(welcomeMessage)}` : "";
+  const widgetUrl = `${origin}/widget?instance=${instanceId}&mode=${activeMethod}${themeQuery ? "&" + themeQuery : ""}${welcomeQuery}`;
 
   // Load embed config
   useEffect(() => {
@@ -118,6 +123,12 @@ export default function EmbedCode() {
       const url = r.data?.custom_css_url || "";
       setCssUrl(url);
       setSavedCssUrl(url);
+      const wm = r.data?.welcome_message || "";
+      setWelcomeMessage(wm);
+      setSavedWelcomeMessage(wm);
+      const dop = r.data?.default_open || false;
+      setDefaultOpen(dop);
+      setSavedDefaultOpen(dop);
     }).catch(() => {});
   }, [instanceId]);
 
@@ -125,13 +136,19 @@ export default function EmbedCode() {
     if (!instanceId) return;
     setSaving(true);
     try {
-      await api.put("/admin/embed-config", { custom_css_url: cssUrl.trim() });
+      await api.put("/admin/embed-config", {
+        custom_css_url: cssUrl.trim(),
+        welcome_message: welcomeMessage,
+        default_open: defaultOpen,
+      });
       setSavedCssUrl(cssUrl.trim());
+      setSavedWelcomeMessage(welcomeMessage);
+      setSavedDefaultOpen(defaultOpen);
       toast.success("Embed configuration saved");
     } catch {
       toast.error("Failed to save configuration");
     } finally { setSaving(false); }
-  }, [instanceId, cssUrl]);
+  }, [instanceId, cssUrl, welcomeMessage, defaultOpen]);
 
   const updateTheme = (key, val) => setTheme(prev => ({ ...prev, [key]: val }));
   const applyPreset = (preset) => setTheme({ ...DEFAULT_THEME, ...preset.theme });
@@ -239,6 +256,76 @@ export default function EmbedCode() {
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 420px) minmax(0, 1fr)", gap: "24px", maxWidth: "1100px" }}>
         {/* Left Column */}
         <div>
+          {/* Widget Behavior */}
+          <div style={{ ...T.card, marginBottom: "20px" }} data-testid="widget-behavior-card">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <MessageSquareText size={16} color={colors.brand.cyan} />
+              <p style={T.sectionTitle}>Widget Behavior</p>
+            </div>
+            <p style={T.sectionSub}>
+              Set a welcome message and control how the popup loads for visitors.
+            </p>
+
+            {/* Default Open Toggle */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.subtle}`,
+              borderRadius: "10px", marginBottom: "14px", marginTop: "12px",
+            }}>
+              <div>
+                <p style={{ fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                  Expand on Load
+                </p>
+                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "2px 0 0" }}>
+                  Popup opens automatically when the page loads
+                </p>
+              </div>
+              <button
+                onClick={() => setDefaultOpen(o => !o)}
+                data-testid="default-open-toggle"
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: "4px",
+                  color: defaultOpen ? colors.brand.success : colors.text.muted,
+                  transition: "color 0.15s",
+                }}
+              >
+                {defaultOpen ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+              </button>
+            </div>
+
+            {/* Welcome Message */}
+            <label style={T.label}>Welcome Message</label>
+            <textarea
+              value={welcomeMessage}
+              onChange={e => setWelcomeMessage(e.target.value)}
+              placeholder="Hello! 👋 Welcome! I'm your assistant. How can I help you today?"
+              rows={5}
+              data-testid="welcome-message-input"
+              style={{
+                ...T.input, minHeight: "100px", resize: "vertical", lineHeight: "1.5",
+                fontFamily: fonts.body, fontSize: "12px",
+              }}
+              onFocus={onFocus} onBlur={onBlur}
+            />
+            <p style={{ ...T.hint, marginTop: "4px" }}>
+              This message appears as the first bot message when the widget loads. Supports markdown. Leave blank for no greeting.
+            </p>
+
+            {/* Save button */}
+            <button onClick={saveEmbedConfig} disabled={saving} data-testid="save-behavior-btn"
+              style={{
+                ...T.btnPrimary, padding: "8px 16px", fontSize: "12px", marginTop: "10px",
+                opacity: saving ? 0.6 : 1, width: "100%",
+              }}>
+              {saving ? "Saving..." : "Save Configuration"}
+            </button>
+            {savedWelcomeMessage && (
+              <p style={{ ...T.hint, color: colors.brand.success, marginTop: "6px" }}>
+                Welcome message active ({savedWelcomeMessage.length} chars)
+              </p>
+            )}
+          </div>
+
           {/* Theme Configurator */}
           <div style={{ ...T.card, marginBottom: "20px" }} data-testid="theme-configurator">
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>

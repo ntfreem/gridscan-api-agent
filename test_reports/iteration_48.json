@@ -1,0 +1,76 @@
+{
+  "summary": "Tested Embed Widget Behavior feature - configurable welcome message and default-open toggle. All backend APIs and frontend UI components working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_embed_widget_behavior.py",
+    "/app/test_reports/pytest/iter48_embed_widget_behavior.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_embed_widget_behavior.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Restored original Cardano welcome message and default_open=true after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Embed Widget Behavior feature fully tested. The Widget Behavior card on /admin/embed page allows configuring welcome_message (textarea) and default_open (toggle). The welcome message appears as the first bot bubble in the widget with markdown rendering (bold, bullets). The embed.js script supports data-welcome and data-open attributes and fetches config from /api/embed/config/{instance_id}.",
+  "features_tested": [
+    {
+      "feature": "Widget Behavior card on Embed Code page",
+      "status": "PASS",
+      "details": "Card visible above Theme Configurator with Expand on Load toggle and Welcome Message textarea"
+    },
+    {
+      "feature": "Expand on Load toggle",
+      "status": "PASS",
+      "details": "Toggle visible, clickable, toggles between on/off states"
+    },
+    {
+      "feature": "Welcome Message textarea",
+      "status": "PASS",
+      "details": "Textarea visible, editable, pre-populated with saved Cardano greeting (377 chars)"
+    },
+    {
+      "feature": "Save Configuration button",
+      "status": "PASS",
+      "details": "Saves both welcome_message and default_open to backend, shows success toast"
+    },
+    {
+      "feature": "Live Preview shows welcome message",
+      "status": "PASS",
+      "details": "Preview iframe renders welcome message as bot bubble with markdown formatting"
+    },
+    {
+      "feature": "Widget displays welcome message",
+      "status": "PASS",
+      "details": "Widget at /widget?instance=<id>&mode=popup shows welcome message as first bot message with bold text and bullet points"
+    },
+    {
+      "feature": "embed.js supports data-welcome and data-open",
+      "status": "PASS",
+      "details": "Script contains attr('welcome') and attr('open') support, fetches config from /api/embed/config/{instance_id}"
+    },
+    {
+      "feature": "GET /api/embed/config/{instance_id}",
+      "status": "PASS",
+      "details": "Returns welcome_message and default_open fields"
+    },
+    {
+      "feature": "PUT /api/admin/embed-config",
+      "status": "PASS",
+      "details": "Accepts and saves welcome_message (string) and default_open (boolean)"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ export default function ChatWidget() {
   const [searchParams] = useSearchParams();
   const instanceId = searchParams.get("instance");
   const mode = searchParams.get("mode") || "popup";
+  const welcomeParam = searchParams.get("welcome") || "";
 
   // Theme URL params for external embedding
   const themeAccent = searchParams.get("accent");
@@ -57,7 +58,7 @@ export default function ChatWidget() {
     Object.entries(map).forEach(([k, v]) => { if (v) root.style.setProperty(k, v); });
   }, [themeAccent, themeAccentLight, themeBg, themeSurface, themePanel, themeText, themeTextSecondary, themeBorder, themeUserBubble, themeBotBubble, themeInputBg, themeFont, themeRadius]);
 
-  // Load embed config (custom CSS) for this instance
+  // Load embed config (custom CSS + welcome message) for this instance
   useEffect(() => {
     if (instanceId) {
       axios.get(`${API}/embed/config/${instanceId}`).then(r => {
@@ -77,14 +78,26 @@ export default function ChatWidget() {
             if (v) root.style.setProperty(k, v);
           });
         }
-      }).catch(() => {});
+        // Set welcome message: URL param takes priority, then config, then nothing
+        const welcome = welcomeParam || cfg.welcome_message || "";
+        if (welcome && messages.length === 0) {
+          setMessages([{ role: "assistant", content: welcome, timestamp: new Date().toISOString() }]);
+        }
+      }).catch(() => {
+        // If config fetch fails, still apply URL-param welcome message
+        if (welcomeParam && messages.length === 0) {
+          setMessages([{ role: "assistant", content: welcomeParam, timestamp: new Date().toISOString() }]);
+        }
+      });
+    } else if (welcomeParam && messages.length === 0) {
+      setMessages([{ role: "assistant", content: welcomeParam, timestamp: new Date().toISOString() }]);
     }
     return () => {
       // Cleanup injected CSS on unmount
       const link = document.querySelector('link[data-bridgebot-css]');
       if (link) link.remove();
     };
-  }, [instanceId]);
+  }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     axios.get(`${API}/admin/bot-config`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
@@ -407,8 +420,8 @@ export default function ChatWidget() {
               <div className="bb-empty-icon">
                 <Bot size={22} color="#FFFFFF" />
               </div>
-              <p className="bb-empty-title">Hi! How can I help?</p>
-              <p className="bb-empty-sub">Ask me anything.</p>
+              <p className="bb-empty-title">Hi there!</p>
+              <p className="bb-empty-sub">Type a message to get started.</p>
             </div>
           )}
 

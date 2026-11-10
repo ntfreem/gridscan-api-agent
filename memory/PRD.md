@@ -133,3 +133,10 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
   - Top Endpoints table with integration name, endpoint path, call count, avg latency
   - Integration Errors section
   - Recent Integration Calls log with timestamps, integration names, endpoints, HTTP status badges, latency
+
+
+### Phase 14 — Custom Welcome Message & Auto-Expand Widget (Nov 2026)
+- **Widget Behavior Config**: Added `welcome_message` (string) and `default_open` (boolean) to `embed_configs` collection. Backend `EmbedConfigUpdate` model accepts both fields. `GET /api/embed/config/{id}` returns them; `PUT /api/admin/embed-config` saves them.
+- **embed.js Enhancements**: Added `data-welcome` and `data-open` attribute support. Script fetches config from `/api/embed/config/{id}` for server-saved values. When `data-open="true"` or config has `default_open`, popup auto-expands on page load.
+- **ChatWidget.js**: Reads `welcome` URL param and displays it as the initial bot message (rendered with markdown). Falls back to embed config `welcome_message`. Old static "Hi! How can I help?" replaced with configurable greeting.
+- **EmbedCode.js Admin UI**: New "Widget Behavior" card above Theme Configurator with Expand on Load toggle, Welcome Message textarea (markdown), and Save Configuration button.

@@ -3060,6 +3060,8 @@ class ExternalChatRequest(BaseModel):
 class EmbedConfigUpdate(BaseModel):
     custom_css_url: Optional[str] = None
     theme: Optional[dict] = None  # CSS variable overrides
+    welcome_message: Optional[str] = None
+    default_open: Optional[bool] = None
 
 # ==================== EMBED CONFIG ====================
 
@@ -3079,6 +3081,10 @@ async def update_embed_config(body: EmbedConfigUpdate, instance_id: str = Depend
         update_data["custom_css_url"] = body.custom_css_url.strip()
     if body.theme is not None:
         update_data["theme"] = body.theme
+    if body.welcome_message is not None:
+        update_data["welcome_message"] = body.welcome_message
+    if body.default_open is not None:
+        update_data["default_open"] = body.default_open
     await db.embed_configs.update_one(
         {"instance_id": instance_id}, {"$set": update_data}, upsert=True
     )
@@ -3124,6 +3130,32 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   }});
 
   var widgetUrl = ORIGIN + "/widget?instance=" + encodeURIComponent(INSTANCE) + "&mode=" + MODE + themeQuery;
+
+  // Welcome message and default-open from data attributes or embed config
+  var WELCOME = attr("welcome", "");
+  var DEFAULT_OPEN = attr("open", "") === "true";
+
+  if (WELCOME) widgetUrl += "&welcome=" + encodeURIComponent(WELCOME);
+
+  // If no data-* overrides, fetch embed config from server for welcome/open settings
+  if (!WELCOME || !attr("open", "")) {{
+    var cfgUrl = ORIGIN + "/api/embed/config/" + encodeURIComponent(INSTANCE);
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", cfgUrl, false); // sync to run before DOM injection
+    try {{
+      xhr.send();
+      if (xhr.status === 200) {{
+        var cfg = JSON.parse(xhr.responseText);
+        if (!WELCOME && cfg.welcome_message) {{
+          WELCOME = cfg.welcome_message;
+          widgetUrl += "&welcome=" + encodeURIComponent(WELCOME);
+        }}
+        if (!attr("open", "") && cfg.default_open) {{
+          DEFAULT_OPEN = true;
+        }}
+      }}
+    }} catch(e) {{}}
+  }}
 
   // ── Inline mode ──
   if (MODE === "inline") {{
@@ -3196,6 +3228,15 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   document.body.appendChild(btn);
 
   var isOpen = false;
+  // Auto-open if DEFAULT_OPEN is set
+  if (DEFAULT_OPEN) {{
+    isOpen = true;
+    panel.style.display = "block";
+    panel.style.animation = "bb-slideUp 0.25s ease forwards";
+    btn.innerHTML = closeSVG;
+    btn.style.animation = "none";
+    btn.style.background = accentColor;
+  }}
   btn.addEventListener("click", function() {{
     isOpen = !isOpen;
     if (isOpen) {{
