@@ -118,7 +118,18 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
   - Direct URLs section with full theme query strings
 
 ## Backlog
+- P0: ~~API Key Usage Analytics — Add integration usage stats~~ ✅ DONE (Nov 2026)
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)
 - P2: Multi-server Discord feature
+
+### Phase 13 — Integration Usage Analytics (Nov 2026)
+- **New Backend Endpoint**: `GET /api/admin/integration-usage-analytics?days=N` aggregates data from `api_request_logs` collection. Returns per-integration breakdown (name, calls, success/fail, avg latency, data transferred, success rate), daily call timeline, top endpoints by call count, error breakdown, and recent request log.
+- **Unified Usage Analytics Page**: Renamed "API Key Usage" page header to "Usage Analytics". Below existing API key analytics, added "External Integration Usage" collapsible section showing:
+  - Summary stat cards (Total Calls, Successful, Failed)
+  - Per-integration cards with name, call count, avg latency, data transferred, success rate badge, base URL
+  - Integration Calls Over Time bar chart
+  - Top Endpoints table with integration name, endpoint path, call count, avg latency
+  - Integration Errors section
+  - Recent Integration Calls log with timestamps, integration names, endpoints, HTTP status badges, latency

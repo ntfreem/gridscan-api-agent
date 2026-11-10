@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import {
   Activity, TrendingUp, Zap, DollarSign, Clock, CheckCircle, XCircle,
   ChevronDown, ChevronRight, BarChart2, RefreshCw, Key, ArrowLeft,
-  Server, Hash, AlertTriangle, Copy, ToggleLeft, ToggleRight
+  Server, Hash, AlertTriangle, Copy, ToggleLeft, ToggleRight,
+  Globe, Plug, ArrowUpRight, Layers
 } from "lucide-react";
 import { colors, fonts, T, radius, onFocus, onBlur } from "../theme";
 
@@ -294,6 +295,259 @@ function AnalyticsDetail({ keyId, days }) {
   );
 }
 
+// ── Integration Usage Section ────────────────────────────────────────
+function IntegrationUsageSection({ days }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(true);
+  const [selectedIntg, setSelectedIntg] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/integration-usage-analytics?days=${days}`)
+      .then(r => setData(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  if (loading) return (
+    <div style={{ textAlign: "center", padding: "24px", color: colors.text.muted }}>Loading integration usage...</div>
+  );
+  if (!data || (data.totals?.total_requests === 0 && (!data.integrations || data.integrations.length === 0))) {
+    return (
+      <div style={{ ...T.card, textAlign: "center", padding: "32px" }} data-testid="integration-usage-empty">
+        <Plug size={32} color={colors.text.muted} style={{ marginBottom: "8px" }} />
+        <p style={{ color: colors.text.secondary, fontSize: "13px", margin: 0 }}>
+          No external API integration calls recorded in the last {days} days.
+        </p>
+        <p style={{ color: colors.text.muted, fontSize: "11px", margin: "4px 0 0" }}>
+          Add integrations (e.g. Gridscan) under Bot Settings to start tracking usage.
+        </p>
+      </div>
+    );
+  }
+
+  const totals = data.totals || {};
+  const integrations = data.integrations || [];
+  const byDay = data.requests_by_day || [];
+  const topEps = data.top_endpoints || [];
+  const errors = data.error_breakdown || [];
+  const recent = data.recent_requests || [];
+
+  return (
+    <div style={{ display: "grid", gap: "16px" }} data-testid="integration-usage-section">
+      {/* Header */}
+      <div
+        style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
+        onClick={() => setExpanded(e => !e)}
+      >
+        {expanded ? <ChevronDown size={16} color={colors.text.muted} /> : <ChevronRight size={16} color={colors.text.muted} />}
+        <Globe size={16} color={colors.brand.primary} />
+        <h2 style={{ ...T.h2, margin: 0, fontSize: "16px" }} data-testid="integration-usage-title">External Integration Usage</h2>
+        <span style={{
+          fontFamily: fonts.mono, fontSize: "10px", padding: "2px 8px", borderRadius: radius.full,
+          backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary,
+        }}>
+          {totals.total_requests?.toLocaleString()} calls
+        </span>
+      </div>
+
+      {expanded && (
+        <div style={{ display: "grid", gap: "16px" }}>
+          {/* Totals row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "10px" }}>
+            <StatCard icon={Activity} label="Total Calls" value={totals.total_requests?.toLocaleString()} color={colors.brand.primary} />
+            <StatCard icon={CheckCircle} label="Successful" value={totals.successful?.toLocaleString()}
+              sub={`${totals.success_rate}% success`} color={colors.brand.success} />
+            <StatCard icon={XCircle} label="Failed" value={totals.failed?.toLocaleString()}
+              color={totals.failed > 0 ? colors.brand.error : colors.text.muted} />
+          </div>
+
+          {/* Per-integration cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
+            {integrations.map(intg => {
+              const isSelected = selectedIntg === intg.integration_id;
+              return (
+                <div
+                  key={intg.integration_id}
+                  data-testid={`intg-card-${intg.integration_id}`}
+                  onClick={() => setSelectedIntg(isSelected ? null : intg.integration_id)}
+                  style={{
+                    padding: "14px 16px", borderRadius: radius.lg, cursor: "pointer",
+                    backgroundColor: isSelected ? `${colors.brand.primary}08` : colors.bg.surface,
+                    border: `1px solid ${isSelected ? colors.brand.primary : colors.border.muted}`,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                    <Plug size={13} color={isSelected ? colors.brand.light : colors.text.muted} />
+                    <span style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>
+                      {intg.name}
+                    </span>
+                    <span style={{
+                      marginLeft: "auto", fontSize: "10px", fontFamily: fonts.mono,
+                      padding: "2px 6px", borderRadius: radius.full,
+                      backgroundColor: intg.success_rate >= 90 ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                      color: intg.success_rate >= 90 ? colors.brand.success : colors.brand.error,
+                    }}>
+                      {intg.success_rate}%
+                    </span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", fontSize: "11px" }}>
+                    <div>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Calls</p>
+                      <p style={{ color: colors.text.primary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "15px" }}>
+                        {intg.total_requests?.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Avg ms</p>
+                      <p style={{ color: colors.text.secondary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "15px" }}>
+                        {intg.avg_duration_ms}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Data</p>
+                      <p style={{ color: colors.text.secondary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "15px" }}>
+                        {intg.total_bytes > 1048576
+                          ? `${(intg.total_bytes / 1048576).toFixed(1)}MB`
+                          : intg.total_bytes > 1024
+                            ? `${(intg.total_bytes / 1024).toFixed(0)}KB`
+                            : `${intg.total_bytes}B`}
+                      </p>
+                    </div>
+                  </div>
+                  {intg.base_url && (
+                    <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "8px 0 0",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {intg.base_url}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Requests over time bar chart */}
+          {byDay.length > 0 && (
+            <div style={{ ...T.card }}>
+              <h3 style={{ ...T.sectionTitle, marginBottom: "14px" }}>
+                <TrendingUp size={14} style={{ marginRight: "6px" }} /> Integration Calls Over Time
+              </h3>
+              <MiniBar data={byDay.map(d => ({ label: d.date, value: d.total }))} color={colors.brand.primary} height={90} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>{byDay[0]?.date}</span>
+                <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>{byDay[byDay.length - 1]?.date}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Top endpoints + Errors row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            {/* Top endpoints */}
+            <div style={{ ...T.card }}>
+              <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+                <Layers size={14} style={{ marginRight: "6px" }} /> Top Endpoints
+              </h3>
+              {topEps.length === 0
+                ? <p style={{ color: colors.text.muted, fontSize: "12px" }}>No data</p>
+                : (
+                  <div style={{ display: "grid", gap: "4px", maxHeight: "220px", overflowY: "auto" }}>
+                    {topEps.map((ep, i) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: "8px", fontSize: "11px",
+                        padding: "4px 6px", borderRadius: radius.sm,
+                        backgroundColor: i % 2 === 0 ? "transparent" : `${colors.bg.surface}80`,
+                      }}>
+                        <span style={{ fontFamily: fonts.mono, color: colors.text.muted, minWidth: "70px", fontSize: "10px",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {ep.integration_name}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, color: colors.text.primary, flex: 1,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {ep.endpoint_path}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, color: colors.brand.primary, fontWeight: "600", minWidth: "30px", textAlign: "right" }}>
+                          {ep.total}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, color: colors.text.muted, fontSize: "10px", minWidth: "40px" }}>
+                          {ep.avg_duration_ms}ms
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+
+            {/* Error breakdown */}
+            <div style={{ ...T.card }}>
+              <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+                <AlertTriangle size={14} style={{ marginRight: "6px" }} /> Integration Errors
+              </h3>
+              {errors.length === 0
+                ? <p style={{ color: colors.text.muted, fontSize: "12px" }}>No errors recorded</p>
+                : (
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {errors.map(e => (
+                      <div key={e.error} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px" }}>
+                        <span style={{ fontFamily: fonts.mono, color: colors.brand.error, flex: 1,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {e.error}
+                        </span>
+                        <span style={{ fontFamily: fonts.mono, color: colors.brand.error, fontWeight: "600" }}>{e.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          </div>
+
+          {/* Recent integration requests */}
+          {recent.length > 0 && (
+            <div style={{ ...T.card }}>
+              <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+                <Activity size={14} style={{ marginRight: "6px" }} /> Recent Integration Calls
+              </h3>
+              <div style={{ maxHeight: "250px", overflowY: "auto" }}>
+                {recent.map((r, i) => (
+                  <div key={r.id || i} style={{
+                    display: "flex", alignItems: "center", gap: "10px",
+                    padding: "5px 8px", fontSize: "11px", fontFamily: fonts.mono,
+                    borderBottom: `1px solid ${colors.border.muted}15`,
+                  }}>
+                    {r.success
+                      ? <CheckCircle size={12} color={colors.brand.success} />
+                      : <XCircle size={12} color={colors.brand.error} />}
+                    <span style={{ color: colors.text.muted, minWidth: "130px" }}>
+                      {new Date(r.timestamp).toLocaleString()}
+                    </span>
+                    <span style={{ color: colors.brand.primary, minWidth: "80px", fontWeight: "500" }}>
+                      {r.integration_name}
+                    </span>
+                    <span style={{ color: colors.text.secondary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.endpoint_path}
+                    </span>
+                    <span style={{
+                      fontSize: "10px", padding: "1px 5px", borderRadius: radius.sm, fontWeight: "600",
+                      backgroundColor: r.http_status >= 200 && r.http_status < 300 ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                      color: r.http_status >= 200 && r.http_status < 300 ? colors.brand.success : colors.brand.error,
+                    }}>
+                      {r.http_status}
+                    </span>
+                    <span style={{ color: colors.text.muted, minWidth: "50px" }}>{r.duration_ms || 0}ms</span>
+                    {r.error_category && <span style={{ color: colors.brand.error, fontSize: "10px" }}>{r.error_category}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ══════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════════════════
@@ -338,7 +592,7 @@ export default function ApiKeyAnalytics() {
     <div style={T.page} data-testid="api-key-analytics-page">
       <p style={T.overline}>API Key Analytics</p>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-        <h1 style={{ ...T.h1, margin: 0 }}>API Key Usage</h1>
+        <h1 style={{ ...T.h1, margin: 0 }}>Usage Analytics</h1>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <select
             data-testid="days-filter"
@@ -421,6 +675,11 @@ export default function ApiKeyAnalytics() {
           {selectedKey && <AnalyticsDetail keyId={selectedKey} days={days} />}
         </>
       )}
+
+      {/* ── External Integration Usage ── */}
+      <div style={{ marginTop: "28px", borderTop: `1px solid ${colors.border.muted}`, paddingTop: "24px" }}>
+        <IntegrationUsageSection days={days} />
+      </div>
     </div>
   );
 }

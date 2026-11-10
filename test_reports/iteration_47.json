@@ -1,0 +1,88 @@
+{
+  "summary": "Completed testing of iteration 47 features: External Integration Usage Analytics section on API Key Analytics page. Backend endpoint GET /api/admin/integration-usage-analytics returns correct JSON with totals, per-integration stats, daily breakdown, top endpoints, error breakdown, and recent requests. Frontend displays all data correctly with collapsible section, stat cards, integration cards, charts, and logs. All 21 backend tests passed. All frontend features verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter47_integration_usage_analytics.py",
+    "/app/test_reports/pytest/iter47_integration_usage_analytics.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend endpoint correctly aggregates data from api_request_logs collection",
+    "Per-integration stats include name, base_url, total_requests, successful, failed, avg_duration_ms, total_bytes, success_rate",
+    "Daily breakdown shows date, total, successful, failed, avg_duration_ms",
+    "Top endpoints show integration_name, endpoint_path, total, avg_duration_ms",
+    "Recent requests include timestamp, integration_name, endpoint_path, http_status, success, duration_ms",
+    "Frontend IntegrationUsageSection component correctly renders all data",
+    "Collapsible header shows total call count badge",
+    "StatCard components display Total Calls, Successful, Failed with correct colors",
+    "Integration cards show name, calls, avg latency, data transferred, success rate percentage, base URL",
+    "MiniBar chart renders Integration Calls Over Time with date range labels",
+    "Top Endpoints section shows endpoint paths with call counts and latency",
+    "Integration Errors section shows 'No errors recorded' when empty",
+    "Recent Integration Calls log shows timestamp, integration name, endpoint path, HTTP status badge (200/404), and latency",
+    "Days filter (7/14/30/90) affects both API key analytics AND integration usage analytics"
+  ],
+  "updated_files": ["/app/backend/tests/test_iter47_integration_usage_analytics.py"],
+  "success_rate": {"backend": "100% (21/21 passed)", "frontend": "100%"},
+  "seed_data_creation": "None - used existing data in api_request_logs collection (7 calls to Grid Scan and another integration)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 47 features fully tested. GET /api/admin/integration-usage-analytics endpoint returns JSON with period_days, totals (total_requests, successful, failed, success_rate), integrations array (integration_id, name, base_url, total_requests, successful, failed, avg_duration_ms, total_bytes, success_rate), requests_by_day array (date, total, successful, failed, avg_duration_ms), top_endpoints array (integration_name, endpoint_path, total, avg_duration_ms), error_breakdown array (error, count), recent_requests array (timestamp, integration_name, endpoint_path, http_status, success, duration_ms). Frontend IntegrationUsageSection component at /admin/api-key-analytics displays all this data with collapsible header, stat cards, integration cards, MiniBar chart, Top Endpoints table, Integration Errors section, and Recent Integration Calls log.",
+  "features_tested": {
+    "backend": {
+      "integration_usage_analytics_endpoint": "PASS - GET /api/admin/integration-usage-analytics returns 200",
+      "response_structure": "PASS - Contains period_days, totals, integrations, requests_by_day, top_endpoints, error_breakdown, recent_requests",
+      "totals_structure": "PASS - Contains total_requests, successful, failed, success_rate",
+      "integrations_structure": "PASS - Contains integration_id, name, base_url, total_requests, successful, failed, avg_duration_ms, total_bytes, success_rate",
+      "requests_by_day_structure": "PASS - Contains date, total, successful, failed, avg_duration_ms",
+      "top_endpoints_structure": "PASS - Contains integration_name, endpoint_path, total, avg_duration_ms",
+      "recent_requests_structure": "PASS - Contains timestamp, integration_name, endpoint_path, http_status, success, duration_ms",
+      "days_filter_7": "PASS - Returns period_days=7",
+      "days_filter_14": "PASS - Returns period_days=14",
+      "days_filter_30": "PASS - Returns period_days=30",
+      "days_filter_90": "PASS - Returns period_days=90",
+      "requires_auth": "PASS - Returns 401 without auth",
+      "requires_instance_id": "PASS - Returns 400 without X-Instance-ID",
+      "api_key_analytics_endpoint": "PASS - GET /api/admin/api-key-analytics returns 200",
+      "api_key_list_structure": "PASS - Returns list of keys with analytics",
+      "data_consistency_totals": "PASS - total_requests = successful + failed",
+      "data_consistency_success_rate": "PASS - success_rate correctly calculated",
+      "grid_scan_integration_present": "PASS - Grid Scan integration found with requests"
+    },
+    "frontend": {
+      "page_loads": "PASS - /admin/api-key-analytics loads with title 'Usage Analytics'",
+      "api_key_cards": "PASS - 4 API key cards displayed with stats",
+      "integration_usage_section": "PASS - External Integration Usage section visible",
+      "integration_usage_title": "PASS - Title 'External Integration Usage' with call count badge",
+      "stat_cards": "PASS - Total Calls (7), Successful (6), Failed (1) displayed",
+      "integration_cards": "PASS - 2 integration cards (Grid Scan 100%, another 66.7%)",
+      "integration_card_details": "PASS - Shows name, calls, avg ms, data, success rate, base URL",
+      "integration_calls_chart": "PASS - MiniBar chart with date range labels",
+      "top_endpoints_section": "PASS - Shows endpoint paths with call counts and latency",
+      "integration_errors_section": "PASS - Shows 'No errors recorded'",
+      "recent_integration_calls": "PASS - Shows timestamp, integration name, endpoint path, HTTP status badge, latency",
+      "days_filter": "PASS - Filter changes affect both sections"
+    }
+  },
+  "test_credentials": {
+    "admin": {"username": "administrator", "password": "Admin@123"},
+    "instance_id": "88bfae82-2533-4235-968d-b3298fd57073"
+  },
+  "verified_data": {
+    "totals": {"total_requests": 7, "successful": 6, "failed": 1, "success_rate": 85.7},
+    "integrations": [
+      {"name": "Grid Scan", "total_requests": 4, "success_rate": 100, "avg_duration_ms": 617, "total_bytes": 6548},
+      {"name": "ab129c73-a73d-416c-832b-af66047f2ab2", "total_requests": 3, "success_rate": 66.7, "avg_duration_ms": 95, "total_bytes": 55042}
+    ],
+    "top_endpoints_sample": ["GET /api/blocks/latest", "GET /api/epochs/latest", "GET /api/txs/recent", "GET /api/txs/{hash}", "GET /posts"],
+    "recent_requests_count": 7
+  }
+}

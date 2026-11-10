@@ -2889,6 +2889,151 @@ async def api_key_analytics_detail(
         "recent_requests": recent,
     }
 
+
+@api_router.get("/admin/integration-usage-analytics")
+async def integration_usage_analytics(
+    instance_id: str = Depends(get_instance_access),
+    days: int = 30,
+):
+    """Usage analytics for external API integrations (Gridscan, etc.)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    base_match = {"instance_id": instance_id, "timestamp": {"$gte": cutoff}}
+
+    # ── Per-integration totals ──
+    intg_pipeline = [
+        {"$match": base_match},
+        {"$group": {
+            "_id": "$integration_id",
+            "total_requests": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+            "total_bytes": {"$sum": {"$ifNull": ["$response_size", 0]}},
+        }},
+        {"$sort": {"total_requests": -1}},
+    ]
+    intg_stats_raw = await db.api_request_logs.aggregate(intg_pipeline).to_list(50)
+
+    # Look up integration names
+    intg_ids = [s["_id"] for s in intg_stats_raw if s["_id"]]
+    intg_docs = {}
+    if intg_ids:
+        cursor = db.api_integrations.find(
+            {"id": {"$in": intg_ids}, "instance_id": instance_id},
+            {"_id": 0, "id": 1, "name": 1, "base_url": 1}
+        )
+        async for doc in cursor:
+            intg_docs[doc["id"]] = doc
+
+    integrations = []
+    grand_total = 0
+    grand_success = 0
+    grand_failed = 0
+    for s in intg_stats_raw:
+        iid = s["_id"]
+        info = intg_docs.get(iid, {})
+        total = s["total_requests"]
+        succ = s["successful"]
+        fail = s["failed"]
+        grand_total += total
+        grand_success += succ
+        grand_failed += fail
+        integrations.append({
+            "integration_id": iid,
+            "name": info.get("name", iid or "Unknown"),
+            "base_url": info.get("base_url", ""),
+            "total_requests": total,
+            "successful": succ,
+            "failed": fail,
+            "avg_duration_ms": round(s.get("avg_duration_ms") or 0),
+            "total_bytes": s.get("total_bytes", 0),
+            "success_rate": round(succ / max(total, 1) * 100, 1),
+        })
+
+    # ── Daily breakdown ──
+    daily_pipeline = [
+        {"$match": base_match},
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    daily_raw = await db.api_request_logs.aggregate(daily_pipeline).to_list(days + 1)
+    requests_by_day = [
+        {"date": d["_id"], "total": d["total"], "successful": d["successful"],
+         "failed": d["failed"], "avg_duration_ms": round(d.get("avg_duration_ms") or 0)}
+        for d in daily_raw
+    ]
+
+    # ── Top endpoints ──
+    ep_pipeline = [
+        {"$match": base_match},
+        {"$group": {
+            "_id": {"integration_id": "$integration_id", "endpoint_path": "$endpoint_path"},
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"total": -1}},
+        {"$limit": 20},
+    ]
+    ep_raw = await db.api_request_logs.aggregate(ep_pipeline).to_list(20)
+    top_endpoints = []
+    for e in ep_raw:
+        iid = e["_id"].get("integration_id", "")
+        info = intg_docs.get(iid, {})
+        top_endpoints.append({
+            "integration_name": info.get("name", iid or "Unknown"),
+            "endpoint_path": e["_id"].get("endpoint_path", ""),
+            "total": e["total"],
+            "successful": e["successful"],
+            "failed": e["failed"],
+            "avg_duration_ms": round(e.get("avg_duration_ms") or 0),
+        })
+
+    # ── Error breakdown ──
+    err_pipeline = [
+        {"$match": {**base_match, "success": False, "error_category": {"$ne": None}}},
+        {"$group": {"_id": "$error_category", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]
+    err_raw = await db.api_request_logs.aggregate(err_pipeline).to_list(10)
+    error_breakdown = [{"error": e["_id"], "count": e["count"]} for e in err_raw]
+
+    # ── Recent requests ──
+    recent = await db.api_request_logs.find(
+        {"instance_id": instance_id},
+        {"_id": 0, "id": 1, "integration_id": 1, "endpoint_path": 1, "timestamp": 1,
+         "http_status": 1, "success": 1, "duration_ms": 1, "error_category": 1, "response_size": 1}
+    ).sort("timestamp", -1).to_list(50)
+    # Enrich with integration names
+    for r in recent:
+        info = intg_docs.get(r.get("integration_id", ""), {})
+        r["integration_name"] = info.get("name", r.get("integration_id", "Unknown"))
+
+    return {
+        "period_days": days,
+        "totals": {
+            "total_requests": grand_total,
+            "successful": grand_success,
+            "failed": grand_failed,
+            "success_rate": round(grand_success / max(grand_total, 1) * 100, 1),
+        },
+        "integrations": integrations,
+        "requests_by_day": requests_by_day,
+        "top_endpoints": top_endpoints,
+        "error_breakdown": error_breakdown,
+        "recent_requests": recent,
+    }
+
+
 async def _authenticate_api_key(request: Request) -> dict:
     """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
     auth = request.headers.get("Authorization", "")
