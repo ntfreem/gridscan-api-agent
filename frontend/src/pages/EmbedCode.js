@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Copy, Check, Code2, Globe, Monitor, Paintbrush, MessageCircle, Layout, Maximize, ChevronDown, ExternalLink, Link2 } from "lucide-react";
+import { Copy, Check, Code2, Globe, Monitor, Paintbrush, MessageCircle, Layout, Maximize, ChevronDown, ExternalLink, Link2, RefreshCw } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 import api from "../utils/api";
 
@@ -45,10 +45,51 @@ function CodeBlock({ code, label, testId }) {
 }
 
 const METHOD_TABS = [
-  { id: "popup", label: "Popup Widget", icon: MessageCircle, desc: "Floating chat bubble — opens an expandable chat panel on click" },
-  { id: "inline", label: "Inline Embed", icon: Layout, desc: "Embeds directly into a container div on your page" },
-  { id: "fullpage", label: "Full Page", icon: Maximize, desc: "Dedicated chat page that fills the entire viewport" },
+  { id: "popup", label: "Popup Widget", icon: MessageCircle, desc: "Floating chat bubble with expandable panel" },
+  { id: "inline", label: "Inline Embed", icon: Layout, desc: "Embeds directly into a container div" },
+  { id: "fullpage", label: "Full Page", icon: Maximize, desc: "Dedicated full-viewport chat page" },
 ];
+
+const DEFAULT_THEME = {
+  accent: "", bg: "", surface: "", panel: "", text: "",
+  textSecondary: "", border: "", userBubble: "", botBubble: "", inputBg: "", font: "", radius: "",
+};
+
+const THEME_PRESETS = [
+  { label: "Default Dark", theme: {} },
+  { label: "Violet Cyber", theme: { accent: "#7C3AED", accentLight: "#00D4FF", bg: "#0B0A1A", surface: "#1A1040", panel: "#251A4D", border: "rgba(124,58,237,0.2)", userBubble: "#7C3AED" } },
+  { label: "Ocean Blue", theme: { accent: "#0EA5E9", accentLight: "#38BDF8", bg: "#0C1222", surface: "#132036", panel: "#1A2942", border: "rgba(14,165,233,0.2)", userBubble: "#0EA5E9" } },
+  { label: "Emerald", theme: { accent: "#10B981", accentLight: "#34D399", bg: "#0A1410", surface: "#0F1F18", panel: "#142B22", border: "rgba(16,185,129,0.2)", userBubble: "#10B981" } },
+  { label: "Rose", theme: { accent: "#F43F5E", accentLight: "#FB7185", bg: "#1A0A10", surface: "#251018", panel: "#321622", border: "rgba(244,63,94,0.2)", userBubble: "#F43F5E" } },
+];
+
+function ThemeColorInput({ label, value, onChange, placeholder }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{
+        width: "20px", height: "20px", borderRadius: "6px", flexShrink: 0,
+        border: `1px solid ${colors.border.default}`,
+        backgroundColor: value || placeholder || "#333",
+      }} />
+      <div style={{ flex: 1 }}>
+        <label style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "2px" }}>
+          {label}
+        </label>
+        <input
+          value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder || "inherit"}
+          style={{
+            width: "100%", padding: "4px 8px", borderRadius: "6px", fontSize: "11px",
+            fontFamily: fonts.mono, backgroundColor: colors.bg.base,
+            border: `1px solid ${colors.border.faint}`, color: colors.text.primary,
+            outline: "none", boxSizing: "border-box",
+          }}
+          onFocus={onFocus} onBlur={onBlur}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function EmbedCode() {
   const { selectedInstance } = useAuth();
@@ -58,9 +99,17 @@ export default function EmbedCode() {
   const [savedCssUrl, setSavedCssUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [theme, setTheme] = useState({ ...DEFAULT_THEME });
+  const [previewKey, setPreviewKey] = useState(0);
 
   const origin = window.location.origin;
-  const widgetUrl = `${origin}/widget?instance=${instanceId}&mode=${activeMethod}`;
+
+  // Build theme query string from non-empty values
+  const themeQuery = Object.entries(theme)
+    .filter(([, v]) => v && v.trim())
+    .map(([k, v]) => `${k}=${encodeURIComponent(v.trim())}`)
+    .join("&");
+  const widgetUrl = `${origin}/widget?instance=${instanceId}&mode=${activeMethod}${themeQuery ? "&" + themeQuery : ""}`;
 
   // Load embed config
   useEffect(() => {
@@ -84,75 +133,78 @@ export default function EmbedCode() {
     } finally { setSaving(false); }
   }, [instanceId, cssUrl]);
 
-  // Generate code snippets based on active method
+  const updateTheme = (key, val) => setTheme(prev => ({ ...prev, [key]: val }));
+  const applyPreset = (preset) => setTheme({ ...DEFAULT_THEME, ...preset.theme });
+  const refreshPreview = () => setPreviewKey(k => k + 1);
+
+  // Build data attributes string for snippet
+  const dataAttrs = Object.entries(theme)
+    .filter(([, v]) => v && v.trim())
+    .map(([k, v]) => `\n    data-${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}="${v.trim()}"`)
+    .join("");
+
   const getSnippets = () => {
     const cssParam = savedCssUrl ? `&css=${encodeURIComponent(savedCssUrl)}` : "";
+    const scriptSrc = `${origin}/api/embed.js`;
 
     if (activeMethod === "popup") {
-      const scriptSrc = `${origin}/api/embed.js?instance=${instanceId}&mode=popup`;
       return {
         primary: {
           label: "Script Tag (Recommended)",
-          code: `<!-- BridgeBot Popup Widget -->\n<script src="${scriptSrc}"></script>`,
+          code: `<!-- BridgeBot Popup Widget -->\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="popup"${dataAttrs}>\n</script>`,
         },
         alt: {
           label: "Manual iframe",
-          code: `<!-- BridgeBot Popup Widget (Manual) -->\n<iframe\n  src="${origin}/widget?instance=${instanceId}&mode=popup${cssParam}"\n  style="position:fixed;bottom:20px;right:20px;width:380px;\n    height:580px;border:none;z-index:9999;\n    border-radius:12px;\n    box-shadow:0 8px 40px rgba(0,0,0,0.25)"\n  title="Chat"\n></iframe>`,
+          code: `<!-- BridgeBot Popup (iframe) -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;bottom:20px;right:20px;width:380px;\n    height:580px;border:none;z-index:9999;\n    border-radius:16px;\n    box-shadow:0 12px 48px rgba(0,0,0,0.3)"\n  title="Chat"\n></iframe>`,
         },
         react: {
           label: "React Component",
-          code: `import { useEffect } from 'react';\n\nexport function BridgeBotPopup() {\n  useEffect(() => {\n    const s = document.createElement('script');\n    s.src = '${scriptSrc}';\n    s.async = true;\n    document.body.appendChild(s);\n    return () => s.remove();\n  }, []);\n  return null;\n}`,
+          code: `import { useEffect } from 'react';\n\nexport function BridgeBotPopup() {\n  useEffect(() => {\n    const s = document.createElement('script');\n    s.src = '${scriptSrc}';\n    s.dataset.instance = '${instanceId}';\n    s.dataset.mode = 'popup';${Object.entries(theme).filter(([, v]) => v?.trim()).map(([k, v]) => `\n    s.dataset.${k} = '${v.trim()}';`).join("")}\n    s.async = true;\n    document.body.appendChild(s);\n    return () => s.remove();\n  }, []);\n  return null;\n}`,
         },
       };
     }
 
     if (activeMethod === "inline") {
-      const scriptSrc = `${origin}/api/embed.js?instance=${instanceId}&mode=inline`;
       return {
         primary: {
           label: "HTML + Script (Recommended)",
-          code: `<!-- BridgeBot Inline Chat -->\n<div id="bridgebot-container"\n  style="width:100%;height:600px;border-radius:12px;\n    overflow:hidden;border:1px solid #e2e8f0">\n</div>\n<script src="${scriptSrc}"></script>`,
+          code: `<!-- BridgeBot Inline Chat -->\n<div id="bridgebot-container"\n  style="width:100%;height:600px;border-radius:12px;\n    overflow:hidden;border:1px solid #e2e8f0">\n</div>\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="inline"${dataAttrs}>\n</script>`,
         },
         alt: {
           label: "Direct iframe",
-          code: `<!-- BridgeBot Inline Chat -->\n<iframe\n  src="${origin}/widget?instance=${instanceId}&mode=inline${cssParam}"\n  style="width:100%;height:600px;border:none;\n    border-radius:12px"\n  title="Chat"\n></iframe>`,
+          code: `<!-- BridgeBot Inline Chat -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="width:100%;height:600px;border:none;\n    border-radius:12px"\n  title="Chat"\n></iframe>`,
         },
         react: {
           label: "React Component",
-          code: `export function BridgeBotInline({ height = '600px' }) {\n  return (\n    <iframe\n      src="${origin}/widget?instance=${instanceId}&mode=inline${cssParam}"\n      title="Chat"\n      style={{\n        width: '100%', height, border: 'none',\n        borderRadius: '12px'\n      }}\n    />\n  );\n}`,
+          code: `export function BridgeBotInline({ height = '600px' }) {\n  return (\n    <iframe\n      src="${widgetUrl}${cssParam}"\n      title="Chat"\n      style={{\n        width: '100%', height, border: 'none',\n        borderRadius: '12px'\n      }}\n    />\n  );\n}`,
         },
       };
     }
 
-    // fullpage
     return {
       primary: {
         label: "Redirect / Link",
-        code: `<!-- Link to BridgeBot full page chat -->\n<a href="${origin}/widget?instance=${instanceId}&mode=fullpage${cssParam}"\n  target="_blank" rel="noopener">\n  Open Chat\n</a>`,
+        code: `<!-- Link to BridgeBot -->\n<a href="${widgetUrl}${cssParam}"\n  target="_blank" rel="noopener">\n  Open Chat\n</a>`,
       },
       alt: {
         label: "Full Page iframe",
-        code: `<!-- BridgeBot Full Page -->\n<iframe\n  src="${origin}/widget?instance=${instanceId}&mode=fullpage${cssParam}"\n  style="position:fixed;top:0;left:0;width:100%;\n    height:100%;border:none;z-index:99999"\n  title="Chat"\n></iframe>`,
+        code: `<!-- BridgeBot Full Page -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;top:0;left:0;width:100%;\n    height:100%;border:none;z-index:99999"\n  title="Chat"\n></iframe>`,
       },
       react: {
         label: "React Route",
-        code: `// Add to your React Router\nimport { Navigate } from 'react-router-dom';\n\n// Option A: Redirect\n<Route path="/chat"\n  element={\n    <Navigate to="${origin}/widget?instance=${instanceId}&mode=fullpage${cssParam}" />\n  }\n/>\n\n// Option B: Embedded\nexport function ChatPage() {\n  return (\n    <iframe\n      src="${origin}/widget?instance=${instanceId}&mode=fullpage${cssParam}"\n      title="Chat"\n      style={{ width:'100%', height:'100vh', border:'none' }}\n    />\n  );\n}`,
+        code: `export function ChatPage() {\n  return (\n    <iframe\n      src="${widgetUrl}${cssParam}"\n      title="Chat"\n      style={{ width: '100%', height: '100vh', border: 'none' }}\n    />\n  );\n}`,
       },
     };
   };
 
   const snippets = getSnippets();
 
-  // Styles
   const tabStyle = (isActive) => ({
     padding: "10px 16px",
     background: isActive ? "rgba(59,130,246,0.12)" : "transparent",
     border: `1px solid ${isActive ? "rgba(59,130,246,0.3)" : colors.border.subtle}`,
-    borderRadius: "10px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    display: "flex", alignItems: "center", gap: "10px",
-    flex: 1, minWidth: 0,
+    borderRadius: "10px", cursor: "pointer", transition: "all 0.2s ease",
+    display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0,
   });
 
   return (
@@ -160,15 +212,14 @@ export default function EmbedCode() {
       <p style={T.overline}>Integration</p>
       <h1 style={T.h1}>Embed Your Chatbot</h1>
 
-      {/* Method Selector Tabs */}
+      {/* Method Selector */}
       <div data-testid="method-tabs" style={{ display: "flex", gap: "12px", marginBottom: "24px" }}>
         {METHOD_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeMethod === tab.id;
           return (
             <button key={tab.id} onClick={() => setActiveMethod(tab.id)}
-              data-testid={`method-tab-${tab.id}`}
-              style={tabStyle(isActive)}>
+              data-testid={`method-tab-${tab.id}`} style={tabStyle(isActive)}>
               <div style={{
                 width: "32px", height: "32px", borderRadius: "8px",
                 background: isActive ? "rgba(59,130,246,0.2)" : colors.bg.panel,
@@ -177,16 +228,8 @@ export default function EmbedCode() {
                 <Icon size={15} color={isActive ? colors.brand.blue : colors.text.secondary} />
               </div>
               <div style={{ textAlign: "left", minWidth: 0 }}>
-                <p style={{
-                  fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600",
-                  color: isActive ? colors.text.primary : colors.text.secondary,
-                  margin: 0, whiteSpace: "nowrap",
-                }}>{tab.label}</p>
-                <p style={{
-                  fontFamily: fonts.body, fontSize: "11px",
-                  color: colors.text.muted, margin: 0,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{tab.desc}</p>
+                <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: isActive ? colors.text.primary : colors.text.secondary, margin: 0 }}>{tab.label}</p>
+                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.desc}</p>
               </div>
             </button>
           );
@@ -194,8 +237,52 @@ export default function EmbedCode() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-        {/* Left Column — Code + CSS */}
+        {/* Left Column */}
         <div>
+          {/* Theme Configurator */}
+          <div style={{ ...T.card, marginBottom: "20px" }} data-testid="theme-configurator">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <Paintbrush size={16} color={colors.brand.cyan} />
+              <p style={T.sectionTitle}>Theme Configurator</p>
+            </div>
+            <p style={T.sectionSub}>
+              Customize the widget colors to match your site. Changes update the embed code and live preview instantly.
+            </p>
+
+            {/* Presets */}
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px", marginTop: "12px" }}>
+              {THEME_PRESETS.map(preset => (
+                <button key={preset.label} onClick={() => applyPreset(preset)}
+                  data-testid={`theme-preset-${preset.label.toLowerCase().replace(/\s/g, "-")}`}
+                  style={{
+                    padding: "5px 12px", borderRadius: "8px", fontSize: "11px", fontFamily: fonts.body,
+                    backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+                    color: colors.text.secondary, cursor: "pointer", transition: "all 0.15s",
+                    display: "flex", alignItems: "center", gap: "6px",
+                  }}>
+                  <div style={{
+                    width: "10px", height: "10px", borderRadius: "50%",
+                    backgroundColor: preset.theme.accent || colors.brand.blue,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }} />
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Color Inputs Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <ThemeColorInput label="Accent" value={theme.accent} onChange={v => updateTheme("accent", v)} placeholder="#3B82F6" />
+              <ThemeColorInput label="Accent Light" value={theme.accentLight} onChange={v => updateTheme("accentLight", v)} placeholder="#60A5FA" />
+              <ThemeColorInput label="Background" value={theme.bg} onChange={v => updateTheme("bg", v)} placeholder="#0B1120" />
+              <ThemeColorInput label="Surface" value={theme.surface} onChange={v => updateTheme("surface", v)} placeholder="#111827" />
+              <ThemeColorInput label="Panel" value={theme.panel} onChange={v => updateTheme("panel", v)} placeholder="#1E293B" />
+              <ThemeColorInput label="Border" value={theme.border} onChange={v => updateTheme("border", v)} placeholder="rgba(148,163,184,0.15)" />
+              <ThemeColorInput label="User Bubble" value={theme.userBubble} onChange={v => updateTheme("userBubble", v)} placeholder="#3B82F6" />
+              <ThemeColorInput label="Bot Bubble" value={theme.botBubble} onChange={v => updateTheme("botBubble", v)} placeholder="#1E293B" />
+            </div>
+          </div>
+
           {/* Embed Snippets */}
           <div style={T.card} data-testid="embed-snippets-card">
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
@@ -203,9 +290,9 @@ export default function EmbedCode() {
               <p style={T.sectionTitle}>Integration Code</p>
             </div>
             <p style={T.sectionSub}>
-              {activeMethod === "popup" && "Add a floating chat bubble to any page. The widget slides open on click."}
-              {activeMethod === "inline" && "Embed the chatbot directly inside a container on your page."}
-              {activeMethod === "fullpage" && "Dedicate an entire page to the chat experience."}
+              {activeMethod === "popup" && "Paste the script tag. The launcher auto-injects with your theme colors."}
+              {activeMethod === "inline" && "Add the container div and script tag where you want the chat."}
+              {activeMethod === "fullpage" && "Link to or embed the full-page chat experience."}
             </p>
 
             <CodeBlock code={snippets.primary.code} label={snippets.primary.label} testId="copy-primary-btn" />
@@ -213,193 +300,127 @@ export default function EmbedCode() {
             <CodeBlock code={snippets.react.code} label={snippets.react.label} testId="copy-react-btn" />
           </div>
 
-          {/* Custom CSS Configuration */}
+          {/* Custom CSS */}
           <div style={{ ...T.card, marginTop: "20px" }} data-testid="css-config-card">
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-              <Paintbrush size={16} color={colors.brand.blue} />
-              <p style={T.sectionTitle}>Custom Stylesheet</p>
+              <Code2 size={16} color={colors.text.secondary} />
+              <p style={T.sectionTitle}>Custom Stylesheet (Advanced)</p>
             </div>
-            <p style={T.sectionSub}>
-              Import your own CSS to make the widget look native to your website. Override any CSS variable to match your brand.
-            </p>
-
+            <p style={T.sectionSub}>Override CSS variables with your own stylesheet for even deeper customization.</p>
             <label style={T.label}>Stylesheet URL</label>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <div style={{ flex: 1, position: "relative" }}>
-                <Link2 size={14} color={colors.text.muted}
-                  style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
-                <input
-                  value={cssUrl} onChange={e => setCssUrl(e.target.value)}
-                  placeholder="https://your-site.com/bridgebot-theme.css"
-                  data-testid="css-url-input"
-                  style={{ ...T.input, paddingLeft: "34px" }}
-                  onFocus={onFocus} onBlur={onBlur}
-                />
+                <Link2 size={14} color={colors.text.muted} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
+                <input value={cssUrl} onChange={e => setCssUrl(e.target.value)}
+                  placeholder="https://your-site.com/bridgebot-theme.css" data-testid="css-url-input"
+                  style={{ ...T.input, paddingLeft: "34px" }} onFocus={onFocus} onBlur={onBlur} />
               </div>
               <button onClick={saveEmbedConfig} disabled={saving} data-testid="save-css-btn"
-                style={{
-                  ...T.btnPrimary, padding: "10px 16px", opacity: saving ? 0.6 : 1,
-                  whiteSpace: "nowrap", fontSize: "12px",
-                }}>
+                style={{ ...T.btnPrimary, padding: "10px 16px", opacity: saving ? 0.6 : 1, whiteSpace: "nowrap", fontSize: "12px" }}>
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>
-            {savedCssUrl && (
-              <p style={{ ...T.hint, color: colors.brand.success }}>
-                Active stylesheet: {savedCssUrl}
-              </p>
-            )}
+            {savedCssUrl && <p style={{ ...T.hint, color: colors.brand.success }}>Active: {savedCssUrl}</p>}
 
-            {/* Collapsible CSS Variables Reference */}
             <button onClick={() => setShowAdvanced(!showAdvanced)} data-testid="toggle-css-vars"
               style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                background: "none", border: "none", cursor: "pointer",
-                color: colors.text.secondary, fontFamily: fonts.body, fontSize: "12px",
+                display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none",
+                cursor: "pointer", color: colors.text.secondary, fontFamily: fonts.body, fontSize: "12px",
                 padding: "8px 0", marginTop: "8px",
               }}>
-              <ChevronDown size={14} style={{
-                transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-              }} />
+              <ChevronDown size={14} style={{ transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
               CSS Variables Reference
             </button>
             {showAdvanced && (
-              <div data-testid="css-vars-ref" style={{
-                backgroundColor: colors.bg.base, border: `1px solid ${colors.border.subtle}`,
-                borderRadius: "10px", padding: "14px 16px", marginTop: "8px",
-              }}>
-                <pre style={{
-                  fontFamily: fonts.mono, fontSize: "11px", lineHeight: "1.8",
-                  color: colors.text.secondary, margin: 0, whiteSpace: "pre-wrap",
-                }}>{`:root {
-  /* Backgrounds */
+              <div data-testid="css-vars-ref" style={{ backgroundColor: colors.bg.base, border: `1px solid ${colors.border.subtle}`, borderRadius: "10px", padding: "14px 16px", marginTop: "8px" }}>
+                <pre style={{ fontFamily: fonts.mono, fontSize: "11px", lineHeight: "1.8", color: colors.text.secondary, margin: 0, whiteSpace: "pre-wrap" }}>{`:root {
   --bb-bg: #0B1120;           /* Main background */
   --bb-surface: #111827;      /* Header background */
   --bb-panel: #1E293B;        /* Cards & panels */
-  --bb-input-bg: #111827;     /* Input field bg */
-
-  /* Text */
+  --bb-input-bg: #111827;     /* Input field */
   --bb-text: #F1F5F9;         /* Primary text */
   --bb-text-secondary: #94A3B8;
-  --bb-text-muted: #64748B;
-
-  /* Accent / Brand */
-  --bb-accent: #3B82F6;       /* Buttons, avatar, links */
+  --bb-accent: #3B82F6;       /* Buttons, avatar */
   --bb-accent-light: #60A5FA; /* Hover states */
-
-  /* Chat Bubbles */
   --bb-user-bubble: #3B82F6;
-  --bb-user-bubble-text: #FFFFFF;
   --bb-bot-bubble: #1E293B;
-  --bb-bot-bubble-text: #F1F5F9;
-
-  /* Borders & Radius */
-  --bb-border: rgba(148, 163, 184, 0.15);
+  --bb-border: rgba(148,163,184,0.15);
   --bb-radius: 12px;
-
-  /* Fonts */
   --bb-font: 'Your Font', sans-serif;
-  --bb-font-mono: monospace;
 }`}</pre>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column — Preview + Direct URLs */}
+        {/* Right Column — Preview */}
         <div>
-          {/* Live Preview */}
           <div style={{ ...T.card, marginBottom: "20px" }} data-testid="widget-preview-card">
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <Monitor size={16} color={colors.brand.blue} />
-              <p style={T.sectionTitle}>Live Preview — {METHOD_TABS.find(t => t.id === activeMethod)?.label}</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Monitor size={16} color={colors.brand.blue} />
+                <p style={T.sectionTitle}>Live Preview</p>
+              </div>
+              <button onClick={refreshPreview} data-testid="refresh-preview-btn"
+                style={{
+                  padding: "5px 10px", borderRadius: "8px", fontSize: "11px", fontFamily: fonts.body,
+                  backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+                  color: colors.text.secondary, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "4px",
+                }}>
+                <RefreshCw size={11} /> Refresh
+              </button>
             </div>
             <div style={{
               backgroundColor: activeMethod === "inline" ? "#f8fafc" : colors.bg.base,
               border: `1px solid ${colors.border.subtle}`, borderRadius: "8px",
-              overflow: "hidden",
-              height: activeMethod === "fullpage" ? "480px" : "520px",
-              position: "relative",
+              overflow: "hidden", height: "520px", position: "relative",
             }}>
-              {activeMethod === "inline" && (
-                <div style={{
-                  padding: "20px", height: "100%",
-                  background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                }}>
-                  <div style={{
-                    width: "100%", maxWidth: "400px", background: "#fff",
-                    borderRadius: "8px", padding: "16px 20px", marginBottom: "12px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                  }}>
-                    <div style={{ height: "8px", width: "60%", background: "#cbd5e1", borderRadius: "4px", marginBottom: "8px" }} />
-                    <div style={{ height: "6px", width: "90%", background: "#e2e8f0", borderRadius: "4px", marginBottom: "4px" }} />
-                    <div style={{ height: "6px", width: "75%", background: "#e2e8f0", borderRadius: "4px" }} />
-                  </div>
-                  <div style={{
-                    width: "100%", flex: 1, borderRadius: "10px", overflow: "hidden",
-                    border: "1px solid #e2e8f0",
-                  }}>
-                    <iframe src={`${origin}/widget?instance=${instanceId}&mode=inline`}
-                      title="Inline Preview" data-testid="widget-preview-iframe"
-                      style={{ width: "100%", height: "100%", border: "none" }} />
-                  </div>
-                </div>
-              )}
               {activeMethod === "popup" && (
-                <div style={{
-                  height: "100%", position: "relative",
-                  background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
-                  padding: "20px",
-                }}>
-                  {/* Fake host page content */}
-                  <div style={{
-                    background: "#fff", borderRadius: "8px", padding: "16px 20px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "12px",
-                  }}>
+                <div style={{ height: "100%", position: "relative", background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)", padding: "20px" }}>
+                  <div style={{ background: "#fff", borderRadius: "8px", padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "12px" }}>
                     <div style={{ height: "8px", width: "50%", background: "#cbd5e1", borderRadius: "4px", marginBottom: "8px" }} />
                     <div style={{ height: "6px", width: "85%", background: "#e2e8f0", borderRadius: "4px", marginBottom: "4px" }} />
                     <div style={{ height: "6px", width: "70%", background: "#e2e8f0", borderRadius: "4px" }} />
                   </div>
                   <div style={{
-                    background: "#fff", borderRadius: "8px", padding: "16px 20px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                  }}>
-                    <div style={{ height: "6px", width: "65%", background: "#e2e8f0", borderRadius: "4px", marginBottom: "4px" }} />
-                    <div style={{ height: "6px", width: "80%", background: "#e2e8f0", borderRadius: "4px" }} />
-                  </div>
-                  {/* Mini widget preview */}
-                  <div style={{
                     position: "absolute", bottom: "12px", right: "12px",
-                    width: "260px", height: "360px",
-                    borderRadius: "10px", overflow: "hidden",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                    width: "260px", height: "360px", borderRadius: "12px", overflow: "hidden",
+                    boxShadow: "0 12px 48px rgba(0,0,0,0.3)",
                   }}>
-                    <iframe src={`${origin}/widget?instance=${instanceId}&mode=popup`}
+                    <iframe key={previewKey} src={widgetUrl}
                       title="Popup Preview" data-testid="widget-preview-iframe"
                       style={{ width: "100%", height: "100%", border: "none" }} />
                   </div>
-                  {/* Fake trigger button */}
                   <div style={{
                     position: "absolute", bottom: "12px", right: "280px",
-                    width: "40px", height: "40px", borderRadius: "50%",
-                    background: colors.brand.blue, display: "flex",
-                    alignItems: "center", justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(59,130,246,0.4)",
+                    width: "44px", height: "44px", borderRadius: "50%",
+                    background: theme.accent || colors.brand.blue,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: `0 4px 16px ${theme.accent || colors.brand.blue}40`,
+                    animation: "bb-pulse-preview 2.5s ease-in-out infinite",
                   }}>
                     <MessageCircle size={18} color="#fff" />
                   </div>
                 </div>
               )}
+              {activeMethod === "inline" && (
+                <div style={{ padding: "20px", height: "100%", background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ width: "100%", flex: 1, borderRadius: "10px", overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                    <iframe key={previewKey} src={widgetUrl}
+                      title="Inline Preview" data-testid="widget-preview-iframe"
+                      style={{ width: "100%", height: "100%", border: "none" }} />
+                  </div>
+                </div>
+              )}
               {activeMethod === "fullpage" && (
-                <iframe src={`${origin}/widget?instance=${instanceId}&mode=fullpage`}
+                <iframe key={previewKey} src={widgetUrl}
                   title="Fullpage Preview" data-testid="widget-preview-iframe"
                   style={{ width: "100%", height: "100%", border: "none" }} />
               )}
             </div>
             <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, marginTop: "12px" }}>
-              Live preview. Changes to bot settings and CSS apply after refresh.
+              Theme changes reflect instantly in code snippets. Click Refresh to reload the preview iframe.
             </p>
           </div>
 
@@ -410,8 +431,8 @@ export default function EmbedCode() {
               <p style={T.sectionTitle}>Direct URLs</p>
             </div>
             {[
-              { label: "Widget URL", url: `${origin}/widget?instance=${instanceId}&mode=${activeMethod}`, desc: `Direct link to the ${activeMethod} mode widget` },
-              { label: "Embed Script", url: `${origin}/api/embed.js?instance=${instanceId}&mode=${activeMethod}`, desc: "JavaScript loader URL for script-based integration" },
+              { label: "Widget URL", url: widgetUrl, desc: `Direct link to the ${activeMethod} mode widget with theme` },
+              { label: "Embed Script", url: `${origin}/api/embed.js`, desc: "JavaScript loader URL — add data-* attributes for config" },
             ].map(({ label, url, desc }) => (
               <div key={label} style={{ marginBottom: "12px", padding: "12px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.subtle}`, borderRadius: "10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

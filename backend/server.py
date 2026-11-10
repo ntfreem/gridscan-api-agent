@@ -2942,55 +2942,107 @@ async def update_embed_config(body: EmbedConfigUpdate, instance_id: str = Depend
 
 @api_router.get("/embed.js")
 async def serve_embed_script(request: Request, instance: str = "", mode: str = "popup"):
-    """Serve the embeddable JavaScript loader. Modes: popup, inline, fullpage."""
+    """Serve the embeddable JavaScript loader with full theme support via data-* attributes.
+    
+    Usage:
+      <script src=".../api/embed.js"
+        data-instance="..."
+        data-mode="popup"
+        data-accent="#7C3AED"
+        data-bg="#0B0A1A"
+        data-position="bottom-right">
+      </script>
+    """
     from fastapi.responses import Response as FastResponse
-    # Derive origin from the request so it works in any environment
     origin = str(request.base_url).rstrip("/")
     script = f"""
 (function() {{
-  var BRIDGE_INSTANCE = "{instance}";
-  var BRIDGE_MODE = "{mode}";
-  var BRIDGE_ORIGIN = "{origin}" || window.location.origin;
-  var widgetUrl = BRIDGE_ORIGIN + "/widget?instance=" + encodeURIComponent(BRIDGE_INSTANCE) + "&mode=" + BRIDGE_MODE;
+  // ── Read config from script tag data-* attributes or URL params ──
+  var scriptEl = document.currentScript || document.querySelector('script[src*="embed.js"]');
+  var attr = function(name, fallback) {{
+    if (scriptEl && scriptEl.getAttribute("data-" + name)) return scriptEl.getAttribute("data-" + name);
+    return fallback || "";
+  }};
 
-  if (BRIDGE_MODE === "inline") {{
+  var INSTANCE = attr("instance", "{instance}");
+  var MODE = attr("mode", "{mode}");
+  var ORIGIN = "{origin}" || window.location.origin;
+  var POSITION = attr("position", "bottom-right");
+
+  // Theme attributes
+  var themeParams = ["accent","accentLight","bg","surface","panel","text","textSecondary",
+                     "border","userBubble","botBubble","inputBg","font","radius"];
+  var themeQuery = "";
+  themeParams.forEach(function(p) {{
+    var v = attr(p);
+    if (v) themeQuery += "&" + p + "=" + encodeURIComponent(v);
+  }});
+
+  var widgetUrl = ORIGIN + "/widget?instance=" + encodeURIComponent(INSTANCE) + "&mode=" + MODE + themeQuery;
+
+  // ── Inline mode ──
+  if (MODE === "inline") {{
     var target = document.getElementById("bridgebot-container") || document.querySelector("[data-bridgebot]");
-    if (!target) {{ console.warn("BridgeBot: No #bridgebot-container or [data-bridgebot] element found."); return; }}
-    var iframe = document.createElement("iframe");
-    iframe.src = widgetUrl;
-    iframe.title = "BridgeBot Chat";
-    iframe.style.cssText = "width:100%;height:100%;border:none;min-height:500px;";
-    iframe.setAttribute("data-testid", "bridgebot-inline-iframe");
-    target.innerHTML = "";
-    target.appendChild(iframe);
+    if (!target) {{ console.warn("BridgeBot: No #bridgebot-container found."); return; }}
+    var f = document.createElement("iframe");
+    f.src = widgetUrl; f.title = "BridgeBot Chat";
+    f.style.cssText = "width:100%;height:100%;border:none;min-height:500px;";
+    f.setAttribute("data-testid", "bridgebot-inline-iframe");
+    target.innerHTML = ""; target.appendChild(f);
     return;
   }}
 
-  if (BRIDGE_MODE === "fullpage") {{
-    var iframe = document.createElement("iframe");
-    iframe.src = widgetUrl;
-    iframe.title = "BridgeBot Chat";
-    iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;";
-    iframe.setAttribute("data-testid", "bridgebot-fullpage-iframe");
-    document.body.appendChild(iframe);
+  // ── Fullpage mode ──
+  if (MODE === "fullpage") {{
+    var f = document.createElement("iframe");
+    f.src = widgetUrl; f.title = "BridgeBot Chat";
+    f.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;";
+    f.setAttribute("data-testid", "bridgebot-fullpage-iframe");
+    document.body.appendChild(f);
     return;
   }}
 
-  // Default: popup mode
-  var isOpen = false;
+  // ── Popup mode (default) ──
+  var accentColor = attr("accent", "#3B82F6");
+  var isRight = POSITION !== "bottom-left";
+  var posH = isRight ? "right" : "left";
+
+  // Inject styles
+  var style = document.createElement("style");
+  style.textContent = [
+    "@keyframes bb-pulse{{0%,100%{{box-shadow:0 0 0 0 " + accentColor + "40}}50%{{box-shadow:0 0 0 12px " + accentColor + "00}}}}",
+    "@keyframes bb-slideUp{{from{{opacity:0;transform:translateY(16px) scale(0.96)}}to{{opacity:1;transform:translateY(0) scale(1)}}}}",
+    "@keyframes bb-slideDown{{from{{opacity:1;transform:translateY(0) scale(1)}}to{{opacity:0;transform:translateY(16px) scale(0.96)}}}}",
+    "@media(max-width:480px){{.bb-embed-panel{{width:100vw!important;height:100vh!important;bottom:0!important;" + posH + ":0!important;border-radius:0!important}}.bb-embed-trigger{{bottom:16px!important;" + posH + ":16px!important}}}}"
+  ].join("");
+  document.head.appendChild(style);
+
+  // Chat icon SVG
+  var chatSVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+  var closeSVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+
+  // Trigger button
   var btn = document.createElement("div");
+  btn.className = "bb-embed-trigger";
   btn.setAttribute("data-testid", "bridgebot-popup-trigger");
-  btn.style.cssText = "position:fixed;bottom:20px;right:20px;z-index:99998;cursor:pointer;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.2);transition:transform 0.2s ease;background:var(--bb-accent,#3B82F6);";
-  btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5C21 16.75 16.75 21 11.5 21C6.25 21 2 16.75 2 11.5C2 6.25 6.25 2 11.5 2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 9" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 2H22V7" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  btn.onmouseenter = function() {{ btn.style.transform = "scale(1.08)"; }};
+  btn.style.cssText = "position:fixed;bottom:20px;" + posH + ":20px;z-index:99998;cursor:pointer;" +
+    "width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;" +
+    "background:" + accentColor + ";box-shadow:0 4px 20px rgba(0,0,0,0.25);" +
+    "transition:transform 0.2s ease,box-shadow 0.2s ease;animation:bb-pulse 2.5s ease-in-out infinite;";
+  btn.innerHTML = chatSVG;
+  btn.onmouseenter = function() {{ btn.style.transform = "scale(1.1)"; }};
   btn.onmouseleave = function() {{ btn.style.transform = "scale(1)"; }};
 
+  // Panel
   var panel = document.createElement("div");
+  panel.className = "bb-embed-panel";
   panel.setAttribute("data-testid", "bridgebot-popup-panel");
-  panel.style.cssText = "position:fixed;bottom:88px;right:20px;z-index:99999;width:380px;height:580px;border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.25);opacity:0;transform:translateY(16px) scale(0.96);transition:opacity 0.25s ease,transform 0.25s ease;pointer-events:none;";
+  panel.style.cssText = "position:fixed;bottom:88px;" + posH + ":20px;z-index:99999;" +
+    "width:380px;height:580px;border-radius:16px;overflow:hidden;" +
+    "box-shadow:0 12px 48px rgba(0,0,0,0.3);display:none;";
+
   var iframe = document.createElement("iframe");
-  iframe.src = widgetUrl;
-  iframe.title = "BridgeBot Chat";
+  iframe.src = widgetUrl; iframe.title = "BridgeBot Chat";
   iframe.style.cssText = "width:100%;height:100%;border:none;";
   iframe.setAttribute("data-testid", "bridgebot-popup-iframe");
   panel.appendChild(iframe);
@@ -2998,18 +3050,20 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   document.body.appendChild(panel);
   document.body.appendChild(btn);
 
+  var isOpen = false;
   btn.addEventListener("click", function() {{
     isOpen = !isOpen;
     if (isOpen) {{
-      panel.style.opacity = "1";
-      panel.style.transform = "translateY(0) scale(1)";
-      panel.style.pointerEvents = "auto";
-      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
+      panel.style.display = "block";
+      panel.style.animation = "bb-slideUp 0.25s ease forwards";
+      btn.innerHTML = closeSVG;
+      btn.style.animation = "none";
+      btn.style.background = accentColor;
     }} else {{
-      panel.style.opacity = "0";
-      panel.style.transform = "translateY(16px) scale(0.96)";
-      panel.style.pointerEvents = "none";
-      btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5C21 16.75 16.75 21 11.5 21C6.25 21 2 16.75 2 11.5C2 6.25 6.25 2 11.5 2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 9" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 2H22V7" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      panel.style.animation = "bb-slideDown 0.2s ease forwards";
+      setTimeout(function() {{ panel.style.display = "none"; }}, 200);
+      btn.innerHTML = chatSVG;
+      btn.style.animation = "bb-pulse 2.5s ease-in-out infinite";
     }}
   }});
 }})();

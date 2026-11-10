@@ -107,6 +107,16 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 - **Markdown Rendering Fix**: MarkdownMessage component rewritten with `compact` mode for narrow widgets. Tables use `table-layout: fixed` with `word-break: break-word` on cells. Code blocks contained with `overflow-x: auto` and `pre-wrap`. Bubble CSS changed from `white-space: pre-wrap` to `overflow-wrap: anywhere` to prevent markdown conflicts.
 - **Chat-Friendly System Prompt**: Added instructions to prefer vertical `**Field:** Value` key-value lists over tables for narrow chat. Truncate long hashes/addresses with inline code backticks.
 
+### Phase 12 — Embed.js Launcher Script & Theme Configurator (Nov 2026)
+- **Embed.js Script**: Self-contained `<script>` tag launcher. Reads `data-*` attributes from the script tag for instance, mode, position, and 13 theme color params. Injects a floating chat button (56px, bottom-right) with CSS pulse animation, expandable iframe panel (380x580px) with slide-up animation, and close/open toggle. Mobile responsive (full-screen at <480px).
+- **Theme Configurator**: Redesigned Embed Code admin page with:
+  - 5 built-in presets: Default Dark, Violet Cyber, Ocean Blue, Emerald, Rose
+  - 8 color inputs: Accent, Accent Light, Background, Surface, Panel, Border, User Bubble, Bot Bubble
+  - Live preview iframe that updates when theme changes
+  - Code snippets auto-update with `data-*` theme attributes
+  - 3 embed methods: Popup Widget, Inline Embed, Full Page
+  - Direct URLs section with full theme query strings
+
 ## Backlog
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
