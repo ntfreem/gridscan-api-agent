@@ -101,6 +101,12 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 - **Import**: `POST /api/knowledge/sources/github/import-stream` uses SSE to stream progress. Downloads raw content, preserves code blocks in Markdown, chunks large files using `_split_into_chunks`. Sources stored with `type="github"` and metadata (`source_repo`, `source_branch`, `source_path`).
 - **Private Repos**: Optional GitHub token field for accessing private repositories.
 
+### Phase 11 — Smart File Filters, Widget Theming, Markdown Fix (Nov 2026)
+- **Smart File Filters**: Extension toggle buttons (dynamically generated from scan results: `.md`, `.rst`, `.txt`, etc.) and max size dropdown (10KB, 50KB, 100KB, 500KB, No limit). "Clear Filters" button resets all. Select All only selects visible (filtered) files.
+- **Widget Theme URL Parameters**: Embed URL accepts color params: `accent`, `accentLight`, `bg`, `surface`, `panel`, `text`, `textSecondary`, `border`, `userBubble`, `botBubble`, `inputBg`, `font`, `radius`. Applied via CSS custom properties. Example: `/widget?instance=...&accent=%237C3AED&bg=%230B0A1A`.
+- **Markdown Rendering Fix**: MarkdownMessage component rewritten with `compact` mode for narrow widgets. Tables use `table-layout: fixed` with `word-break: break-word` on cells. Code blocks contained with `overflow-x: auto` and `pre-wrap`. Bubble CSS changed from `white-space: pre-wrap` to `overflow-wrap: anywhere` to prevent markdown conflicts.
+- **Chat-Friendly System Prompt**: Added instructions to prefer vertical `**Field:** Value` key-value lists over tables for narrow chat. Truncate long hashes/addresses with inline code backticks.
+
 ## Backlog
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)

@@ -1,0 +1,73 @@
+{
+  "summary": "Completed testing of iteration 45 features: Smart File Filters for GitHub scanner, Widget theme URL parameters, and Markdown rendering fixes. All 10 backend tests passed. All frontend features verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter45_features.py",
+    "/app/test_reports/pytest/iter45_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GitHub scan endpoint correctly returns 'extension' and 'size' fields for each doc file",
+    "Extension filter buttons dynamically generated from unique extensions in scan results",
+    "Size filter dropdown correctly filters files larger than selected size",
+    "Clear Filters button resets both extension and size filters",
+    "Select All only selects visible (filtered) files as expected",
+    "Widget theme URL params (accent, bg, surface, panel, etc.) correctly applied via CSS custom properties",
+    "MarkdownMessage component renders code blocks with Copy button, bullet lists, bold text without overflow",
+    "Responsive tables use table-layout: fixed in compact mode for narrow widget",
+    "System prompt instructs AI to prefer vertical key-value lists over tables for narrow chat"
+  ],
+  "updated_files": ["/app/backend/tests/test_iter45_features.py"],
+  "success_rate": {"backend": "100% (10/10 passed)", "frontend": "100%"},
+  "seed_data_creation": "None - used existing expressjs/express repo for GitHub scan tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 45 features fully tested. Smart File Filters: Extension toggle buttons (.css, .ejs, .hbs, .html, .js, .md, .txt) filter GitHub scan results. Size dropdown (No limit, 10KB, 50KB, 100KB, 500KB) filters by max file size. Clear Filters resets all. Select All selects only visible files. Widget Theme: URL params accent, accentLight, bg, surface, panel, text, textSecondary, border, userBubble, botBubble, inputBg, font, radius applied via CSS variables. Markdown: Code blocks have Copy button, bullet lists render correctly, no text overflow in narrow widget.",
+  "features_tested": {
+    "backend": {
+      "scan_returns_extension_field": "PASS - Each doc file has 'extension' field (string)",
+      "scan_returns_size_field": "PASS - Each doc file has 'size' field (integer >= 0)",
+      "scan_extension_values_correct": "PASS - .md files have extension='.md'",
+      "scan_returns_all_required_fields": "PASS - path, size, category, extension present",
+      "widget_page_loads": "PASS - /widget?instance=... returns 200",
+      "widget_with_theme_params_loads": "PASS - /widget with theme params returns 200",
+      "widget_without_theme_params_loads": "PASS - Default theme applied",
+      "chat_send_endpoint_works": "PASS - /api/chat/send returns 200",
+      "embed_config_endpoint": "PASS - /api/embed/config/{id} returns 200",
+      "bot_config_endpoint": "PASS - /api/admin/bot-config returns 200"
+    },
+    "frontend": {
+      "github_filter_bar_visible": "PASS - Filter bar appears after successful scan",
+      "extension_filter_buttons": "PASS - 7 extension buttons (.css, .ejs, .hbs, .html, .js, .md, .txt)",
+      "extension_filter_toggle": "PASS - Clicking .md filter reduced files from 90 to 4",
+      "clear_filters_button": "PASS - Restored file count to 90",
+      "size_filter_dropdown": "PASS - 50KB limit reduced files from 90 to 89",
+      "select_all_filtered": "PASS - Button text changed to 'Deselect All'",
+      "widget_default_theme": "PASS - --bb-bg: #0B1120 (default dark theme)",
+      "widget_custom_theme": "PASS - --bb-accent: #7C3AED, --bb-bg: #0B0A1A applied",
+      "markdown_code_blocks": "PASS - Code blocks with Copy button rendered",
+      "markdown_bullet_lists": "PASS - Bullet lists with emojis rendered correctly",
+      "markdown_no_overflow": "PASS - Bot bubbles have no horizontal overflow"
+    }
+  },
+  "test_credentials": {
+    "admin": {"username": "administrator", "password": "Admin@123"},
+    "instance_id": "88bfae82-2533-4235-968d-b3298fd57073"
+  },
+  "verified_data": {
+    "test_repo": "expressjs/express",
+    "initial_doc_files": 90,
+    "md_filtered_files": 4,
+    "size_50kb_filtered_files": 89,
+    "extension_buttons": [".css", ".ejs", ".hbs", ".html", ".js", ".md", ".txt"],
+    "theme_params_tested": ["accent", "accentLight", "bg", "surface", "panel"]
+  }
+}

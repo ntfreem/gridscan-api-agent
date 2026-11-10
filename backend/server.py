@@ -688,7 +688,17 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         "or any structured data, ALWAYS format them in fenced code blocks with the language tag. Example:\n"
         "```json\n{\"key\": \"value\"}\n```\n"
         "For inline code references (function names, field names, endpoints), use single backticks: `fieldName`.\n"
-        "Never output raw unformatted JSON or code."
+        "Never output raw unformatted JSON or code.\n\n"
+        "FORMATTING — CHAT-FRIENDLY LAYOUT:\n"
+        "Your responses display in a narrow chat widget. Follow these rules:\n"
+        "- Prefer vertical key-value lists over markdown tables for 2-column data. Use bold labels:\n"
+        "  **Field:** Value\n"
+        "  **Fee:** 192,913 lovelace (~0.193 ADA)\n"
+        "- Only use markdown tables when there are 3+ columns AND the data is short per cell.\n"
+        "- For long hashes, addresses, or IDs, wrap them in inline code backticks: `addr1q9h7m...spn0ukd`\n"
+        "  and truncate with ellipsis in the middle if very long.\n"
+        "- Break long responses into sections with **bold headers** instead of H1/H2 headings.\n"
+        "- Keep code blocks short. For long JSON, show only the relevant fields."
     )
 
     # Anti-fabrication rule — always included

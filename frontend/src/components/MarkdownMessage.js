@@ -37,7 +37,7 @@ function CopyButton({ text }) {
  * Props:
  *   content  — raw markdown string
  *   isUser   — true for user messages (minimal styling)
- *   compact  — true for widget mode (smaller sizing)
+ *   compact  — true for widget mode (smaller sizing, responsive tables)
  */
 export default function MarkdownMessage({ content, isUser, compact }) {
   if (!content) return null;
@@ -65,25 +65,25 @@ export default function MarkdownMessage({ content, isUser, compact }) {
             <em style={{ fontStyle: "italic", opacity: 0.9 }}>{children}</em>
           ),
           h1: ({ children }) => (
-            <h3 style={{ fontSize: `${base + 4}px`, fontWeight: 700, margin: "12px 0 6px", letterSpacing: "-0.3px" }}>{children}</h3>
+            <h3 style={{ fontSize: `${base + (compact ? 2 : 4)}px`, fontWeight: 700, margin: "12px 0 6px", letterSpacing: "-0.3px" }}>{children}</h3>
           ),
           h2: ({ children }) => (
-            <h4 style={{ fontSize: `${base + 2}px`, fontWeight: 600, margin: "10px 0 4px", letterSpacing: "-0.2px" }}>{children}</h4>
+            <h4 style={{ fontSize: `${base + (compact ? 1 : 2)}px`, fontWeight: 600, margin: "10px 0 4px", letterSpacing: "-0.2px" }}>{children}</h4>
           ),
           h3: ({ children }) => (
             <h5 style={{ fontSize: `${base + 1}px`, fontWeight: 600, margin: "8px 0 4px" }}>{children}</h5>
           ),
           a: ({ href, children }) => (
             <a href={href} target="_blank" rel="noopener noreferrer"
-              style={{ color: "#60A5FA", textDecoration: "none", borderBottom: "1px solid rgba(96,165,250,0.3)" }}>
+              style={{ color: "var(--bb-accent-light, #60A5FA)", textDecoration: "none", borderBottom: "1px solid rgba(96,165,250,0.3)" }}>
               {children}
             </a>
           ),
           ul: ({ children }) => (
-            <ul style={{ margin: "4px 0 8px", paddingLeft: "20px", listStyleType: "disc" }}>{children}</ul>
+            <ul style={{ margin: "4px 0 8px", paddingLeft: "18px", listStyleType: "disc" }}>{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol style={{ margin: "4px 0 8px", paddingLeft: "20px" }}>{children}</ol>
+            <ol style={{ margin: "4px 0 8px", paddingLeft: "18px" }}>{children}</ol>
           ),
           li: ({ children }) => (
             <li style={{ margin: "2px 0", fontSize: `${base}px`, lineHeight: 1.6 }}>{children}</li>
@@ -95,6 +95,7 @@ export default function MarkdownMessage({ content, isUser, compact }) {
                   fontFamily: mono, fontSize: `${base - 1.5}px`,
                   backgroundColor: "rgba(96,165,250,0.1)", color: "#93C5FD",
                   padding: "1px 5px", borderRadius: "4px", border: "1px solid rgba(96,165,250,0.15)",
+                  wordBreak: "break-all",
                 }}>
                   {children}
                 </code>
@@ -117,11 +118,13 @@ export default function MarkdownMessage({ content, isUser, compact }) {
                 )}
                 <CopyButton text={codeText} />
                 <pre style={{
-                  fontFamily: mono, fontSize: `${base - 2}px`, lineHeight: 1.6,
+                  fontFamily: mono, fontSize: `${compact ? base - 2 : base - 2}px`, lineHeight: 1.6,
                   backgroundColor: "rgba(15,23,42,0.6)", color: "#CBD5E1",
                   padding: `${lang ? "28px" : "12px"} 14px 12px`, borderRadius: "8px",
                   border: "1px solid rgba(148,163,184,0.1)",
-                  overflowX: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all",
+                  overflowX: "auto", margin: 0,
+                  whiteSpace: "pre-wrap", wordBreak: "break-all",
+                  maxWidth: "100%",
                 }}>
                   <code>{children}</code>
                 </pre>
@@ -140,10 +143,16 @@ export default function MarkdownMessage({ content, isUser, compact }) {
             </blockquote>
           ),
           table: ({ children }) => (
-            <div style={{ overflowX: "auto", margin: "8px 0", borderRadius: "8px", border: "1px solid rgba(148,163,184,0.15)" }}>
+            <div style={{
+              overflowX: "auto", margin: "8px 0", borderRadius: "8px",
+              border: "1px solid rgba(148,163,184,0.15)",
+              maxWidth: "100%",
+              WebkitOverflowScrolling: "touch",
+            }}>
               <table style={{
                 width: "100%", borderCollapse: "collapse",
-                fontSize: `${base - 1}px`, fontFamily: "inherit",
+                fontSize: `${compact ? base - 2 : base - 1}px`, fontFamily: "inherit",
+                tableLayout: compact ? "fixed" : "auto",
               }}>
                 {children}
               </table>
@@ -154,17 +163,24 @@ export default function MarkdownMessage({ content, isUser, compact }) {
           ),
           th: ({ children }) => (
             <th style={{
-              padding: "8px 12px", textAlign: "left", fontWeight: 600,
-              borderBottom: "1px solid rgba(148,163,184,0.2)", fontSize: `${base - 1}px`,
-              color: "#E2E8F0", whiteSpace: "nowrap",
+              padding: compact ? "6px 8px" : "8px 12px",
+              textAlign: "left", fontWeight: 600,
+              borderBottom: "1px solid rgba(148,163,184,0.2)",
+              fontSize: `${compact ? base - 2 : base - 1}px`,
+              color: "#E2E8F0",
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
             }}>
               {children}
             </th>
           ),
           td: ({ children }) => (
             <td style={{
-              padding: "6px 12px",
-              borderBottom: "1px solid rgba(148,163,184,0.08)", fontSize: `${base - 1}px`,
+              padding: compact ? "5px 8px" : "6px 12px",
+              borderBottom: "1px solid rgba(148,163,184,0.08)",
+              fontSize: `${compact ? base - 2 : base - 1}px`,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
             }}>
               {children}
             </td>

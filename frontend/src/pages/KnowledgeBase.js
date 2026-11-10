@@ -293,6 +293,8 @@ export default function KnowledgeBase() {
   const [ghSelectedFiles, setGhSelectedFiles] = useState(new Set());
   const [ghImporting, setGhImporting] = useState(false);
   const [ghProgress, setGhProgress] = useState(null);
+  const [ghFilterExts, setGhFilterExts] = useState(new Set());  // empty = show all
+  const [ghFilterMaxSize, setGhFilterMaxSize] = useState(0);     // 0 = no limit (KB)
 
   const loadSources = useCallback(() => {
     api.get(`/knowledge/sources`).then(r => setSources(r.data)).catch(() => {});
@@ -410,10 +412,23 @@ export default function KnowledgeBase() {
 
   const ghToggleAll = () => {
     if (!ghScanResult) return;
-    const allPaths = ghScanResult.doc_files.map(f => f.path);
-    if (ghSelectedFiles.size === allPaths.length) setGhSelectedFiles(new Set());
-    else setGhSelectedFiles(new Set(allPaths));
+    const visible = ghFilteredFiles;
+    if (ghSelectedFiles.size === visible.length && visible.every(f => ghSelectedFiles.has(f.path))) {
+      setGhSelectedFiles(new Set());
+    } else {
+      setGhSelectedFiles(new Set(visible.map(f => f.path)));
+    }
   };
+
+  // Compute filtered file list from scan results
+  const ghFilteredFiles = (ghScanResult?.doc_files || []).filter(f => {
+    if (ghFilterExts.size > 0 && !ghFilterExts.has(f.extension)) return false;
+    if (ghFilterMaxSize > 0 && f.size > ghFilterMaxSize * 1024) return false;
+    return true;
+  });
+
+  // Available extensions from scan
+  const ghAvailableExts = [...new Set((ghScanResult?.doc_files || []).map(f => f.extension).filter(Boolean))].sort();
 
   const ghImportFiles = async () => {
     if (ghSelectedFiles.size === 0) { toast.error("Select at least one file"); return; }
@@ -1148,6 +1163,7 @@ export default function KnowledgeBase() {
                   </p>
                   <p style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, margin: "4px 0 0" }}>
                     {ghScanResult.total_files} total files, {ghScanResult.doc_count} docs found
+                    {ghFilteredFiles.length !== ghScanResult.doc_count && ` (${ghFilteredFiles.length} shown after filters)`}
                     {ghScanResult.truncated && <span style={{ color: colors.brand.warning }}> (tree truncated — large repo)</span>}
                   </p>
                 </div>
@@ -1161,7 +1177,7 @@ export default function KnowledgeBase() {
                       color: colors.text.secondary, cursor: "pointer",
                     }}
                   >
-                    {ghSelectedFiles.size === ghScanResult.doc_files.length ? "Deselect All" : "Select All"}
+                    {ghSelectedFiles.size === ghFilteredFiles.length && ghFilteredFiles.length > 0 ? "Deselect All" : "Select All"}
                   </button>
                   <button
                     data-testid="gh-import-btn"
@@ -1177,6 +1193,71 @@ export default function KnowledgeBase() {
                     {ghImporting ? "Importing..." : `Import ${ghSelectedFiles.size} Files`}
                   </button>
                 </div>
+              </div>
+
+              {/* Smart Filters */}
+              <div data-testid="gh-filters" style={{
+                display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap",
+                padding: "10px 14px", marginBottom: "10px", borderRadius: "10px",
+                backgroundColor: colors.bg.base, border: `1px solid ${colors.border.faint}`,
+              }}>
+                <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <Filter size={10} style={{ marginRight: "4px", verticalAlign: "middle" }} />Filters
+                </span>
+                {/* Extension toggles */}
+                {ghAvailableExts.map(ext => {
+                  const active = ghFilterExts.has(ext);
+                  return (
+                    <button key={ext} data-testid={`gh-filter-ext-${ext.replace(".", "")}`}
+                      onClick={() => {
+                        setGhFilterExts(prev => {
+                          const next = new Set(prev);
+                          if (next.has(ext)) next.delete(ext); else next.add(ext);
+                          return next;
+                        });
+                      }}
+                      style={{
+                        padding: "3px 10px", borderRadius: "8px", fontSize: "11px", fontFamily: fonts.mono,
+                        backgroundColor: active ? "rgba(139,92,246,0.12)" : "transparent",
+                        border: `1px solid ${active ? "rgba(139,92,246,0.4)" : colors.border.default}`,
+                        color: active ? "rgba(139,92,246,0.9)" : colors.text.secondary,
+                        cursor: "pointer", transition: "all 0.15s",
+                      }}
+                    >
+                      {ext || "no ext"}
+                    </button>
+                  );
+                })}
+                {/* Size filter */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
+                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>Max size:</span>
+                  <select data-testid="gh-filter-size"
+                    value={ghFilterMaxSize}
+                    onChange={e => setGhFilterMaxSize(Number(e.target.value))}
+                    style={{
+                      padding: "3px 8px", borderRadius: "6px", fontSize: "11px", fontFamily: fonts.mono,
+                      backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
+                      color: colors.text.primary, cursor: "pointer",
+                    }}
+                  >
+                    <option value={0}>No limit</option>
+                    <option value={10}>10 KB</option>
+                    <option value={50}>50 KB</option>
+                    <option value={100}>100 KB</option>
+                    <option value={500}>500 KB</option>
+                  </select>
+                </div>
+                {(ghFilterExts.size > 0 || ghFilterMaxSize > 0) && (
+                  <button onClick={() => { setGhFilterExts(new Set()); setGhFilterMaxSize(0); }}
+                    style={{
+                      padding: "3px 10px", borderRadius: "8px", fontSize: "10px", fontFamily: fonts.body,
+                      backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+                      color: colors.text.secondary, cursor: "pointer",
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
 
               {/* Import progress */}
@@ -1195,7 +1276,7 @@ export default function KnowledgeBase() {
                 backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
                 borderRadius: "10px", maxHeight: "400px", overflowY: "auto",
               }}>
-                {ghScanResult.doc_files.map(file => (
+                {ghFilteredFiles.map(file => (
                   <label
                     key={file.path}
                     data-testid="gh-file-item"
@@ -1230,10 +1311,12 @@ export default function KnowledgeBase() {
                     </span>
                   </label>
                 ))}
-                {ghScanResult.doc_files.length === 0 && (
+                {ghFilteredFiles.length === 0 && (
                   <div style={{ padding: "32px", textAlign: "center" }}>
                     <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary }}>
-                      No documentation files detected. This repo may use non-standard doc locations.
+                      {ghScanResult.doc_count === 0
+                        ? "No documentation files detected. This repo may use non-standard doc locations."
+                        : "No files match the current filters. Try adjusting or clearing them."}
                     </p>
                   </div>
                 )}

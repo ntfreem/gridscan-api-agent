@@ -21,6 +21,42 @@ export default function ChatWidget() {
   const instanceId = searchParams.get("instance");
   const mode = searchParams.get("mode") || "popup";
 
+  // Theme URL params for external embedding
+  const themeAccent = searchParams.get("accent");
+  const themeAccentLight = searchParams.get("accentLight");
+  const themeBg = searchParams.get("bg");
+  const themeSurface = searchParams.get("surface");
+  const themePanel = searchParams.get("panel");
+  const themeText = searchParams.get("text");
+  const themeTextSecondary = searchParams.get("textSecondary");
+  const themeBorder = searchParams.get("border");
+  const themeUserBubble = searchParams.get("userBubble");
+  const themeBotBubble = searchParams.get("botBubble");
+  const themeInputBg = searchParams.get("inputBg");
+  const themeFont = searchParams.get("font");
+  const themeRadius = searchParams.get("radius");
+
+  // Apply URL theme params on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    const map = {
+      "--bb-accent": themeAccent,
+      "--bb-accent-light": themeAccentLight || themeAccent,
+      "--bb-bg": themeBg,
+      "--bb-surface": themeSurface,
+      "--bb-panel": themePanel,
+      "--bb-text": themeText,
+      "--bb-text-secondary": themeTextSecondary,
+      "--bb-border": themeBorder,
+      "--bb-user-bubble": themeUserBubble || themeAccent,
+      "--bb-bot-bubble": themeBotBubble || themePanel,
+      "--bb-input-bg": themeInputBg || themeSurface,
+      "--bb-font": themeFont,
+      "--bb-radius": themeRadius,
+    };
+    Object.entries(map).forEach(([k, v]) => { if (v) root.style.setProperty(k, v); });
+  }, [themeAccent, themeAccentLight, themeBg, themeSurface, themePanel, themeText, themeTextSecondary, themeBorder, themeUserBubble, themeBotBubble, themeInputBg, themeFont, themeRadius]);
+
   // Load embed config (custom CSS) for this instance
   useEffect(() => {
     if (instanceId) {
@@ -239,10 +275,11 @@ export default function ChatWidget() {
           margin-right: 7px; flex-shrink: 0; margin-top: 3px;
         }
         .bb-bubble {
-          max-width: 80%; padding: 9px 12px;
+          max-width: 85%; padding: 9px 12px;
           border-radius: var(--bb-radius);
           font-size: 13px; line-height: 1.6;
-          white-space: pre-wrap; word-break: break-word;
+          word-break: break-word; overflow-wrap: anywhere;
+          min-width: 0;
         }
         .bb-bubble.user {
           background: var(--bb-user-bubble);
@@ -254,6 +291,9 @@ export default function ChatWidget() {
           color: var(--bb-bot-bubble-text);
           border: 1px solid var(--bb-border);
         }
+        .bb-bubble .bb-md { overflow-x: hidden; max-width: 100%; }
+        .bb-bubble .bb-md table { table-layout: fixed; }
+        .bb-bubble .bb-md pre { max-width: 100%; }
         .bb-bubble.error {
           background: rgba(244,63,94,0.08);
           color: var(--bb-error);
