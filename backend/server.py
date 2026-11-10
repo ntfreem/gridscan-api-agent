@@ -4142,6 +4142,239 @@ async def get_knowledge_categories(instance_id: str = Depends(get_instance_acces
     """Return all unique categories used by knowledge sources in this instance."""
     cats = await db.knowledge_sources.distinct("category", {"instance_id": instance_id})
     return [c for c in cats if c and isinstance(c, str) and c.strip()]
+
+# ==================== GITHUB REPOSITORY CRAWLER ====================
+
+# ── Doc-file detection patterns ──
+_GITHUB_DOC_EXTENSIONS = {".md", ".mdx", ".rst", ".txt", ".adoc", ".asciidoc", ".textile", ".wiki"}
+_GITHUB_DOC_NAMES = {"readme", "changelog", "contributing", "license", "authors", "history",
+                     "code_of_conduct", "security", "support", "faq", "install", "installation",
+                     "getting_started", "quickstart", "guide", "tutorial", "api", "usage"}
+_GITHUB_DOC_DIRS = {"docs", "doc", "documentation", "wiki", "guides", "tutorials", "examples"}
+
+
+def _is_doc_file(path: str) -> bool:
+    """Heuristic: is this file likely documentation?"""
+    lower = path.lower()
+    ext = os.path.splitext(lower)[1]
+    basename = os.path.splitext(os.path.basename(lower))[0].replace("-", "_").replace(" ", "_")
+    # Explicit doc extensions
+    if ext in _GITHUB_DOC_EXTENSIONS:
+        return True
+    # Well-known doc files (even without extension)
+    if basename in _GITHUB_DOC_NAMES:
+        return True
+    # Files inside doc directories
+    parts = lower.split("/")
+    if any(p in _GITHUB_DOC_DIRS for p in parts):
+        return True
+    return False
+
+
+def _doc_file_category(path: str) -> str:
+    """Assign a rough sub-category based on path location."""
+    lower = path.lower()
+    parts = lower.split("/")
+    for p in parts[:-1]:  # check parent dirs
+        if p in _GITHUB_DOC_DIRS:
+            return p.capitalize()
+    basename = os.path.splitext(os.path.basename(lower))[0].replace("-", "_").replace(" ", "_")
+    if basename in {"readme"}:
+        return "Overview"
+    if basename in {"changelog", "history"}:
+        return "Changelog"
+    if basename in {"contributing", "code_of_conduct"}:
+        return "Contributing"
+    if basename in {"api"}:
+        return "API Reference"
+    if basename in {"install", "installation", "getting_started", "quickstart"}:
+        return "Getting Started"
+    return "Documentation"
+
+
+class GitHubScanRequest(BaseModel):
+    repo_url: str
+    branch: Optional[str] = None
+    github_token: Optional[str] = None
+
+
+class GitHubImportRequest(BaseModel):
+    repo_url: str
+    branch: str = "main"
+    files: list[str]  # file paths to import
+    category: Optional[str] = None  # override category, else auto-categorise
+    github_token: Optional[str] = None
+
+
+@api_router.post("/knowledge/sources/github/scan")
+async def github_scan_repo(body: GitHubScanRequest, instance_id: str = Depends(get_instance_access)):
+    """Scan a GitHub repo and return all discovered documentation files."""
+    # Parse owner/repo from URL
+    match = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", body.repo_url.strip())
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL. Use https://github.com/owner/repo")
+    owner, repo = match.group(1), match.group(2)
+
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if body.github_token:
+        headers["Authorization"] = f"Bearer {body.github_token}"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Determine default branch if not specified
+        branch = body.branch
+        if not branch:
+            repo_resp = await client.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers)
+            if repo_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Repository not found. If private, provide a GitHub token.")
+            if repo_resp.status_code == 403:
+                raise HTTPException(status_code=429, detail="GitHub API rate limit exceeded. Try again later or provide a token.")
+            if repo_resp.status_code != 200:
+                raise HTTPException(status_code=repo_resp.status_code, detail=f"GitHub API error: {repo_resp.text[:200]}")
+            branch = repo_resp.json().get("default_branch", "main")
+
+        # Get full file tree
+        tree_resp = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+            headers=headers
+        )
+        if tree_resp.status_code != 200:
+            raise HTTPException(status_code=tree_resp.status_code, detail=f"Failed to list repo files: {tree_resp.text[:200]}")
+
+        tree = tree_resp.json().get("tree", [])
+        truncated = tree_resp.json().get("truncated", False)
+
+    # Filter for doc files
+    doc_files = []
+    for item in tree:
+        if item.get("type") != "blob":
+            continue
+        path = item.get("path", "")
+        if _is_doc_file(path):
+            doc_files.append({
+                "path": path,
+                "size": item.get("size", 0),
+                "category": _doc_file_category(path),
+                "extension": os.path.splitext(path)[1],
+            })
+
+    # Sort: READMEs first, then by path
+    doc_files.sort(key=lambda f: (0 if "readme" in f["path"].lower() else 1, f["path"]))
+
+    return {
+        "owner": owner,
+        "repo": repo,
+        "branch": branch,
+        "total_files": len(tree),
+        "doc_files": doc_files,
+        "doc_count": len(doc_files),
+        "truncated": truncated,
+    }
+
+
+@api_router.post("/knowledge/sources/github/import-stream")
+async def github_import_stream(body: GitHubImportRequest, instance_id: str = Depends(get_instance_access)):
+    """Import selected GitHub files as KB sources with SSE progress."""
+    match = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", body.repo_url.strip())
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+    owner, repo = match.group(1), match.group(2)
+
+    if not body.files:
+        raise HTTPException(status_code=400, detail="No files selected")
+
+    inst_id = instance_id
+    branch = body.branch
+    files = body.files
+    category_override = body.category
+    gh_token = body.github_token
+
+    async def generate():
+        import json as _json
+        headers = {"Accept": "application/vnd.github.v3.raw"}
+        if gh_token:
+            headers["Authorization"] = f"Bearer {gh_token}"
+
+        total = len(files)
+        imported = 0
+        failed = 0
+
+        for idx, file_path in enumerate(files):
+            try:
+                yield f"data: {_json.dumps({'type': 'progress', 'current': idx + 1, 'total': total, 'file': file_path, 'message': f'Downloading {file_path}...'})}\n\n"
+
+                raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
+                async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                    resp = await client.get(raw_url, headers=headers)
+                    if resp.status_code != 200:
+                        failed += 1
+                        yield f"data: {_json.dumps({'type': 'error', 'file': file_path, 'detail': f'HTTP {resp.status_code}'})}\n\n"
+                        continue
+                    raw_content = resp.text
+
+                # Clean markdown: strip HTML tags but preserve code blocks
+                content = raw_content
+                # For .rst files, just use as-is (readable enough)
+                # For .md/.mdx, strip common HTML but keep structure
+                if file_path.lower().endswith((".md", ".mdx")):
+                    # Preserve code blocks by replacing them with placeholders
+                    code_blocks = []
+                    def _save_code_block(m):
+                        code_blocks.append(m.group(0))
+                        return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
+                    content = re.sub(r"```[\s\S]*?```", _save_code_block, content)
+                    content = re.sub(r"`[^`]+`", lambda m: m.group(0), content)  # keep inline code
+                    # Strip HTML tags
+                    content = re.sub(r"<[^>]+>", "", content)
+                    # Restore code blocks
+                    for i, block in enumerate(code_blocks):
+                        content = content.replace(f"__CODE_BLOCK_{i}__", block)
+
+                if not content.strip():
+                    failed += 1
+                    yield f"data: {_json.dumps({'type': 'error', 'file': file_path, 'detail': 'Empty content'})}\n\n"
+                    continue
+
+                # Determine title and category
+                filename = os.path.basename(file_path)
+                title = f"{repo}/{file_path}"
+                cat = category_override or _doc_file_category(file_path)
+
+                # Chunk if needed
+                chunks = _split_into_chunks(content, 8000)
+                group_id = str(uuid.uuid4()) if len(chunks) > 1 else None
+
+                for pi, chunk_text in enumerate(chunks):
+                    part_title = f"{title} (part {pi + 1}/{len(chunks)})" if len(chunks) > 1 else title
+                    doc = {
+                        "id": str(uuid.uuid4()),
+                        "type": "github",
+                        "title": part_title,
+                        "content": chunk_text,
+                        "url": f"https://github.com/{owner}/{repo}/blob/{branch}/{file_path}",
+                        "category": cat,
+                        "instance_id": inst_id,
+                        "priority": 0,
+                        "is_active": True,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "source_repo": f"{owner}/{repo}",
+                        "source_branch": branch,
+                        "source_path": file_path,
+                    }
+                    if group_id:
+                        doc["group_id"] = group_id
+                    await db.knowledge_sources.insert_one(doc)
+
+                imported += 1
+                yield f"data: {_json.dumps({'type': 'success', 'file': file_path, 'parts': len(chunks), 'chars': len(content)})}\n\n"
+
+            except Exception as e:
+                failed += 1
+                yield f"data: {_json.dumps({'type': 'error', 'file': file_path, 'detail': str(e)[:200]})}\n\n"
+
+        yield f"data: {_json.dumps({'type': 'done', 'imported': imported, 'failed': failed, 'total': total})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
 # ==================== CONVERSATIONS (PROTECTED) ====================
 
 @api_router.get("/conversations/count")

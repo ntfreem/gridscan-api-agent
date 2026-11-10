@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2 } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2, Github, Check } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
-const typeIcon = { faq: HelpCircle, url: Globe, document: FileText };
-const typeColor = { faq: colors.brand.blue, url: colors.brand.success, document: colors.text.secondary };
+const typeIcon = { faq: HelpCircle, url: Globe, document: FileText, github: Github };
+const typeColor = { faq: colors.brand.blue, url: colors.brand.success, document: colors.text.secondary, github: "rgba(139,92,246,0.9)" };
 
 const PRIORITY_LEVELS = [
   { value: 0, label: "Normal", color: colors.text.secondary },
@@ -283,6 +283,16 @@ export default function KnowledgeBase() {
   const [allInstances, setAllInstances] = useState([]);
   const [shareTarget, setShareTarget] = useState("");
   const [sharing, setSharing] = useState(false);
+  // GitHub crawler state
+  const [ghUrl, setGhUrl] = useState("");
+  const [ghToken, setGhToken] = useState("");
+  const [ghBranch, setGhBranch] = useState("");
+  const [ghCategory, setGhCategory] = useState("");
+  const [ghScanning, setGhScanning] = useState(false);
+  const [ghScanResult, setGhScanResult] = useState(null);
+  const [ghSelectedFiles, setGhSelectedFiles] = useState(new Set());
+  const [ghImporting, setGhImporting] = useState(false);
+  const [ghProgress, setGhProgress] = useState(null);
 
   const loadSources = useCallback(() => {
     api.get(`/knowledge/sources`).then(r => setSources(r.data)).catch(() => {});
@@ -368,6 +378,92 @@ export default function KnowledgeBase() {
     finally { setSharing(false); }
   };
 
+  // ── GitHub crawler handlers ──
+  const ghScanRepo = async () => {
+    if (!ghUrl.trim()) { toast.error("Enter a GitHub repository URL"); return; }
+    setGhScanning(true);
+    setGhScanResult(null);
+    setGhSelectedFiles(new Set());
+    try {
+      const res = await api.post("/knowledge/sources/github/scan", {
+        repo_url: ghUrl.trim(),
+        branch: ghBranch.trim() || null,
+        github_token: ghToken.trim() || null,
+      });
+      setGhScanResult(res.data);
+      // Pre-select all files
+      setGhSelectedFiles(new Set(res.data.doc_files.map(f => f.path)));
+      if (res.data.doc_count === 0) toast.info("No documentation files found in this repository.");
+      else toast.success(`Found ${res.data.doc_count} documentation files`);
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to scan repository"); }
+    finally { setGhScanning(false); }
+  };
+
+  const ghToggleFile = (path) => {
+    setGhSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const ghToggleAll = () => {
+    if (!ghScanResult) return;
+    const allPaths = ghScanResult.doc_files.map(f => f.path);
+    if (ghSelectedFiles.size === allPaths.length) setGhSelectedFiles(new Set());
+    else setGhSelectedFiles(new Set(allPaths));
+  };
+
+  const ghImportFiles = async () => {
+    if (ghSelectedFiles.size === 0) { toast.error("Select at least one file"); return; }
+    setGhImporting(true);
+    setGhProgress({ current: 0, total: ghSelectedFiles.size, message: "Starting import...", imported: 0, failed: 0 });
+    try {
+      await consumeSSE("/knowledge/sources/github/import-stream", {
+        repo_url: ghUrl.trim(),
+        branch: ghScanResult?.branch || ghBranch.trim() || "main",
+        files: [...ghSelectedFiles],
+        category: ghCategory.trim() || null,
+        github_token: ghToken.trim() || null,
+      }, {
+        onProgress: (data) => {
+          if (data.type === "progress") {
+            setGhProgress(prev => ({
+              ...prev,
+              current: data.current || prev.current,
+              total: data.total || prev.total,
+              message: data.message || data.file || prev.message,
+            }));
+          }
+        },
+        onComplete: (data) => {
+          if (data.type === "success") {
+            setGhProgress(prev => ({ ...prev, imported: (prev.imported || 0) + 1 }));
+          } else if (data.type === "error") {
+            setGhProgress(prev => ({ ...prev, failed: (prev.failed || 0) + 1 }));
+          } else if (data.type === "done") {
+            toast.success(`Imported ${data.imported} files${data.failed ? `, ${data.failed} failed` : ""}`);
+            loadSources();
+            setGhImporting(false);
+            setGhProgress(null);
+            setGhScanResult(null);
+            setGhSelectedFiles(new Set());
+          }
+        },
+        onError: (err) => {
+          toast.error(`Import error: ${err}`);
+          setGhImporting(false);
+          setGhProgress(null);
+        },
+      });
+    } catch (err) {
+      toast.error("Import failed");
+      setGhImporting(false);
+      setGhProgress(null);
+    }
+  };
+
   const addFaq = async () => {
     if (!faq.title.trim() || !faq.content.trim()) { toast.error("Title and content are required"); return; }
     setLoading(true);
@@ -411,8 +507,9 @@ export default function KnowledgeBase() {
         if (!dataLine) continue;
         try {
           const data = JSON.parse(dataLine);
-          if (data.type === "complete") { onComplete?.(data); return; }
-          else if (data.type === "page_done" || data.type === "progress" || data.type === "discovered") { onProgress?.(data); }
+          if (data.type === "complete" || data.type === "done") { onComplete?.(data); }
+          else if (data.type === "success" || data.type === "error") { onComplete?.(data); }
+          else { onProgress?.(data); }
         } catch { /* skip malformed events */ }
       }
     }
@@ -724,6 +821,7 @@ export default function KnowledgeBase() {
   const tabs = [
     { id: "faq", label: "FAQ", icon: HelpCircle },
     { id: "url", label: "URL Scraper", icon: Globe },
+    { id: "github", label: "GitHub Crawler", icon: Github },
     { id: "document", label: "Upload Document", icon: FileText },
   ];
 
@@ -962,6 +1060,186 @@ export default function KnowledgeBase() {
           </div>
           {/* SSE Progress Bar */}
           {scrapeProgress && <ScrapeProgressBar progress={scrapeProgress} />}
+        </div>
+      )}
+
+      {/* GitHub Crawler Tab */}
+      {activeTab === "github" && (
+        <div style={T.card}>
+          <p style={T.sectionTitle}>GitHub Repository Crawler</p>
+          <p style={{ ...T.sectionSub, marginTop: "4px" }}>
+            Paste a GitHub repo URL to auto-discover and import documentation files (README, docs/, .md, .rst, changelogs, etc.).
+          </p>
+          <div style={{ display: "grid", gap: "14px", marginTop: "16px" }}>
+            <div>
+              <label style={T.label}>Repository URL *</label>
+              <input
+                data-testid="gh-repo-url"
+                style={T.input}
+                value={ghUrl}
+                onChange={e => setGhUrl(e.target.value)}
+                placeholder="https://github.com/owner/repo"
+                onFocus={onFocus} onBlur={onBlur}
+              />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={T.label}>Branch (optional)</label>
+                <input
+                  data-testid="gh-branch"
+                  style={T.input}
+                  value={ghBranch}
+                  onChange={e => setGhBranch(e.target.value)}
+                  placeholder="auto-detect"
+                  onFocus={onFocus} onBlur={onBlur}
+                />
+              </div>
+              <div>
+                <label style={T.label}>Category (optional)</label>
+                <input
+                  data-testid="gh-category"
+                  style={T.input}
+                  value={ghCategory}
+                  onChange={e => setGhCategory(e.target.value)}
+                  placeholder="Auto-categorise"
+                  list="gh-category-suggestions"
+                  onFocus={onFocus} onBlur={onBlur}
+                />
+                <datalist id="gh-category-suggestions">
+                  {categories.map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div>
+                <label style={T.label}>GitHub Token (for private repos)</label>
+                <input
+                  data-testid="gh-token"
+                  type="password"
+                  style={T.input}
+                  value={ghToken}
+                  onChange={e => setGhToken(e.target.value)}
+                  placeholder="ghp_xxxx (optional)"
+                  onFocus={onFocus} onBlur={onBlur}
+                />
+              </div>
+            </div>
+            <div>
+              <button
+                data-testid="gh-scan-btn"
+                onClick={ghScanRepo}
+                disabled={ghScanning || !ghUrl.trim()}
+                style={{ ...T.btnPrimary, opacity: ghScanning || !ghUrl.trim() ? 0.6 : 1, display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                {ghScanning ? <Loader2 size={14} className="animate-spin" /> : <Network size={14} />}
+                {ghScanning ? "Scanning..." : "Scan Repository"}
+              </button>
+            </div>
+          </div>
+
+          {/* Scan Results */}
+          {ghScanResult && (
+            <div style={{ marginTop: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div>
+                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                    {ghScanResult.owner}/{ghScanResult.repo}
+                    <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, marginLeft: "8px" }}>
+                      {ghScanResult.branch}
+                    </span>
+                  </p>
+                  <p style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, margin: "4px 0 0" }}>
+                    {ghScanResult.total_files} total files, {ghScanResult.doc_count} docs found
+                    {ghScanResult.truncated && <span style={{ color: colors.brand.warning }}> (tree truncated — large repo)</span>}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    data-testid="gh-toggle-all"
+                    onClick={ghToggleAll}
+                    style={{
+                      padding: "5px 12px", borderRadius: "8px", fontSize: "11px", fontFamily: fonts.body,
+                      backgroundColor: "transparent", border: `1px solid ${colors.border.default}`,
+                      color: colors.text.secondary, cursor: "pointer",
+                    }}
+                  >
+                    {ghSelectedFiles.size === ghScanResult.doc_files.length ? "Deselect All" : "Select All"}
+                  </button>
+                  <button
+                    data-testid="gh-import-btn"
+                    onClick={ghImportFiles}
+                    disabled={ghImporting || ghSelectedFiles.size === 0}
+                    style={{
+                      ...T.btnPrimary,
+                      opacity: ghImporting || ghSelectedFiles.size === 0 ? 0.6 : 1,
+                      display: "flex", alignItems: "center", gap: "6px",
+                    }}
+                  >
+                    {ghImporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {ghImporting ? "Importing..." : `Import ${ghSelectedFiles.size} Files`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Import progress */}
+              {ghImporting && ghProgress && (
+                <ScrapeProgressBar progress={{
+                  current: ghProgress.current,
+                  total: ghProgress.total,
+                  message: ghProgress.message,
+                  scraped: ghProgress.imported || 0,
+                  failed: ghProgress.failed || 0,
+                }} />
+              )}
+
+              {/* File list */}
+              <div style={{
+                backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
+                borderRadius: "10px", maxHeight: "400px", overflowY: "auto",
+              }}>
+                {ghScanResult.doc_files.map(file => (
+                  <label
+                    key={file.path}
+                    data-testid="gh-file-item"
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "8px 16px", borderBottom: `1px solid ${colors.border.faint}`,
+                      cursor: "pointer", transition: "background-color 0.15s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(96,165,250,0.04)"}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={ghSelectedFiles.has(file.path)}
+                      onChange={() => ghToggleFile(file.path)}
+                      style={{ width: "14px", height: "14px", accentColor: colors.brand.cyan, cursor: "pointer" }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.text.primary, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {file.path}
+                      </p>
+                    </div>
+                    <span style={{
+                      padding: "2px 8px", borderRadius: "8px", fontSize: "9px", fontFamily: fonts.mono,
+                      backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(139,92,246,0.9)",
+                      textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0,
+                    }}>
+                      {file.category}
+                    </span>
+                    <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, flexShrink: 0 }}>
+                      {file.size > 1024 ? `${(file.size / 1024).toFixed(1)}KB` : `${file.size}B`}
+                    </span>
+                  </label>
+                ))}
+                {ghScanResult.doc_files.length === 0 && (
+                  <div style={{ padding: "32px", textAlign: "center" }}>
+                    <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary }}>
+                      No documentation files detected. This repo may use non-standard doc locations.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

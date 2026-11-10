@@ -94,6 +94,13 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 - **KB Import**: `POST /api/knowledge/import` accepts sources array + optional `overwrite` flag. Overwrite uses soft-delete (deactivates existing sources with `archived_at` timestamp). Merge mode skips duplicates by ID.
 - **Share KB Across Bots**: `POST /api/knowledge/share` copies selected or all sources to another instance. Modal picker shows all available instances. Group IDs are regenerated for target instance to maintain chunked source grouping. Bulk action bar includes "Share Selected" button.
 
+### Phase 10 — GitHub Repository Crawler (Nov 2026)
+- **GitHub Crawler Tab**: New "GitHub Crawler" tab in Knowledge Base alongside FAQ, URL Scraper, and Upload Document.
+- **Scan**: `POST /api/knowledge/sources/github/scan` uses GitHub's tree API to recursively list all files, then filters for documentation (`.md`, `.rst`, `.txt`, `README`, `CHANGELOG`, `CONTRIBUTING`, files in `docs/`, `wiki/`, etc.). Auto-detects default branch.
+- **File Preview**: Scan results show scrollable list with checkboxes, file paths, auto-assigned category badges (Overview, Docs, Changelog, Examples, etc.), and file sizes. Select All / Deselect All toggle.
+- **Import**: `POST /api/knowledge/sources/github/import-stream` uses SSE to stream progress. Downloads raw content, preserves code blocks in Markdown, chunks large files using `_split_into_chunks`. Sources stored with `type="github"` and metadata (`source_repo`, `source_branch`, `source_path`).
+- **Private Repos**: Optional GitHub token field for accessing private repositories.
+
 ## Backlog
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
