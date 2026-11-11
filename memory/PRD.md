@@ -119,6 +119,7 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 
 ## Backlog
 - P0: ~~API Key Usage Analytics — Add integration usage stats~~ ✅ DONE (Nov 2026)
+- P0: ~~API Key Analytics — Per-key integration breakdown with dates and call counts~~ ✅ DONE (Nov 2026)
 - P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)

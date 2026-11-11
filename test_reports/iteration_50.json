@@ -1,0 +1,96 @@
+{
+  "summary": "Tested API Key Analytics with Integration Usage feature - all backend APIs and frontend UI components working correctly. The page shows key cards with Total/LLM/API columns, detail panel with LLM stats and External API Calls section, and External Integration Usage section at the bottom.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_api_key_analytics_integration.py",
+    "/app/test_reports/pytest/iter50_api_key_analytics_integration.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_api_key_analytics_integration.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Used existing test data - 4 API keys, 8 LLM requests on TEST_key, 7 api_request_logs (4 Grid Scan + 3 other integration)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "API Key Analytics with Integration Usage feature fully tested. The page at /admin/api-key-analytics shows key cards with Total/LLM/API columns. Clicking a key loads detail panel with LLM stats (summary cards, Requests Over Time, Model Breakdown, Platform, Errors, Cost Breakdown, Recent Requests) and External API Calls section (integration summary cards, API Calls Over Time chart, Recent API Calls list). The External Integration Usage section at the bottom shows instance-wide integration stats.",
+  "features_tested": [
+    {
+      "feature": "GET /api/admin/api-key-analytics - List endpoint",
+      "status": "PASS",
+      "details": "Returns list of keys with analytics including integration_calls_total and integration_calls array per key"
+    },
+    {
+      "feature": "GET /api/admin/api-key-analytics/{key_id} - Detail endpoint",
+      "status": "PASS",
+      "details": "Returns detailed analytics with summary, requests_by_day, model_breakdown, platform_breakdown, error_breakdown, cost_by_model, recent_requests, and integration_usage object"
+    },
+    {
+      "feature": "GET /api/admin/integration-usage-analytics - Integration usage endpoint",
+      "status": "PASS",
+      "details": "Returns totals, integrations array, requests_by_day, top_endpoints, error_breakdown, and recent_requests"
+    },
+    {
+      "feature": "Days filter (7/14/30/90)",
+      "status": "PASS",
+      "details": "Filter affects both LLM and integration data in all endpoints"
+    },
+    {
+      "feature": "Authentication required",
+      "status": "PASS",
+      "details": "All endpoints return 401 without auth token"
+    },
+    {
+      "feature": "Key cards grid layout",
+      "status": "PASS",
+      "details": "4 key cards displayed in responsive grid with Total/LLM/API columns"
+    },
+    {
+      "feature": "Key card Total/LLM/API columns",
+      "status": "PASS",
+      "details": "Each card shows three columns: Total (combined), LLM (llm_usage count), API (integration_calls_total)"
+    },
+    {
+      "feature": "Detail panel LLM stats",
+      "status": "PASS",
+      "details": "Shows Total Requests, Successful, Failed, Avg Latency, Input Tokens, Output Tokens, Est. Cost summary cards"
+    },
+    {
+      "feature": "Detail panel Requests Over Time",
+      "status": "PASS",
+      "details": "Bar chart with date/total/ok/failed breakdown table"
+    },
+    {
+      "feature": "Detail panel Model Breakdown",
+      "status": "PASS",
+      "details": "Shows model name, count, and avg latency"
+    },
+    {
+      "feature": "Detail panel External API Calls section",
+      "status": "PASS",
+      "details": "Shows integration summary cards (name, Calls, OK, Avg ms), API Calls Over Time chart, and Recent API Calls list"
+    },
+    {
+      "feature": "Recent API Calls list",
+      "status": "PASS",
+      "details": "Shows timestamp, integration name, endpoint path, HTTP status badge (color-coded), and latency"
+    },
+    {
+      "feature": "External Integration Usage section",
+      "status": "PASS",
+      "details": "Shows instance-wide integration stats with per-integration cards, Integration Calls Over Time chart, Top Endpoints, Integration Errors, and Recent Integration Calls"
+    }
+  ]
+}

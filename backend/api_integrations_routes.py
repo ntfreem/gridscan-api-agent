@@ -576,10 +576,10 @@ async def execute_endpoint(integration: dict, endpoint: dict, parameters: dict =
 # Activity Logging & Stats
 # ══════════════════════════════════════════════════════════════════════════
 
-async def _log_api_request(instance_id, integration_id, endpoint_id, status, duration_ms, success, error, response_size, endpoint_path=""):
+async def _log_api_request(instance_id, integration_id, endpoint_id, status, duration_ms, success, error, response_size, endpoint_path="", api_key_id=None):
     try:
         db = _require_db()
-        await db.api_request_logs.insert_one({
+        doc = {
             "id": str(uuid.uuid4()),
             "instance_id": instance_id,
             "integration_id": integration_id,
@@ -591,7 +591,10 @@ async def _log_api_request(instance_id, integration_id, endpoint_id, status, dur
             "success": success,
             "error_category": str(error)[:100] if error else None,
             "response_size": response_size,
-        })
+        }
+        if api_key_id:
+            doc["api_key_id"] = api_key_id
+        await db.api_request_logs.insert_one(doc)
     except Exception:
         pass
 
@@ -655,7 +658,7 @@ async def get_enabled_endpoints_for_instance(instance_id: str) -> list[dict]:
     return endpoints
 
 
-async def execute_selected_endpoints(selections: list[dict], instance_id: str) -> list[dict]:
+async def execute_selected_endpoints(selections: list[dict], instance_id: str, api_key_id: str = None) -> list[dict]:
     """Execute a batch of endpoint selections. Each: {endpoint_id, parameters}.
     Returns list of {endpoint_id, endpoint, result, schema_context}."""
     db = _require_db()
@@ -685,7 +688,8 @@ async def execute_selected_endpoints(selections: list[dict], instance_id: str) -
             result.get("status", 0), result.get("duration_ms", 0),
             result.get("success", False), result.get("error"),
             result.get("response_size", 0),
-            endpoint_path=f"{ep.get('method','')} {ep.get('path','')}"
+            endpoint_path=f"{ep.get('method','')} {ep.get('path','')}",
+            api_key_id=api_key_id,
         )
         schema_ctx = build_schema_context(ep, str(result.get("status", 200)))
         results.append({

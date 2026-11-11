@@ -56,30 +56,74 @@ function StatCard({ icon: Icon, label, value, sub, color, accent }) {
 // ── Key Selector ────────────────────────────────────────────────────
 function KeySelector({ keys, selected, onSelect }) {
   return (
-    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
       {keys.map(k => {
         const isActive = selected === k.id;
+        const a = k.analytics || {};
+        const intgCalls = a.integration_calls || [];
+        const totalCombined = (a.total_requests || 0) + (a.integration_calls_total || 0);
         return (
           <button
             key={k.id}
             data-testid={`key-select-${k.id}`}
             onClick={() => onSelect(k.id)}
             style={{
-              display: "flex", alignItems: "center", gap: "8px",
-              padding: "10px 16px", borderRadius: radius.md,
-              backgroundColor: isActive ? `${colors.brand.primary}12` : colors.bg.surface,
+              display: "block", textAlign: "left", width: "100%",
+              padding: "14px 16px", borderRadius: radius.lg,
+              backgroundColor: isActive ? `${colors.brand.primary}08` : colors.bg.surface,
               border: `1px solid ${isActive ? colors.brand.primary : colors.border.muted}`,
               cursor: "pointer", transition: "all 0.15s",
-              fontFamily: fonts.mono, fontSize: "12px",
-              color: isActive ? colors.brand.light : colors.text.secondary,
             }}
           >
-            <Key size={13} />
-            <span>{k.key_prefix}...</span>
-            {k.label && <span style={{ fontFamily: fonts.body, color: colors.text.muted, fontSize: "11px" }}>({k.label})</span>}
-            {k.is_active
-              ? <ToggleRight size={14} color={colors.brand.success} />
-              : <ToggleLeft size={14} color={colors.text.muted} />}
+            {/* Key header */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+              <Key size={13} color={isActive ? colors.brand.light : colors.text.muted} />
+              <span style={{ fontFamily: fonts.mono, fontSize: "12px", color: isActive ? colors.brand.light : colors.text.secondary }}>
+                {k.key_prefix}...
+              </span>
+              {k.label && <span style={{ fontFamily: fonts.body, color: colors.text.muted, fontSize: "10px" }}>({k.label})</span>}
+              {k.is_active
+                ? <ToggleRight size={13} color={colors.brand.success} style={{ marginLeft: "auto" }} />
+                : <ToggleLeft size={13} color={colors.text.muted} style={{ marginLeft: "auto" }} />}
+            </div>
+
+            {/* Stats row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", marginBottom: intgCalls.length > 0 ? "10px" : "0" }}>
+              <div>
+                <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 2px", textTransform: "uppercase" }}>Total</p>
+                <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+                  {totalCombined.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 2px", textTransform: "uppercase" }}>LLM</p>
+                <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.brand.primary, margin: 0 }}>
+                  {(a.total_requests || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 2px", textTransform: "uppercase" }}>API</p>
+                <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.brand.cyan || colors.brand.primary, margin: 0 }}>
+                  {(a.integration_calls_total || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Integration breakdown badges */}
+            {intgCalls.length > 0 && (
+              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                {intgCalls.map(ic => (
+                  <span key={ic.integration_id} style={{
+                    fontSize: "10px", fontFamily: fonts.mono,
+                    padding: "2px 7px", borderRadius: radius.full,
+                    backgroundColor: `${colors.brand.cyan || colors.brand.primary}12`,
+                    color: colors.brand.cyan || colors.brand.primary,
+                  }}>
+                    {ic.name}: {ic.count}
+                  </span>
+                ))}
+              </div>
+            )}
           </button>
         );
       })}
@@ -111,6 +155,12 @@ function AnalyticsDetail({ keyId, days }) {
   const errors = data.error_breakdown || [];
   const costs = data.cost_by_model || [];
   const recent = data.recent_requests || [];
+  const intgData = data.integration_usage || {};
+  const intgs = intgData.integrations || [];
+  const intgByDay = intgData.requests_by_day || [];
+  const intgRecent = intgData.recent_calls || [];
+  const hasLLMData = s.total_requests > 0;
+  const hasIntgData = (intgData.total_calls || 0) > 0;
 
   return (
     <div style={{ display: "grid", gap: "20px" }}>
@@ -289,6 +339,134 @@ function AnalyticsDetail({ keyId, days }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Integration API Calls ── */}
+      {hasIntgData && (
+        <div style={{ borderTop: `1px solid ${colors.border.muted}`, paddingTop: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+            <Plug size={15} color={colors.brand.cyan || colors.brand.primary} />
+            <h3 style={{ ...T.sectionTitle, margin: 0, fontSize: "14px" }}>External API Calls</h3>
+            <span style={{
+              fontFamily: fonts.mono, fontSize: "10px", padding: "2px 8px", borderRadius: radius.full,
+              backgroundColor: `${colors.brand.cyan || colors.brand.primary}12`,
+              color: colors.brand.cyan || colors.brand.primary,
+            }}>
+              {intgData.total_calls} calls
+            </span>
+          </div>
+
+          {/* Per-integration summary cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+            {intgs.map(ig => (
+              <div key={ig.integration_id} style={{
+                padding: "12px 14px", borderRadius: radius.md,
+                backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.muted}`,
+              }}>
+                <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: "0 0 8px" }}>
+                  {ig.name}
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", fontSize: "11px" }}>
+                  <div>
+                    <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 1px", textTransform: "uppercase" }}>Calls</p>
+                    <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>{ig.total}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 1px", textTransform: "uppercase" }}>OK</p>
+                    <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "700", color: colors.brand.success, margin: 0 }}>{ig.successful}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, margin: "0 0 1px", textTransform: "uppercase" }}>Avg</p>
+                    <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "700", color: colors.text.secondary, margin: 0 }}>{ig.avg_duration_ms}ms</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Integration calls over time */}
+          {intgByDay.length > 0 && (
+            <div style={{ ...T.card, marginBottom: "14px" }}>
+              <h4 style={{ ...T.sectionTitle, marginBottom: "10px", fontSize: "12px" }}>
+                <TrendingUp size={13} style={{ marginRight: "5px" }} /> API Calls Over Time
+              </h4>
+              <MiniBar data={intgByDay.map(d => ({ label: d.date, value: d.total }))} color={colors.brand.cyan || colors.brand.primary} height={70} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>{intgByDay[0]?.date}</span>
+                <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>{intgByDay[intgByDay.length - 1]?.date}</span>
+              </div>
+              {/* Day-by-day table */}
+              <div style={{ maxHeight: "180px", overflowY: "auto", marginTop: "10px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: fonts.mono, fontSize: "11px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${colors.border.muted}` }}>
+                      {["Date", "Total", "OK", "Failed"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "5px 8px", color: colors.text.muted, fontSize: "9px", textTransform: "uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {intgByDay.map(d => (
+                      <tr key={d.date} style={{ borderBottom: `1px solid ${colors.border.muted}15` }}>
+                        <td style={{ padding: "4px 8px", color: colors.text.secondary }}>{d.date}</td>
+                        <td style={{ padding: "4px 8px", color: colors.text.primary, fontWeight: "600" }}>{d.total}</td>
+                        <td style={{ padding: "4px 8px", color: colors.brand.success }}>{d.successful}</td>
+                        <td style={{ padding: "4px 8px", color: d.failed > 0 ? colors.brand.error : colors.text.muted }}>{d.failed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Recent integration calls */}
+          {intgRecent.length > 0 && (
+            <div style={{ ...T.card }}>
+              <h4 style={{ ...T.sectionTitle, marginBottom: "10px", fontSize: "12px" }}>
+                <Activity size={13} style={{ marginRight: "5px" }} /> Recent API Calls
+              </h4>
+              <div style={{ maxHeight: "250px", overflowY: "auto" }}>
+                {intgRecent.map((r, i) => (
+                  <div key={r.id || i} style={{
+                    display: "flex", alignItems: "center", gap: "10px",
+                    padding: "5px 8px", fontSize: "11px", fontFamily: fonts.mono,
+                    borderBottom: `1px solid ${colors.border.muted}15`,
+                  }}>
+                    {r.success
+                      ? <CheckCircle size={12} color={colors.brand.success} />
+                      : <XCircle size={12} color={colors.brand.error} />}
+                    <span style={{ color: colors.text.muted, minWidth: "130px" }}>
+                      {new Date(r.timestamp).toLocaleString()}
+                    </span>
+                    <span style={{ color: colors.brand.cyan || colors.brand.primary, minWidth: "80px", fontWeight: "500" }}>
+                      {r.integration_name}
+                    </span>
+                    <span style={{ color: colors.text.secondary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.endpoint_path}
+                    </span>
+                    <span style={{
+                      fontSize: "10px", padding: "1px 5px", borderRadius: radius.sm, fontWeight: "600",
+                      backgroundColor: r.http_status >= 200 && r.http_status < 300 ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                      color: r.http_status >= 200 && r.http_status < 300 ? colors.brand.success : colors.brand.error,
+                    }}>
+                      {r.http_status}
+                    </span>
+                    <span style={{ color: colors.text.muted, minWidth: "50px" }}>{r.duration_ms || 0}ms</span>
+                    {r.error_category && <span style={{ color: colors.brand.error, fontSize: "10px" }}>{r.error_category}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No data at all */}
+      {!hasLLMData && !hasIntgData && (
+        <div style={{ textAlign: "center", padding: "40px", color: colors.text.muted }}>
+          <p style={{ fontFamily: fonts.body, fontSize: "13px" }}>No usage recorded for this key in the last {days} days.</p>
         </div>
       )}
     </div>
@@ -627,6 +805,8 @@ export default function ApiKeyAnalytics() {
             {keys.map(k => {
               const a = k.analytics || {};
               const isSelected = selectedKey === k.id;
+              const intgCalls = a.integration_calls || [];
+              const totalCombined = (a.total_requests || 0) + (a.integration_calls_total || 0);
               return (
                 <div
                   key={k.id}
@@ -652,20 +832,35 @@ export default function ApiKeyAnalytics() {
                       {k.is_active ? "active" : "disabled"}
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "11px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "11px", marginBottom: intgCalls.length > 0 ? "10px" : "0" }}>
                     <div>
-                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Requests</p>
-                      <p style={{ color: colors.text.primary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{a.total_requests || 0}</p>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Total</p>
+                      <p style={{ color: colors.text.primary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{totalCombined}</p>
                     </div>
                     <div>
-                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Success</p>
-                      <p style={{ color: colors.brand.success, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{a.successful || 0}</p>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>LLM</p>
+                      <p style={{ color: colors.brand.primary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{a.total_requests || 0}</p>
                     </div>
                     <div>
-                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>Avg ms</p>
-                      <p style={{ color: colors.text.secondary, fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{a.avg_duration_ms || 0}</p>
+                      <p style={{ color: colors.text.muted, margin: "0 0 2px", fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase" }}>API</p>
+                      <p style={{ color: colors.brand.cyan || "#06b6d4", fontWeight: "600", margin: 0, fontFamily: fonts.heading, fontSize: "16px" }}>{a.integration_calls_total || 0}</p>
                     </div>
                   </div>
+                  {/* Integration breakdown badges */}
+                  {intgCalls.length > 0 && (
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                      {intgCalls.map(ic => (
+                        <span key={ic.integration_id} style={{
+                          fontSize: "10px", fontFamily: fonts.mono,
+                          padding: "2px 7px", borderRadius: radius.full,
+                          backgroundColor: `${colors.brand.cyan || "#06b6d4"}15`,
+                          color: colors.brand.cyan || "#06b6d4",
+                        }}>
+                          {ic.name}: {ic.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

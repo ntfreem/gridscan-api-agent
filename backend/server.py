@@ -2564,7 +2564,7 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
         return None
 
     # Step 2: Execute via registered endpoint system
-    results = await api_integrations_routes.execute_selected_endpoints(calls, instance_id)
+    results = await api_integrations_routes.execute_selected_endpoints(calls, instance_id, api_key_id=_current_api_key_id.get(None))
     if not results:
         return None
 
@@ -2801,6 +2801,38 @@ async def api_key_analytics_list(
         ]
         agg = await db.llm_usage.aggregate(pipeline).to_list(1)
         tokens = agg[0] if agg else {}
+
+        # Integration API calls for this key
+        intg_pipeline = [
+            {"$match": {"api_key_id": kid, "timestamp": {"$gte": cutoff}}},
+            {"$group": {
+                "_id": "$integration_id",
+                "count": {"$sum": 1},
+                "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+                "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+                "avg_duration_ms": {"$avg": "$duration_ms"},
+            }},
+            {"$sort": {"count": -1}},
+        ]
+        intg_raw = await db.api_request_logs.aggregate(intg_pipeline).to_list(20)
+        intg_total = sum(i["count"] for i in intg_raw)
+
+        # Lookup integration names
+        intg_names = {}
+        intg_ids = [i["_id"] for i in intg_raw if i["_id"]]
+        if intg_ids:
+            async for doc in db.api_integrations.find({"id": {"$in": intg_ids}}, {"_id": 0, "id": 1, "name": 1}):
+                intg_names[doc["id"]] = doc.get("name", doc["id"])
+
+        integration_calls = [{
+            "integration_id": i["_id"],
+            "name": intg_names.get(i["_id"], i["_id"] or "Unknown"),
+            "count": i["count"],
+            "successful": i["successful"],
+            "failed": i["failed"],
+            "avg_duration_ms": round(i.get("avg_duration_ms") or 0),
+        } for i in intg_raw]
+
         result.append({
             **k,
             "analytics": {
@@ -2811,6 +2843,8 @@ async def api_key_analytics_list(
                 "total_input_tokens": tokens.get("total_input", 0),
                 "total_output_tokens": tokens.get("total_output", 0),
                 "avg_duration_ms": round(tokens.get("avg_duration", 0)),
+                "integration_calls_total": intg_total,
+                "integration_calls": integration_calls,
             }
         })
     return result
@@ -2912,6 +2946,71 @@ async def api_key_analytics_detail(
         cost_by_model.append({"model": model_name, "cost": round(cost, 4), "requests": m["count"],
                               "input_tokens": m.get("input_tokens", 0), "output_tokens": m.get("output_tokens", 0)})
 
+    # ── 8. Integration API calls for this key ──
+    intg_key_match = {"api_key_id": key_id, "timestamp": {"$gte": cutoff}}
+    # Also include instance-level calls if no api_key_id is set (legacy data)
+    intg_match_any = {"$or": [
+        {"api_key_id": key_id, "timestamp": {"$gte": cutoff}},
+        {"api_key_id": {"$exists": False}, "instance_id": instance_id, "timestamp": {"$gte": cutoff}},
+    ]}
+
+    intg_breakdown = await db.api_request_logs.aggregate([
+        {"$match": intg_match_any},
+        {"$group": {
+            "_id": "$integration_id",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"total": -1}},
+    ]).to_list(20)
+
+    intg_names = {}
+    intg_ids = [i["_id"] for i in intg_breakdown if i["_id"]]
+    if intg_ids:
+        async for doc in db.api_integrations.find({"id": {"$in": intg_ids}}, {"_id": 0, "id": 1, "name": 1}):
+            intg_names[doc["id"]] = doc.get("name", doc["id"])
+
+    intg_daily = await db.api_request_logs.aggregate([
+        {"$match": intg_match_any},
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+        }},
+        {"$sort": {"_id": 1}},
+    ]).to_list(days + 1)
+
+    intg_recent = await db.api_request_logs.find(
+        {"$or": [
+            {"api_key_id": key_id},
+            {"api_key_id": {"$exists": False}, "instance_id": instance_id},
+        ]},
+        {"_id": 0, "id": 1, "integration_id": 1, "endpoint_path": 1, "timestamp": 1,
+         "http_status": 1, "success": 1, "duration_ms": 1, "error_category": 1}
+    ).sort("timestamp", -1).to_list(50)
+
+    for r in intg_recent:
+        r["integration_name"] = intg_names.get(r.get("integration_id", ""), r.get("integration_id", "Unknown"))
+
+    intg_usage = {
+        "integrations": [{
+            "integration_id": i["_id"],
+            "name": intg_names.get(i["_id"], i["_id"] or "Unknown"),
+            "total": i["total"],
+            "successful": i["successful"],
+            "failed": i["failed"],
+            "avg_duration_ms": round(i.get("avg_duration_ms") or 0),
+        } for i in intg_breakdown],
+        "total_calls": sum(i["total"] for i in intg_breakdown),
+        "requests_by_day": [{"date": d["_id"], "total": d["total"], "successful": d["successful"],
+                             "failed": d["failed"]} for d in intg_daily],
+        "recent_calls": intg_recent,
+    }
+
     return {
         "key": key_doc,
         "period_days": days,
@@ -2938,6 +3037,7 @@ async def api_key_analytics_detail(
         "error_breakdown": [{"error_type": e["_id"], "count": e["count"]} for e in error_breakdown],
         "cost_by_model": cost_by_model,
         "recent_requests": recent,
+        "integration_usage": intg_usage,
     }
 
 
