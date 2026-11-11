@@ -473,6 +473,212 @@ function AnalyticsDetail({ keyId, days }) {
   );
 }
 
+// ── Per-Integration Detail Panel ─────────────────────────────────────
+function IntegrationDetail({ integrationId, days }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/integration-usage-analytics/${integrationId}?days=${days}`)
+      .then(r => setData(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [integrationId, days]);
+
+  if (loading) return <div style={{ textAlign: "center", padding: "24px", color: colors.text.muted }}>Loading details...</div>;
+  if (!data) return null;
+
+  const info = data.integration || {};
+  const s = data.summary || {};
+  const byDay = data.requests_by_day || [];
+  const eps = data.endpoints || [];
+  const errors = data.error_breakdown || [];
+  const hourly = data.hourly_distribution || [];
+  const recent = data.recent_requests || [];
+
+  return (
+    <div style={{ display: "grid", gap: "14px", padding: "16px 0 0" }} data-testid="integration-detail-panel">
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <Plug size={16} color={colors.brand.primary} />
+        <span style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "700", color: colors.text.primary }}>
+          {info.name || integrationId}
+        </span>
+        {info.base_url && (
+          <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+            {info.base_url}
+          </span>
+        )}
+      </div>
+
+      {/* Summary stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "10px" }}>
+        <StatCard icon={Activity} label="Total Calls" value={s.total_requests?.toLocaleString()} color={colors.brand.primary} />
+        <StatCard icon={CheckCircle} label="Successful" value={s.successful?.toLocaleString()}
+          sub={`${s.success_rate}%`} color={colors.brand.success} />
+        <StatCard icon={XCircle} label="Failed" value={s.failed?.toLocaleString()}
+          color={s.failed > 0 ? colors.brand.error : colors.text.muted} />
+        <StatCard icon={Clock} label="Avg Latency" value={`${s.avg_duration_ms}ms`}
+          sub={`${s.min_duration_ms}–${s.max_duration_ms}ms`} color={colors.text.secondary} />
+        <StatCard icon={Zap} label="Data" value={
+          s.total_bytes > 1048576 ? `${(s.total_bytes / 1048576).toFixed(1)}MB`
+          : s.total_bytes > 1024 ? `${(s.total_bytes / 1024).toFixed(0)}KB`
+          : `${s.total_bytes || 0}B`
+        } color={colors.brand.cyan || colors.text.secondary} />
+      </div>
+
+      {/* Daily breakdown chart + table */}
+      {byDay.length > 0 && (
+        <div style={{ ...T.card }}>
+          <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+            <TrendingUp size={14} style={{ marginRight: "6px" }} /> Calls Per Day
+          </h3>
+          <MiniBar data={byDay.map(d => ({ label: d.date, value: d.total }))} color={colors.brand.primary} height={80} />
+          <div style={{ maxHeight: "200px", overflowY: "auto", marginTop: "10px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: fonts.mono, fontSize: "11px" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${colors.border.muted}` }}>
+                  {["Date", "Total", "OK", "Failed", "Avg ms"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "5px 8px", color: colors.text.muted, fontSize: "9px", textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {byDay.map(d => (
+                  <tr key={d.date} style={{ borderBottom: `1px solid ${colors.border.muted}15` }}>
+                    <td style={{ padding: "4px 8px", color: colors.text.secondary }}>{d.date}</td>
+                    <td style={{ padding: "4px 8px", color: colors.text.primary, fontWeight: "600" }}>{d.total}</td>
+                    <td style={{ padding: "4px 8px", color: colors.brand.success }}>{d.successful}</td>
+                    <td style={{ padding: "4px 8px", color: d.failed > 0 ? colors.brand.error : colors.text.muted }}>{d.failed}</td>
+                    <td style={{ padding: "4px 8px", color: colors.text.muted }}>{d.avg_duration_ms}ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Endpoints + Errors row */}
+      <div style={{ display: "grid", gridTemplateColumns: eps.length > 0 && errors.length > 0 ? "1.5fr 1fr" : "1fr", gap: "14px" }}>
+        {/* Endpoint breakdown */}
+        {eps.length > 0 && (
+          <div style={{ ...T.card }}>
+            <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+              <Layers size={14} style={{ marginRight: "6px" }} /> Endpoints
+            </h3>
+            <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: fonts.mono, fontSize: "11px" }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${colors.border.muted}` }}>
+                    {["Endpoint", "Calls", "OK", "Fail", "Avg ms", "Data"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "5px 6px", color: colors.text.muted, fontSize: "9px", textTransform: "uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {eps.map((ep, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${colors.border.muted}15` }}>
+                      <td style={{ padding: "4px 6px", color: colors.text.primary, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ep.path}</td>
+                      <td style={{ padding: "4px 6px", color: colors.brand.primary, fontWeight: "600" }}>{ep.total}</td>
+                      <td style={{ padding: "4px 6px", color: colors.brand.success }}>{ep.successful}</td>
+                      <td style={{ padding: "4px 6px", color: ep.failed > 0 ? colors.brand.error : colors.text.muted }}>{ep.failed}</td>
+                      <td style={{ padding: "4px 6px", color: colors.text.muted }}>{ep.avg_duration_ms}ms</td>
+                      <td style={{ padding: "4px 6px", color: colors.text.muted }}>
+                        {ep.total_bytes > 1024 ? `${(ep.total_bytes / 1024).toFixed(0)}KB` : `${ep.total_bytes}B`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Errors */}
+        {errors.length > 0 && (
+          <div style={{ ...T.card }}>
+            <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+              <AlertTriangle size={14} style={{ marginRight: "6px" }} /> Errors
+            </h3>
+            <div style={{ display: "grid", gap: "6px" }}>
+              {errors.map((e, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", fontFamily: fonts.mono }}>
+                  <span style={{
+                    padding: "1px 5px", borderRadius: radius.sm, fontSize: "10px", fontWeight: "600",
+                    backgroundColor: "rgba(239,68,68,0.1)", color: colors.brand.error,
+                  }}>
+                    {e.http_status}
+                  </span>
+                  <span style={{ color: colors.brand.error, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {e.error || "Unknown"}
+                  </span>
+                  <span style={{ color: colors.text.muted }}>{e.count}×</span>
+                  {e.last_seen && <span style={{ color: colors.text.muted, fontSize: "10px" }}>{e.last_seen.substring(0, 10)}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Hourly distribution */}
+      {hourly.length > 0 && (
+        <div style={{ ...T.card }}>
+          <h3 style={{ ...T.sectionTitle, marginBottom: "10px" }}>
+            <Clock size={14} style={{ marginRight: "6px" }} /> Hourly Distribution
+          </h3>
+          <MiniBar data={hourly.map(h => ({ label: `${h.hour}:00`, value: h.count }))} color={colors.brand.cyan || colors.brand.primary} height={60} />
+        </div>
+      )}
+
+      {/* Recent calls */}
+      {recent.length > 0 && (
+        <div style={{ ...T.card }}>
+          <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
+            <Activity size={14} style={{ marginRight: "6px" }} /> Recent Calls ({recent.length})
+          </h3>
+          <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+            {recent.map((r, i) => (
+              <div key={r.id || i} style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "5px 8px", fontSize: "11px", fontFamily: fonts.mono,
+                borderBottom: `1px solid ${colors.border.muted}15`,
+              }}>
+                {r.success
+                  ? <CheckCircle size={12} color={colors.brand.success} />
+                  : <XCircle size={12} color={colors.brand.error} />}
+                <span style={{ color: colors.text.muted, minWidth: "140px" }}>
+                  {new Date(r.timestamp).toLocaleString()}
+                </span>
+                <span style={{ color: colors.text.primary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {r.endpoint_path}
+                </span>
+                <span style={{
+                  fontSize: "10px", padding: "1px 5px", borderRadius: radius.sm, fontWeight: "600",
+                  backgroundColor: r.http_status >= 200 && r.http_status < 300 ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                  color: r.http_status >= 200 && r.http_status < 300 ? colors.brand.success : colors.brand.error,
+                }}>
+                  {r.http_status}
+                </span>
+                <span style={{ color: colors.text.muted, minWidth: "50px" }}>{r.duration_ms || 0}ms</span>
+                {r.response_size > 0 && (
+                  <span style={{ color: colors.text.muted, fontSize: "10px", minWidth: "40px" }}>
+                    {r.response_size > 1024 ? `${(r.response_size / 1024).toFixed(0)}KB` : `${r.response_size}B`}
+                  </span>
+                )}
+                {r.error_category && <span style={{ color: colors.brand.error, fontSize: "10px" }}>{r.error_category}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── Integration Usage Section ────────────────────────────────────────
 function IntegrationUsageSection({ days }) {
   const [data, setData] = useState(null);
@@ -606,8 +812,11 @@ function IntegrationUsageSection({ days }) {
             })}
           </div>
 
-          {/* Requests over time bar chart */}
-          {byDay.length > 0 && (
+          {/* ── Per-Integration Detail Panel ── */}
+          {selectedIntg && <IntegrationDetail integrationId={selectedIntg} days={days} />}
+
+          {/* Overall charts (shown when no integration selected) */}
+          {!selectedIntg && byDay.length > 0 && (
             <div style={{ ...T.card }}>
               <h3 style={{ ...T.sectionTitle, marginBottom: "14px" }}>
                 <TrendingUp size={14} style={{ marginRight: "6px" }} /> Integration Calls Over Time
@@ -620,7 +829,8 @@ function IntegrationUsageSection({ days }) {
             </div>
           )}
 
-          {/* Top endpoints + Errors row */}
+          {/* Top endpoints + Errors row (overall view) */}
+          {!selectedIntg && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
             {/* Top endpoints */}
             <div style={{ ...T.card }}>
@@ -679,9 +889,10 @@ function IntegrationUsageSection({ days }) {
                 )}
             </div>
           </div>
+          )}
 
-          {/* Recent integration requests */}
-          {recent.length > 0 && (
+          {/* Recent integration requests (overall view) */}
+          {!selectedIntg && recent.length > 0 && (
             <div style={{ ...T.card }}>
               <h3 style={{ ...T.sectionTitle, marginBottom: "12px" }}>
                 <Activity size={14} style={{ marginRight: "6px" }} /> Recent Integration Calls

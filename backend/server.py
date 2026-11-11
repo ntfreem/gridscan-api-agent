@@ -3185,6 +3185,125 @@ async def integration_usage_analytics(
     }
 
 
+@api_router.get("/admin/integration-usage-analytics/{integration_id}")
+async def integration_usage_detail(
+    integration_id: str,
+    instance_id: str = Depends(get_instance_access),
+    days: int = 30,
+):
+    """Detailed per-integration usage analytics."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    base_match = {"instance_id": instance_id, "integration_id": integration_id, "timestamp": {"$gte": cutoff}}
+
+    # Integration info
+    intg_doc = await db.api_integrations.find_one(
+        {"id": integration_id, "instance_id": instance_id},
+        {"_id": 0, "id": 1, "name": 1, "base_url": 1, "auth_type": 1}
+    ) or {"id": integration_id, "name": integration_id}
+
+    # Summary
+    summary_pipeline = [
+        {"$match": base_match},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+            "min_duration_ms": {"$min": "$duration_ms"},
+            "max_duration_ms": {"$max": "$duration_ms"},
+            "total_bytes": {"$sum": {"$ifNull": ["$response_size", 0]}},
+        }},
+    ]
+    s_raw = await db.api_request_logs.aggregate(summary_pipeline).to_list(1)
+    s = s_raw[0] if s_raw else {}
+
+    # Daily breakdown
+    daily_pipeline = [
+        {"$match": base_match},
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    daily = await db.api_request_logs.aggregate(daily_pipeline).to_list(days + 1)
+
+    # Per-endpoint breakdown
+    ep_pipeline = [
+        {"$match": base_match},
+        {"$group": {
+            "_id": "$endpoint_path",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+            "total_bytes": {"$sum": {"$ifNull": ["$response_size", 0]}},
+        }},
+        {"$sort": {"total": -1}},
+        {"$limit": 50},
+    ]
+    endpoints = await db.api_request_logs.aggregate(ep_pipeline).to_list(50)
+
+    # Error breakdown
+    err_pipeline = [
+        {"$match": {**base_match, "success": False}},
+        {"$group": {
+            "_id": {"error": "$error_category", "status": "$http_status"},
+            "count": {"$sum": 1},
+            "last_seen": {"$max": "$timestamp"},
+        }},
+        {"$sort": {"count": -1}},
+        {"$limit": 20},
+    ]
+    errors = await db.api_request_logs.aggregate(err_pipeline).to_list(20)
+
+    # Hourly distribution
+    hourly_pipeline = [
+        {"$match": base_match},
+        {"$addFields": {"hour": {"$substr": ["$timestamp", 11, 2]}}},
+        {"$group": {"_id": "$hour", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    hourly = await db.api_request_logs.aggregate(hourly_pipeline).to_list(24)
+
+    # Recent calls
+    recent = await db.api_request_logs.find(
+        {"instance_id": instance_id, "integration_id": integration_id},
+        {"_id": 0, "id": 1, "endpoint_path": 1, "timestamp": 1,
+         "http_status": 1, "success": 1, "duration_ms": 1,
+         "error_category": 1, "response_size": 1}
+    ).sort("timestamp", -1).to_list(100)
+
+    return {
+        "integration": intg_doc,
+        "period_days": days,
+        "summary": {
+            "total_requests": s.get("total", 0),
+            "successful": s.get("successful", 0),
+            "failed": s.get("failed", 0),
+            "success_rate": round(s.get("successful", 0) / max(s.get("total", 1), 1) * 100, 1),
+            "avg_duration_ms": round(s.get("avg_duration_ms") or 0),
+            "min_duration_ms": s.get("min_duration_ms", 0),
+            "max_duration_ms": s.get("max_duration_ms", 0),
+            "total_bytes": s.get("total_bytes", 0),
+        },
+        "requests_by_day": [{"date": d["_id"], "total": d["total"], "successful": d["successful"],
+                             "failed": d["failed"], "avg_duration_ms": round(d.get("avg_duration_ms") or 0)} for d in daily],
+        "endpoints": [{"path": e["_id"] or "", "total": e["total"], "successful": e["successful"],
+                       "failed": e["failed"], "avg_duration_ms": round(e.get("avg_duration_ms") or 0),
+                       "total_bytes": e.get("total_bytes", 0)} for e in endpoints],
+        "error_breakdown": [{"error": e["_id"].get("error", "Unknown"), "http_status": e["_id"].get("status"),
+                             "count": e["count"], "last_seen": e.get("last_seen")} for e in errors],
+        "hourly_distribution": [{"hour": h["_id"], "count": h["count"]} for h in hourly],
+        "recent_requests": recent,
+    }
+
+
 async def _authenticate_api_key(request: Request) -> dict:
     """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
     auth = request.headers.get("Authorization", "")
