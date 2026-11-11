@@ -600,13 +600,56 @@ async def _log_api_request(instance_id, integration_id, endpoint_id, status, dur
 
 
 @router.get("/{integration_id}/activity")
-async def get_activity(integration_id: str, request: Request, limit: int = 50):
+async def get_activity(integration_id: str, request: Request, limit: int = 50, date: str = None):
     db = _require_db()
     instance_id = await _get_instance_access(request)
+    match = {"integration_id": integration_id, "instance_id": instance_id}
+    if date:
+        match["timestamp"] = {"$gte": date, "$lt": date + "T\uffff"}
     cursor = db.api_request_logs.find(
-        {"integration_id": integration_id, "instance_id": instance_id}, {"_id": 0}
-    ).sort("timestamp", -1).limit(min(limit, 200))
-    return {"logs": await cursor.to_list(min(limit, 200))}
+        match, {"_id": 0}
+    ).sort("timestamp", -1).limit(min(limit, 500))
+    logs = await cursor.to_list(min(limit, 500))
+
+    # Daily breakdown
+    daily_pipeline = [
+        {"$match": {"integration_id": integration_id, "instance_id": instance_id}},
+        {"$addFields": {"day": {"$substr": ["$timestamp", 0, 10]}}},
+        {"$group": {
+            "_id": "$day",
+            "total": {"$sum": 1},
+            "successful": {"$sum": {"$cond": ["$success", 1, 0]}},
+            "failed": {"$sum": {"$cond": ["$success", 0, 1]}},
+            "avg_duration_ms": {"$avg": "$duration_ms"},
+        }},
+        {"$sort": {"_id": -1}},
+        {"$limit": 90},
+    ]
+    daily = await db.api_request_logs.aggregate(daily_pipeline).to_list(90)
+
+    # Masked auth key
+    intg = await db.api_integrations.find_one(
+        {"id": integration_id, "instance_id": instance_id},
+        {"_id": 0, "auth_encrypted_value": 1, "auth_value_set": 1, "auth_type": 1}
+    )
+    masked_key = None
+    if intg and intg.get("auth_value_set"):
+        try:
+            raw = decrypt_value(intg.get("auth_encrypted_value", ""))
+            if raw and len(raw) > 8:
+                masked_key = raw[:4] + "*" * (len(raw) - 8) + raw[-4:]
+            elif raw:
+                masked_key = raw[:2] + "***" + raw[-2:] if len(raw) > 4 else "****"
+        except Exception:
+            masked_key = "****"
+
+    return {
+        "logs": logs,
+        "daily_breakdown": [{"date": d["_id"], "total": d["total"], "successful": d["successful"],
+                             "failed": d["failed"], "avg_duration_ms": round(d.get("avg_duration_ms") or 0)} for d in daily],
+        "masked_key": masked_key,
+        "filtered_date": date,
+    }
 
 
 @router.get("/{integration_id}/stats")

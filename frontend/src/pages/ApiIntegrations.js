@@ -329,6 +329,9 @@ function IntegrationCard({ intg, onRefresh }) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [activity, setActivity] = useState(null);
   const [stats, setStats] = useState(null);
+  const [dailyBreakdown, setDailyBreakdown] = useState([]);
+  const [maskedKey, setMaskedKey] = useState(null);
+  const [activityDateFilter, setActivityDateFilter] = useState("");
   const [diagOpen, setDiagOpen] = useState(false);
 
   const loadEndpoints = useCallback(async () => {
@@ -400,17 +403,28 @@ function IntegrationCard({ intg, onRefresh }) {
     }
   };
 
-  const loadActivity = async () => {
-    if (activityOpen) { setActivityOpen(false); return; }
+  const loadActivity = async (dateOverride) => {
+    // dateOverride can be: undefined (button click), "" (clear filter), or "2026-11-05" (date click)
+    const isButtonClick = dateOverride === undefined || (dateOverride && typeof dateOverride === "object");
+    if (activityOpen && isButtonClick) { setActivityOpen(false); return; }
+    const dateParam = (!isButtonClick && dateOverride !== undefined) ? dateOverride : activityDateFilter;
     try {
+      const query = dateParam ? `?limit=100&date=${dateParam}` : "?limit=100";
       const [logsR, statsR] = await Promise.all([
-        api.get(`/integrations/${intg.id}/activity?limit=20`),
+        api.get(`/integrations/${intg.id}/activity${query}`),
         api.get(`/integrations/${intg.id}/stats`),
       ]);
       setActivity(logsR.data.logs || []);
+      setDailyBreakdown(logsR.data.daily_breakdown || []);
+      setMaskedKey(logsR.data.masked_key || null);
       setStats(statsR.data || {});
       setActivityOpen(true);
     } catch { toast.error("Failed to load activity"); }
+  };
+
+  const handleDateFilter = (date) => {
+    setActivityDateFilter(date);
+    loadActivity(date);
   };
 
   return (
@@ -559,6 +573,23 @@ function IntegrationCard({ intg, onRefresh }) {
       {/* Activity Panel */}
       {activityOpen && (
         <div style={{ marginTop: "14px" }}>
+          {/* Masked API Key */}
+          {maskedKey && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              padding: "8px 14px", marginBottom: "12px",
+              backgroundColor: colors.bg.panel, borderRadius: radius.md,
+              border: `1px solid ${colors.border.muted}`,
+            }}>
+              <Key size={13} color={colors.brand.primary} />
+              <span style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted }}>API Key:</span>
+              <span data-testid="masked-api-key" style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.text.primary, fontWeight: "600", letterSpacing: "0.3px" }}>
+                {maskedKey}
+              </span>
+            </div>
+          )}
+
+          {/* Stats cards */}
           {stats && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "12px" }}>
               {[
@@ -577,8 +608,79 @@ function IntegrationCard({ intg, onRefresh }) {
               ))}
             </div>
           )}
+
+          {/* Daily Breakdown */}
+          {dailyBreakdown.length > 0 && (
+            <div style={{
+              padding: "12px 14px", marginBottom: "12px",
+              backgroundColor: colors.bg.panel, borderRadius: radius.md,
+              border: `1px solid ${colors.border.muted}`,
+            }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: colors.text.primary, margin: "0 0 10px" }}>
+                Requests By Day
+              </p>
+              <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: fonts.mono, fontSize: "11px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${colors.border.muted}` }}>
+                      {["Date", "Total", "OK", "Failed", "Avg ms"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "5px 8px", color: colors.text.muted, fontSize: "9px", textTransform: "uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyBreakdown.map(d => (
+                      <tr
+                        key={d.date}
+                        data-testid={`daily-row-${d.date}`}
+                        onClick={() => handleDateFilter(activityDateFilter === d.date ? "" : d.date)}
+                        style={{
+                          cursor: "pointer",
+                          borderBottom: `1px solid ${colors.border.muted}15`,
+                          backgroundColor: activityDateFilter === d.date ? `${colors.brand.primary}10` : "transparent",
+                        }}
+                      >
+                        <td style={{ padding: "5px 8px", color: activityDateFilter === d.date ? colors.brand.primary : colors.text.secondary, fontWeight: activityDateFilter === d.date ? "600" : "400" }}>
+                          {d.date}
+                          {activityDateFilter === d.date && <span style={{ marginLeft: "4px", fontSize: "10px" }}>✕</span>}
+                        </td>
+                        <td style={{ padding: "5px 8px", color: colors.text.primary, fontWeight: "600" }}>{d.total}</td>
+                        <td style={{ padding: "5px 8px", color: colors.brand.success }}>{d.successful}</td>
+                        <td style={{ padding: "5px 8px", color: d.failed > 0 ? colors.brand.error : colors.text.muted }}>{d.failed}</td>
+                        <td style={{ padding: "5px 8px", color: colors.text.muted }}>{d.avg_duration_ms}ms</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Date filter indicator */}
+          {activityDateFilter && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px",
+              padding: "6px 12px", backgroundColor: `${colors.brand.primary}08`,
+              borderRadius: radius.md, border: `1px solid ${colors.brand.primary}30`,
+            }}>
+              <span style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.brand.primary }}>
+                Showing calls for <strong>{activityDateFilter}</strong>
+              </span>
+              <button
+                onClick={() => handleDateFilter("")}
+                data-testid="clear-date-filter"
+                style={{
+                  marginLeft: "auto", background: "none", border: "none", cursor: "pointer",
+                  fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.primary,
+                  textDecoration: "underline",
+                }}
+              >Clear filter</button>
+            </div>
+          )}
+
+          {/* Activity log */}
           {activity && activity.length > 0 ? (
-            <div style={{ maxHeight: "250px", overflowY: "auto" }}>
+            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
               {activity.map((log, i) => (
                 <div key={log.id || i} style={{
                   display: "flex", alignItems: "center", gap: "10px",
@@ -587,15 +689,31 @@ function IntegrationCard({ intg, onRefresh }) {
                   color: log.success ? colors.text.secondary : colors.brand.error,
                 }}>
                   {log.success ? <CheckCircle size={11} color={colors.brand.success} /> : <XCircle size={11} color={colors.brand.error} />}
-                  <span style={{ color: colors.text.muted }}>{new Date(log.timestamp).toLocaleString()}</span>
-                  <span>HTTP {log.http_status}</span>
-                  <span>{log.duration_ms}ms</span>
+                  <span style={{ color: colors.text.muted, minWidth: "140px" }}>{new Date(log.timestamp).toLocaleString()}</span>
+                  <span style={{ color: colors.text.primary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {log.endpoint_path || `HTTP ${log.http_status}`}
+                  </span>
+                  <span style={{
+                    fontSize: "10px", padding: "1px 5px", borderRadius: "4px", fontWeight: "600",
+                    backgroundColor: log.http_status >= 200 && log.http_status < 300 ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)",
+                    color: log.http_status >= 200 && log.http_status < 300 ? colors.brand.success : colors.brand.error,
+                  }}>
+                    {log.http_status}
+                  </span>
+                  <span style={{ color: colors.text.muted, minWidth: "50px" }}>{log.duration_ms}ms</span>
+                  {log.response_size > 0 && (
+                    <span style={{ color: colors.text.muted, fontSize: "10px" }}>
+                      {log.response_size > 1024 ? `${(log.response_size / 1024).toFixed(0)}KB` : `${log.response_size}B`}
+                    </span>
+                  )}
                   {log.error_category && <span style={{ color: colors.brand.error }}>{log.error_category}</span>}
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ textAlign: "center", color: colors.text.muted, fontSize: "12px", padding: "16px" }}>No activity recorded yet.</p>
+            <p style={{ textAlign: "center", color: colors.text.muted, fontSize: "12px", padding: "16px" }}>
+              {activityDateFilter ? `No calls recorded on ${activityDateFilter}.` : "No activity recorded yet."}
+            </p>
           )}
         </div>
       )}
