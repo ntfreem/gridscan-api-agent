@@ -5131,10 +5131,12 @@ async def analytics_overview(instance_id: str = Depends(get_instance_access)):
     total_messages = msg_result[0]["total"] if msg_result else 0
     web_count = await db.conversations.count_documents({**q, "platform": "web"})
     discord_count = await db.conversations.count_documents({**q, "platform": "discord"})
+    telegram_count = await db.conversations.count_documents({**q, "platform": "telegram"})
+    api_count = await db.conversations.count_documents({**q, "platform": "api"})
     return {
         "total_conversations": total_convs, "total_messages": total_messages,
         "approved_for_training": approved_training, "knowledge_sources": knowledge_count,
-        "platform_breakdown": {"web": web_count, "discord": discord_count}
+        "platform_breakdown": {"web": web_count, "discord": discord_count, "telegram": telegram_count, "api": api_count}
     }
 @api_router.get("/analytics/daily")
 async def analytics_daily(instance_id: str = Depends(get_instance_access)):
@@ -5157,6 +5159,32 @@ async def analytics_daily(instance_id: str = Depends(get_instance_access)):
         msg_count = msg_res[0]["total"] if msg_res else 0
         days.append({"date": day_start.strftime("%m/%d"), "conversations": count, "messages": msg_count})
     return days
+
+@api_router.get("/analytics/daily-by-platform")
+async def analytics_daily_by_platform(instance_id: str = Depends(get_instance_access)):
+    """Daily message counts broken down by platform for the last 7 days."""
+    now = datetime.now(timezone.utc)
+    platforms = ["web", "discord", "telegram", "api"]
+    days = []
+    for i in range(6, -1, -1):
+        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        base_q = {
+            "instance_id": instance_id,
+            "created_at": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}
+        }
+        day_data = {"date": day_start.strftime("%m/%d")}
+        for p in platforms:
+            pipeline = [
+                {"$match": {**base_q, "platform": p}},
+                {"$project": {"msg_count": {"$size": {"$ifNull": ["$messages", []]}}}},
+                {"$group": {"_id": None, "total": {"$sum": "$msg_count"}}}
+            ]
+            res = await db.conversations.aggregate(pipeline).to_list(1)
+            day_data[p] = res[0]["total"] if res else 0
+        days.append(day_data)
+    return days
+
 @api_router.get("/analytics/llm-usage")
 async def analytics_llm_usage(instance_id: str = Depends(get_instance_access)):
     """API usage, retry attempts, fallbacks and error breakdown for the selected instance."""

@@ -84,7 +84,7 @@ async def _set_webhook(token: str, instance_id: str, webhook_secret: str):
         raise HTTPException(status_code=500, detail="Cannot determine public URL for webhook registration")
 
     webhook_url = f"{base_url}/api/telegram/webhook/{instance_id}/{webhook_secret}"
-    await _tg_request(token, "setWebhook", {"url": webhook_url, "allowed_updates": ["message"]})
+    await _tg_request(token, "setWebhook", {"url": webhook_url, "allowed_updates": ["message", "callback_query"]})
     logger.info(f"Telegram webhook set for instance {instance_id[:12]}: {webhook_url}")
 
 
@@ -224,11 +224,40 @@ async def test_telegram_token(request: Request):
         raise HTTPException(status_code=400, detail=f"Token test failed: {str(e)}")
 
 
+# Telegram-specific system prompt addition for contextual follow-up buttons
+TELEGRAM_FOLLOWUP_INSTRUCTION = """
+
+TELEGRAM FOLLOW-UP SUGGESTIONS (IMPORTANT):
+When your answer naturally invites related questions, include 1-3 short follow-up suggestions at the very end of your response on a new line, using this EXACT format:
+[SUGGESTIONS: suggestion one | suggestion two | suggestion three]
+
+Rules:
+- Only include suggestions when they add genuine value (e.g., after explaining a concept, showing data, or answering a factual question).
+- Do NOT include suggestions for simple greetings, acknowledgements, or when the conversation is clearly ending.
+- Each suggestion must be a natural short question (max 40 chars) the user might logically ask next.
+- The [SUGGESTIONS: ...] line must be the LAST line of your response. Do not put anything after it.
+- If no follow-ups are appropriate, simply omit the [SUGGESTIONS: ...] line entirely.
+"""
+
+
+def _parse_suggestions(response: str):
+    """Extract follow-up suggestions from LLM response. Returns (clean_text, suggestions_list)."""
+    import re
+    pattern = r'\[SUGGESTIONS:\s*(.+?)\]\s*$'
+    match = re.search(pattern, response, re.DOTALL)
+    if not match:
+        return response, []
+    suggestions_raw = match.group(1).strip()
+    suggestions = [s.strip() for s in suggestions_raw.split("|") if s.strip()][:3]
+    clean_text = response[:match.start()].rstrip()
+    return clean_text, suggestions
+
+
 # ────────────────── Webhook Handler ──────────────────
 
 @router.post("/telegram/webhook/{instance_id}/{webhook_secret}")
 async def telegram_webhook(instance_id: str, webhook_secret: str, request: Request):
-    """Receive and process incoming Telegram messages."""
+    """Receive and process incoming Telegram messages and callback queries."""
     cfg = await _db.telegram_config.find_one({"instance_id": instance_id})
     if not cfg:
         raise HTTPException(status_code=404, detail="Not found")
@@ -241,6 +270,17 @@ async def telegram_webhook(instance_id: str, webhook_secret: str, request: Reque
         update = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    # Handle callback queries (inline button taps)
+    callback_query = update.get("callback_query")
+    if callback_query:
+        import asyncio
+        asyncio.create_task(_handle_callback_query(
+            instance_id=instance_id,
+            callback_query=callback_query,
+            bot_token=cfg["bot_token"],
+        ))
+        return {"ok": True}
 
     message = update.get("message")
     if not message:
@@ -301,6 +341,36 @@ async def telegram_webhook(instance_id: str, webhook_secret: str, request: Reque
     return {"ok": True}
 
 
+async def _handle_callback_query(instance_id: str, callback_query: dict, bot_token: str):
+    """Handle inline button taps — treat the button text as a new question."""
+    cb_id = callback_query.get("id")
+    data = callback_query.get("data", "")
+    chat = callback_query.get("message", {}).get("chat", {})
+    chat_id = chat.get("id")
+    from_user = callback_query.get("from", {})
+    username = from_user.get("username", from_user.get("first_name", "Unknown"))
+    user_id = str(from_user.get("id", ""))
+
+    # Acknowledge the callback to remove the loading spinner
+    try:
+        await _tg_request(bot_token, "answerCallbackQuery", {"callback_query_id": cb_id})
+    except Exception:
+        pass
+
+    if not data or not chat_id:
+        return
+
+    # Process the follow-up question through the full AI pipeline
+    await _process_telegram_message(
+        instance_id=instance_id,
+        chat_id=chat_id,
+        user_text=data,
+        username=username,
+        user_id=user_id,
+        bot_token=bot_token,
+    )
+
+
 async def _process_telegram_message(
     instance_id: str, chat_id: int, user_text: str,
     username: str, user_id: str, bot_token: str, message_id: int = None,
@@ -334,21 +404,27 @@ async def _process_telegram_message(
                 api_context=api_context, api_sources=api_sources,
                 has_api_integrations=has_api_integrations,
             )
+            # Append Telegram follow-up instruction
+            system_prompt += TELEGRAM_FOLLOWUP_INSTRUCTION
             response = await _call_claude(session_id, user_text, system_prompt,
                                           instance_id=instance_id, platform="telegram")
 
-        # Save conversation
+        # Parse follow-up suggestions from the response
+        clean_response, suggestions = _parse_suggestions(response)
+
+        # Save conversation (store the clean version)
         await _save_conversation(
             session_id=session_id,
             user_message=user_text,
-            bot_response=response,
+            bot_response=clean_response,
             platform="telegram",
             instance_id=instance_id,
             metadata={"username": username, "user_id": user_id, "chat_id": str(chat_id)},
         )
 
-        # Send reply
-        await _send_telegram_reply(bot_token, chat_id, response, reply_to=message_id)
+        # Send reply with inline keyboard if suggestions exist
+        await _send_telegram_reply(bot_token, chat_id, clean_response,
+                                   reply_to=message_id, suggestions=suggestions)
 
     except Exception as e:
         logger.error(f"Telegram message processing error (instance={instance_id}): {e}", exc_info=True)
@@ -362,8 +438,9 @@ async def _process_telegram_message(
             pass
 
 
-async def _send_telegram_reply(token: str, chat_id: int, text: str, reply_to: int = None):
-    """Send a message back to Telegram. Handles long messages by splitting."""
+async def _send_telegram_reply(token: str, chat_id: int, text: str,
+                                reply_to: int = None, suggestions: list = None):
+    """Send a message back to Telegram with optional inline keyboard buttons."""
     MAX_LEN = 4096
     chunks = [text[i:i+MAX_LEN] for i in range(0, len(text), MAX_LEN)] if len(text) > MAX_LEN else [text]
 
@@ -371,6 +448,11 @@ async def _send_telegram_reply(token: str, chat_id: int, text: str, reply_to: in
         data = {"chat_id": chat_id, "text": chunk, "parse_mode": "Markdown"}
         if reply_to and i == 0:
             data["reply_to_message_id"] = reply_to
+        # Add inline keyboard to the last chunk if suggestions exist
+        if suggestions and i == len(chunks) - 1:
+            buttons = [{"text": s, "callback_data": s} for s in suggestions]
+            # Stack buttons vertically for readability
+            data["reply_markup"] = {"inline_keyboard": [[btn] for btn in buttons]}
         try:
             await _tg_request(token, "sendMessage", data)
         except Exception:
