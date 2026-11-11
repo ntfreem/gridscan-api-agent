@@ -30,6 +30,7 @@ import resend
 
 import api_integrations_routes
 import api_diagnostics_routes
+import telegram_routes
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
 ROOT_DIR = Path(__file__).parent
@@ -393,6 +394,15 @@ def _init_diagnostics():
         build_auth_params_fn=api_integrations_routes._build_auth_params,
     )
 api_router.include_router(api_diagnostics_routes.router)
+
+# Telegram routes — initialised with real pipeline functions (deferred until they're defined)
+def _init_telegram():
+    telegram_routes.init_telegram_routes(
+        db, require_admin, _get_instance_from_request,
+        search_knowledge, build_system_prompt, call_claude,
+        save_conversation, get_tone_examples_text, _try_api_query,
+    )
+api_router.include_router(telegram_routes.router)
 
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
@@ -2094,6 +2104,10 @@ async def startup_event():
     _init_diagnostics()
     await db.api_diagnostics_history.create_index([("instance_id", 1), ("timestamp", -1)])
     await db.api_diagnostics_history.create_index([("integration_id", 1), ("timestamp", -1)])
+
+    # Initialise Telegram routes (deferred — same reason)
+    _init_telegram()
+    await db.telegram_config.create_index([("instance_id", 1)], unique=True)
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task

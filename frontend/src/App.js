@@ -25,6 +25,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import Docs from "@/pages/Docs";
 import ApiIntegrations from "@/pages/ApiIntegrations";
 import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
+import TelegramSettings from "@/pages/TelegramSettings";
 import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
 import "@/App.css";
 
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="embed" element={<EmbedCode />} />
         <Route path="api-integrations" element={<ApiIntegrations />} />
         <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
+        <Route path="telegram" element={<TelegramSettings />} />
         <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>

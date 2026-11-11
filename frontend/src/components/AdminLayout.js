@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
-  BarChart2, Zap, Code2, ExternalLink, Bot, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity
+  BarChart2, Zap, Code2, ExternalLink, Bot, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity, Send
 } from "lucide-react";
 import { useState } from "react";
 import { colors, fonts, radius } from "@/theme";
@@ -13,6 +13,7 @@ const ALL_NAV_ITEMS = [
   { path: "/admin/users", label: "Assign Users", icon: Users, adminOnly: true },
   { path: "/admin/settings", label: "Bot Settings", icon: Settings },
   { path: "/admin/discord", label: "Discord Channel", icon: Zap },
+  { path: "/admin/telegram", label: "Telegram", icon: Send },
   { path: "/admin/knowledge", label: "Knowledge Base", icon: BookOpen },
   { path: "/admin/conversations", label: "Conversations", icon: MessageSquare },
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
