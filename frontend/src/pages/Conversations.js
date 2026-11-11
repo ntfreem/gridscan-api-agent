@@ -6,11 +6,13 @@ import { CheckCircle, Trash2, X, ChevronRight, Lightbulb, Search, RefreshCw } fr
 import { colors, fonts, T } from "../theme";
 
 function PlatformBadge({ platform }) {
-  const c = platform === "discord"
-    ? { bg: "rgba(88,101,242,0.12)", text: colors.brand.discord }
-    : platform === "api"
-    ? { bg: "rgba(52,211,153,0.12)", text: colors.brand.success }
-    : { bg: "rgba(59,130,246,0.12)", text: colors.brand.blue };
+  const map = {
+    discord: { bg: "rgba(88,101,242,0.12)", text: colors.brand.discord },
+    telegram: { bg: "rgba(0,136,204,0.12)", text: "#0088CC" },
+    api: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA" },
+    web: { bg: "rgba(59,130,246,0.12)", text: colors.brand.blue },
+  };
+  const c = map[platform] || map.web;
   return <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontFamily: fonts.mono, textTransform: "uppercase", letterSpacing: "0.05em", backgroundColor: c.bg, color: c.text }}>{platform}</span>;
 }
 
@@ -194,6 +196,8 @@ export default function Conversations() {
         <button data-testid="filter-all" onClick={() => setFilter({ platform: "", approved: "" })} style={filterBtn(colors.text.secondary, !filter.platform && filter.approved === "")}>All</button>
         <button data-testid="filter-web" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "web" ? "" : "web" }))} style={filterBtn(colors.brand.blue, filter.platform === "web")}>Web</button>
         <button data-testid="filter-discord" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "discord" ? "" : "discord" }))} style={filterBtn(colors.brand.discord, filter.platform === "discord")}>Discord</button>
+        <button data-testid="filter-telegram" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "telegram" ? "" : "telegram" }))} style={filterBtn("#0088CC", filter.platform === "telegram")}>Telegram</button>
+        <button data-testid="filter-api" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "api" ? "" : "api" }))} style={filterBtn("#A78BFA", filter.platform === "api")}>API</button>
         <button data-testid="filter-approved" onClick={() => setFilter(p => ({ ...p, approved: p.approved === "true" ? "" : "true" }))} style={filterBtn(colors.brand.success, filter.approved === "true")}>Approved</button>
         <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{total} total</span>
       </div>
