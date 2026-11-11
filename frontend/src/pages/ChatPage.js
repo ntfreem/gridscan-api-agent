@@ -1,12 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { Bot, Send, Plus, ExternalLink } from "lucide-react";
+import { Bot, Send, Plus, ExternalLink, Copy, Check } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { colors, fonts } from "../theme";
 import { streamChat } from "../utils/streamChat";
 import MarkdownMessage from "../components/MarkdownMessage";
 
 const API = `/api`;
+
+function BubbleCopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
+  const go = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  }, [text]);
+  return (
+    <button onClick={go} data-testid="bubble-copy-btn" title={copied ? "Copied" : "Copy message"}
+      style={{
+        opacity: 0, transition: "opacity 0.15s", background: "none", border: "none", cursor: "pointer",
+        padding: "3px", color: copied ? "#34D399" : "rgba(148,163,184,0.45)", flexShrink: 0,
+        marginTop: "6px", marginLeft: "6px", borderRadius: "4px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      className="bb-pcopy"
+    >
+      {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
+    </button>
+  );
+}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]);
@@ -105,6 +125,7 @@ export default function ChatPage() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: colors.bg.base, display: "flex", flexDirection: "column" }}>
+      <style>{`.bb-prow:hover .bb-pcopy { opacity: 1 !important; } .bb-pcopy:hover { color: ${colors.brand.cyan} !important; }`}</style>
       {/* Header */}
       <div style={{
         backgroundColor: "rgba(5,11,20,0.85)", backdropFilter: "blur(16px)",
@@ -172,8 +193,8 @@ export default function ChatPage() {
         )}
 
         {messages.map((msg, i) => (
-          <div key={`${msg.role}-${msg.timestamp || i}`} className="message-enter"
-            style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: "16px" }}>
+          <div key={`${msg.role}-${msg.timestamp || i}`} className="message-enter bb-prow"
+            style={{ display: "flex", alignItems: "flex-start", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: "16px" }}>
             {msg.role === "assistant" && (
               <div style={{
                 width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
@@ -202,6 +223,9 @@ export default function ChatPage() {
                 {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
               </p>
             </div>
+            {msg.role === "assistant" && !msg.isStreaming && msg.content && (
+              <BubbleCopyBtn text={msg.content} />
+            )}
           </div>
         ))}
 

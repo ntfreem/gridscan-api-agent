@@ -742,7 +742,50 @@ def build_system_prompt(bot_config: dict, knowledge_context: str = "", tone_exam
         "- For long hashes, addresses, or IDs, wrap them in inline code backticks: `addr1q9h7m...spn0ukd`\n"
         "  and truncate with ellipsis in the middle if very long.\n"
         "- Break long responses into sections with **bold headers** instead of H1/H2 headings.\n"
-        "- Keep code blocks short. For long JSON, show only the relevant fields."
+        "- Keep code blocks short. For long JSON, show only the relevant fields.\n\n"
+
+        "FORMATTING — RICH BLOCKCHAIN DATA CARDS:\n"
+        "When presenting blockchain data (transactions, blocks, addresses, UTXOs, assets, stake pools, epochs, governance), "
+        "use this structured card format for EACH item:\n\n"
+
+        "1. **Section Header** — Start with a bold title + summary stats on one line:\n"
+        "   **🔗 Transaction Outputs** · 3 outputs · 15.34 ADA total\n\n"
+
+        "2. **Individual Items** — For each output, token, pool, etc., use this pattern:\n"
+        "   ---\n"
+        "   **OUTPUT #0** · `Script address`\n\n"
+        "   **90,764,188,442**\n"
+        "   NIGHT · raw units\n\n"
+        "   + 1.930880 ADA · Inline datum present\n\n"
+        "   Use large bold numbers for the primary value (token amount, ADA balance, block height, etc.).\n"
+        "   Put unit/token name on the next line in plain text.\n"
+        "   Add secondary info (ADA value, datum, fees) as a + prefixed line.\n\n"
+
+        "3. **Technical Details** — Group addresses, hashes, policy IDs under a bold sub-header:\n"
+        "   **Address & technical details**\n\n"
+        "   **Address:** `addr1wxgp2xvmvh0lrfdeu2q3jtqp2lprej6hjvgjx2u5lcwqxlqfvty7h`\n\n"
+        "   **Policy:** `0691b2fecca1ac4f53cb6dfb00b7013e561d1f34403b957cbb5af1fa`\n\n"
+        "   **Asset-name hex:** `4e49474854383534`\n\n"
+        "   Use code backticks for ALL hashes, addresses, policy IDs, and hex values.\n"
+        "   Truncate addresses longer than 60 chars with ellipsis in the middle: `addr1q9h7m...spn0ukd`\n\n"
+
+        "4. **Badges** — Use inline code for type labels:\n"
+        "   `Script address` `Wallet address` `Stake pool` `DRep` `Governance action`\n\n"
+
+        "5. **Insights** — Add helpful notes at the end:\n"
+        "   > Outputs #1 and #2 share a stake address.\n\n"
+
+        "6. **Disclaimers** — End with any relevant notes in italic:\n"
+        "   *Token quantities shown as supplied; decimals unverified.*\n\n"
+
+        "7. **Separators** — Use `---` between individual items (outputs, transactions, assets).\n\n"
+
+        "8. **Numbers** — Format large numbers with commas: 90,764,188,442 not 90764188442.\n"
+        "   Show ADA with up to 6 decimal places. Show lovelace as integer.\n\n"
+
+        "Apply this formatting pattern CONSISTENTLY whenever you present structured blockchain data "
+        "from API responses. Adapt the pattern to fit the data type (transactions use outputs, "
+        "blocks use slot/height/hash, pools use ticker/margin/pledge, etc.)."
     )
 
     # Anti-fabrication rule — always included

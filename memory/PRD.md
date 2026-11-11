@@ -117,14 +117,6 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
   - 3 embed methods: Popup Widget, Inline Embed, Full Page
   - Direct URLs section with full theme query strings
 
-## Backlog
-- P0: ~~API Key Usage Analytics — Add integration usage stats~~ ✅ DONE (Nov 2026)
-- P0: ~~API Key Analytics — Per-key integration breakdown with dates and call counts~~ ✅ DONE (Nov 2026)
-- P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
-- P2: Refactor server.py into modular route files (/routes, /models, /services)
-- P2: APP_MODE env splitting (worker vs api)
-- P2: Multi-server Discord feature
-
 ### Phase 13 — Integration Usage Analytics (Nov 2026)
 - **New Backend Endpoint**: `GET /api/admin/integration-usage-analytics?days=N` aggregates data from `api_request_logs` collection. Returns per-integration breakdown (name, calls, success/fail, avg latency, data transferred, success rate), daily call timeline, top endpoints by call count, error breakdown, and recent request log.
 - **Unified Usage Analytics Page**: Renamed "API Key Usage" page header to "Usage Analytics". Below existing API key analytics, added "External Integration Usage" collapsible section showing:
@@ -135,13 +127,11 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
   - Integration Errors section
   - Recent Integration Calls log with timestamps, integration names, endpoints, HTTP status badges, latency
 
-
 ### Phase 14 — Custom Welcome Message & Auto-Expand Widget (Nov 2026)
 - **Widget Behavior Config**: Added `welcome_message` (string) and `default_open` (boolean) to `embed_configs` collection. Backend `EmbedConfigUpdate` model accepts both fields. `GET /api/embed/config/{id}` returns them; `PUT /api/admin/embed-config` saves them.
 - **embed.js Enhancements**: Added `data-welcome` and `data-open` attribute support. Script fetches config from `/api/embed/config/{id}` for server-saved values. When `data-open="true"` or config has `default_open`, popup auto-expands on page load.
 - **ChatWidget.js**: Reads `welcome` URL param and displays it as the initial bot message (rendered with markdown). Falls back to embed config `welcome_message`. Old static "Hi! How can I help?" replaced with configurable greeting.
 - **EmbedCode.js Admin UI**: New "Widget Behavior" card above Theme Configurator with Expand on Load toggle, Welcome Message textarea (markdown), and Save Configuration button.
-
 
 ### Phase 15 — Bot Logo / Avatar Upload (Nov 2026)
 - **Object Storage**: Integrated Emergent Managed Object Storage for file uploads. Init on startup with `CLAUDE_API_KEY`.
@@ -149,3 +139,18 @@ Chat endpoints (`/chat/send`, `/chat/stream`) defaulted `instance_id` to `"defau
 - **Bot Settings UI**: New "Bot Avatar" section in Identity card. Shows avatar preview, Upload/Replace, Remove, and "Sync to Discord" buttons.
 - **ChatWidget**: Logo replaces default Bot icon in header avatar, bot message avatars, typing indicator, and empty state. Falls back to Bot icon when no logo uploaded.
 - **embed.js**: Trigger button probes `/api/bot-logo/{instance}` on load; shows logo if available, falls back to chat SVG.
+
+### Phase 16 — Rich Markdown Formatting for API Responses (Nov 2026)
+- Enhanced `MarkdownMessage.js` and backend prompt to output rich, card-style markdown (separators, large metrics, blockquotes) for blockchain data from Gridscan API.
+
+### Phase 17 — Copy Button UX Fix (Nov 2026)
+- Replaced oversized "Copy" text button with a minimal 12px clipboard icon outside the message bubble
+- Shows on hover only, turns green checkmark on successful copy
+- Applied to both ChatPage (admin demo) and ChatWidget (embed)
+- Code-block copy button also reduced to icon-only (removed text label)
+
+## Backlog
+- P1: Scope and integrate Telegram, WhatsApp, and Zendesk channels
+- P2: Refactor server.py into modular route files (/routes, /models, /services)
+- P2: APP_MODE env splitting (worker vs api)
+- P2: Multi-server Discord feature

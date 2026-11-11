@@ -16,17 +16,16 @@ function CopyButton({ text }) {
     <button onClick={copy} data-testid="copy-code-btn"
       style={{
         position: "absolute", top: "6px", right: "6px",
-        display: "flex", alignItems: "center", gap: "4px",
-        padding: "3px 8px", borderRadius: "6px", cursor: "pointer",
-        fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "4px", borderRadius: "4px", cursor: "pointer",
         background: copied ? "rgba(52,211,153,0.15)" : "rgba(148,163,184,0.1)",
-        color: copied ? "#34D399" : "rgba(148,163,184,0.7)",
-        border: `1px solid ${copied ? "rgba(52,211,153,0.3)" : "rgba(148,163,184,0.15)"}`,
+        color: copied ? "#34D399" : "rgba(148,163,184,0.5)",
+        border: "none",
         transition: "all 0.2s ease",
       }}
+      title={copied ? "Copied" : "Copy code"}
     >
-      {copied ? <Check size={10} /> : <Copy size={10} />}
-      {copied ? "Copied" : "Copy"}
+      {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
     </button>
   );
 }
@@ -186,7 +185,12 @@ export default function MarkdownMessage({ content, isUser, compact }) {
             </td>
           ),
           hr: () => (
-            <hr style={{ border: "none", borderTop: "1px solid rgba(148,163,184,0.15)", margin: "12px 0" }} />
+            <hr style={{
+              border: "none", margin: "14px 0", padding: 0,
+              borderTop: "1px solid rgba(148,163,184,0.12)",
+              background: "linear-gradient(90deg, rgba(96,165,250,0.2) 0%, rgba(148,163,184,0.08) 50%, transparent 100%)",
+              height: "1px",
+            }} />
           ),
         }}
       >

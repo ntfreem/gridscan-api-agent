@@ -1,11 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { Bot, Send, RotateCcw } from "lucide-react";
+import { Bot, Send, RotateCcw, Copy, Check } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { streamChat } from "../utils/streamChat";
 import MarkdownMessage from "../components/MarkdownMessage";
 
 const API = `/api`;
+
+function BubbleCopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
+  const go = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+  }, [text]);
+  return (
+    <button onClick={go} data-testid="bubble-copy-btn" className="bb-bubble-copy" title={copied ? "Copied" : "Copy message"}>
+      {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
+    </button>
+  );
+}
 
 export default function ChatWidget() {
   const [messages, setMessages] = useState([]);
@@ -284,10 +296,19 @@ export default function ChatWidget() {
           font-size: 13px; color: var(--bb-text-secondary);
         }
         .bb-msg-row {
-          display: flex; margin-bottom: 10px;
+          display: flex; margin-bottom: 10px; align-items: flex-start;
         }
         .bb-msg-row.user { justify-content: flex-end; }
         .bb-msg-row.bot { justify-content: flex-start; }
+        .bb-bubble-copy {
+          opacity: 0; transition: opacity 0.15s;
+          background: none; border: none; cursor: pointer; padding: 3px;
+          color: var(--bb-text-secondary, rgba(148,163,184,0.5));
+          flex-shrink: 0; margin-top: 6px; margin-left: 4px; border-radius: 4px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .bb-bubble-copy:hover { color: var(--bb-accent-light, #60A5FA); }
+        .bb-msg-row:hover .bb-bubble-copy { opacity: 1; }
         .bb-msg-avatar {
           width: 22px; height: 22px;
           background: var(--bb-accent);
@@ -452,6 +473,9 @@ export default function ChatWidget() {
                   {msg.isStreaming && <span className="bb-stream-cursor" />}
                 </div>
               </div>
+              {msg.role === "assistant" && !msg.isStreaming && msg.content && (
+                <BubbleCopyBtn text={msg.content} />
+              )}
             </div>
           ))}
 
