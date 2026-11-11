@@ -521,7 +521,7 @@ function IntegrationUsageSection({ days }) {
       >
         {expanded ? <ChevronDown size={16} color={colors.text.muted} /> : <ChevronRight size={16} color={colors.text.muted} />}
         <Globe size={16} color={colors.brand.primary} />
-        <h2 style={{ ...T.h2, margin: 0, fontSize: "16px" }} data-testid="integration-usage-title">External Integration Usage</h2>
+        <h2 style={{ ...T.h2, margin: 0, fontSize: "16px" }} data-testid="integration-usage-title">Integration API Key Usage</h2>
         <span style={{
           fontFamily: fonts.mono, fontSize: "10px", padding: "2px 8px", borderRadius: radius.full,
           backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary,
@@ -789,17 +789,37 @@ export default function ApiKeyAnalytics() {
         </div>
       </div>
 
-      {/* Key overview cards */}
+      {/* ── Integration API Key Usage (TOP) ── */}
+      <IntegrationUsageSection days={days} />
+
+      {/* ── BridgeBot API Keys ── */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "48px", color: colors.text.muted }}>Loading...</div>
       ) : keys.length === 0 ? (
-        <div style={{ ...T.card, textAlign: "center", padding: "48px" }}>
-          <Key size={40} color={colors.text.muted} style={{ marginBottom: "12px" }} />
-          <p style={{ color: colors.text.secondary, fontSize: "14px", marginBottom: "4px" }}>No API keys found.</p>
-          <p style={{ color: colors.text.muted, fontSize: "12px" }}>Create API keys in Bot Settings to enable external chat access and usage tracking.</p>
+        <div style={{
+          marginTop: "24px", borderTop: `1px solid ${colors.border.muted}`, paddingTop: "20px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+            <Key size={15} color={colors.text.muted} />
+            <h2 style={{ ...T.h2, margin: 0, fontSize: "14px", color: colors.text.muted }}>Inbound API Keys</h2>
+          </div>
+          <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 0 23px" }}>
+            No API keys created yet. Create keys in Bot Settings to let external apps chat with your bot via the <code style={{ fontSize: "11px" }}>/v1/chat</code> endpoint.
+          </p>
         </div>
       ) : (
-        <>
+        <div style={{ marginTop: "24px", borderTop: `1px solid ${colors.border.muted}`, paddingTop: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+            <Key size={15} color={colors.brand.primary} />
+            <h2 style={{ ...T.h2, margin: 0, fontSize: "14px" }}>Inbound API Keys</h2>
+            <span style={{
+              fontFamily: fonts.mono, fontSize: "10px", padding: "2px 8px", borderRadius: radius.full,
+              backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary,
+            }}>
+              {keys.length} keys
+            </span>
+          </div>
+          <>
           {/* Overview grid — compact summary per key */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "12px", marginBottom: "20px" }}>
             {keys.map(k => {
@@ -869,12 +889,8 @@ export default function ApiKeyAnalytics() {
           {/* Detailed view */}
           {selectedKey && <AnalyticsDetail keyId={selectedKey} days={days} />}
         </>
+        </div>
       )}
-
-      {/* ── External Integration Usage ── */}
-      <div style={{ marginTop: "28px", borderTop: `1px solid ${colors.border.muted}`, paddingTop: "24px" }}>
-        <IntegrationUsageSection days={days} />
-      </div>
     </div>
   );
 }
