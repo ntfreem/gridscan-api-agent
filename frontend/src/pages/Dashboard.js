@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { MessageSquare, BookOpen, CheckCircle, Zap, Globe, Send, Monitor, Code2 } from "lucide-react";
+import { MessageSquare, BookOpen, CheckCircle, Zap, Globe, Send, Monitor, Code2, Headphones } from "lucide-react";
 import { colors, fonts, radius, T, rowEnter, rowLeave } from "../theme";
 
 function StatCard({ title, value, icon: Icon, color }) {
@@ -36,6 +36,7 @@ const PLATFORMS = [
   { key: "discord", label: "Discord", icon: Monitor, color: "#5865F2" },
   { key: "telegram", label: "Telegram", icon: Send, color: "#0088CC" },
   { key: "api", label: "API", icon: Code2, color: "#A78BFA" },
+  { key: "zendesk", label: "Zendesk", icon: Headphones, color: "#03363D" },
 ];
 
 function PlatformCard({ label, icon: Icon, color, value }) {
@@ -65,7 +66,7 @@ function PlatformCard({ label, icon: Icon, color, value }) {
 function TrendChart({ data }) {
   if (!data || data.length === 0) return null;
 
-  const platformColors = { web: "#60A5FA", discord: "#5865F2", telegram: "#0088CC", api: "#A78BFA" };
+  const platformColors = { web: "#60A5FA", discord: "#5865F2", telegram: "#0088CC", api: "#A78BFA", zendesk: "#03363D" };
   const maxVal = Math.max(1, ...data.map(d => Math.max(d.web || 0, d.discord || 0, d.telegram || 0, d.api || 0)));
   const chartH = 140;
   const barW = 8;
@@ -118,6 +119,7 @@ function PlatformBadge({ platform }) {
     telegram: { bg: "rgba(0,136,204,0.12)", text: "#0088CC" },
     web: { bg: "rgba(59,130,246,0.12)", text: colors.brand.primary },
     api: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA" },
+    zendesk: { bg: "rgba(3,54,61,0.12)", text: "#03363D" },
   };
   const c = map[platform] || map.web;
   return (

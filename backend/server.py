@@ -31,6 +31,7 @@ import resend
 import api_integrations_routes
 import api_diagnostics_routes
 import telegram_routes
+import zendesk_routes
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
 ROOT_DIR = Path(__file__).parent
@@ -403,6 +404,15 @@ def _init_telegram():
         save_conversation, get_tone_examples_text, _try_api_query,
     )
 api_router.include_router(telegram_routes.router)
+
+# Zendesk routes — initialised with real pipeline functions (deferred)
+def _init_zendesk():
+    zendesk_routes.init_zendesk_routes(
+        db, _get_instance_from_request,
+        search_knowledge, build_system_prompt, call_claude,
+        save_conversation, get_tone_examples_text, _try_api_query,
+    )
+api_router.include_router(zendesk_routes.router)
 
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
@@ -2108,6 +2118,12 @@ async def startup_event():
     # Initialise Telegram routes (deferred — same reason)
     _init_telegram()
     await db.telegram_config.create_index([("instance_id", 1)], unique=True)
+
+    # Initialise Zendesk routes
+    _init_zendesk()
+    await db.zendesk_config.create_index([("instance_id", 1)], unique=True)
+    await db.zendesk_suggestions.create_index([("instance_id", 1), ("ticket_id", 1)], unique=True)
+    await db.zendesk_events.create_index([("instance_id", 1), ("event_id", 1)], unique=True)
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task
@@ -5133,10 +5149,11 @@ async def analytics_overview(instance_id: str = Depends(get_instance_access)):
     discord_count = await db.conversations.count_documents({**q, "platform": "discord"})
     telegram_count = await db.conversations.count_documents({**q, "platform": "telegram"})
     api_count = await db.conversations.count_documents({**q, "platform": "api"})
+    zendesk_count = await db.conversations.count_documents({**q, "platform": "zendesk"})
     return {
         "total_conversations": total_convs, "total_messages": total_messages,
         "approved_for_training": approved_training, "knowledge_sources": knowledge_count,
-        "platform_breakdown": {"web": web_count, "discord": discord_count, "telegram": telegram_count, "api": api_count}
+        "platform_breakdown": {"web": web_count, "discord": discord_count, "telegram": telegram_count, "api": api_count, "zendesk": zendesk_count}
     }
 @api_router.get("/analytics/daily")
 async def analytics_daily(instance_id: str = Depends(get_instance_access)):
@@ -5164,7 +5181,7 @@ async def analytics_daily(instance_id: str = Depends(get_instance_access)):
 async def analytics_daily_by_platform(instance_id: str = Depends(get_instance_access)):
     """Daily message counts broken down by platform for the last 7 days."""
     now = datetime.now(timezone.utc)
-    platforms = ["web", "discord", "telegram", "api"]
+    platforms = ["web", "discord", "telegram", "api", "zendesk"]
     days = []
     for i in range(6, -1, -1):
         day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)

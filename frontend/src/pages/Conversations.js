@@ -10,6 +10,7 @@ function PlatformBadge({ platform }) {
     discord: { bg: "rgba(88,101,242,0.12)", text: colors.brand.discord },
     telegram: { bg: "rgba(0,136,204,0.12)", text: "#0088CC" },
     api: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA" },
+    zendesk: { bg: "rgba(3,54,61,0.15)", text: "#17A589" },
     web: { bg: "rgba(59,130,246,0.12)", text: colors.brand.blue },
   };
   const c = map[platform] || map.web;
@@ -198,6 +199,7 @@ export default function Conversations() {
         <button data-testid="filter-discord" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "discord" ? "" : "discord" }))} style={filterBtn(colors.brand.discord, filter.platform === "discord")}>Discord</button>
         <button data-testid="filter-telegram" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "telegram" ? "" : "telegram" }))} style={filterBtn("#0088CC", filter.platform === "telegram")}>Telegram</button>
         <button data-testid="filter-api" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "api" ? "" : "api" }))} style={filterBtn("#A78BFA", filter.platform === "api")}>API</button>
+        <button data-testid="filter-zendesk" onClick={() => setFilter(p => ({ ...p, platform: p.platform === "zendesk" ? "" : "zendesk" }))} style={filterBtn("#17A589", filter.platform === "zendesk")}>Zendesk</button>
         <button data-testid="filter-approved" onClick={() => setFilter(p => ({ ...p, approved: p.approved === "true" ? "" : "true" }))} style={filterBtn(colors.brand.success, filter.approved === "true")}>Approved</button>
         <span style={{ marginLeft: "auto", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>{total} total</span>
       </div>

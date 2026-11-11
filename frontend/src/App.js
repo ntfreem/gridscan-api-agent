@@ -26,6 +26,7 @@ import Docs from "@/pages/Docs";
 import ApiIntegrations from "@/pages/ApiIntegrations";
 import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
 import TelegramSettings from "@/pages/TelegramSettings";
+import ZendeskSettings from "@/pages/ZendeskSettings";
 import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
 import "@/App.css";
 
@@ -80,6 +81,7 @@ function AppRoutes() {
         <Route path="api-integrations" element={<ApiIntegrations />} />
         <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
         <Route path="telegram" element={<TelegramSettings />} />
+        <Route path="zendesk" element={<ZendeskSettings />} />
         <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>
