@@ -135,7 +135,7 @@ export default function ChatPage() {
         position: "sticky", top: 0, zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <BridgeBotLogo size={28} />
+          <BridgeBotLogo size={36} />
           <div>
             <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.3px" }}>
               {botConfig.name || "BridgeBot Assistant"}
@@ -174,7 +174,7 @@ export default function ChatPage() {
             <div style={{
               margin: "0 auto 20px",
             }}>
-              <BridgeBotLogo size={56} />
+              <BridgeBotLogo size={64} />
             </div>
             <h2 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: "0 0 10px", letterSpacing: "-0.5px" }}>
               How can I help you?
@@ -189,7 +189,7 @@ export default function ChatPage() {
           <div key={`${msg.role}-${msg.timestamp || i}`} className="message-enter bb-prow"
             style={{ display: "flex", alignItems: "flex-start", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: "16px" }}>
             {msg.role === "assistant" && (
-              <BridgeBotLogo size={24} style={{ marginRight: "10px", flexShrink: 0, marginTop: "4px" }} />
+              <BridgeBotLogo size={30} style={{ marginRight: "10px", flexShrink: 0, marginTop: "4px" }} />
             )}
             <div style={{
               maxWidth: "72%", padding: "12px 16px", borderRadius: "12px",
@@ -218,7 +218,7 @@ export default function ChatPage() {
 
         {isLoading && !isStreaming && (
           <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }} data-testid="typing-indicator">
-            <BridgeBotLogo size={24} style={{ marginRight: "10px", flexShrink: 0 }} />
+            <BridgeBotLogo size={30} style={{ marginRight: "10px", flexShrink: 0 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ padding: "14px 18px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "5px", alignItems: "center" }}>
                 {[0, 1, 2].map(i => (

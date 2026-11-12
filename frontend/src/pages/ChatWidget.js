@@ -431,7 +431,7 @@ export default function ChatWidget() {
           <div className="bb-avatar">
             {logoUrl
               ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-              : <BridgeBotLogo size={16} />}
+              : <BridgeBotLogo size={22} />}
           </div>
           <div style={{ flex: 1 }}>
             <p className="bb-bot-name">{botConfig.name || "Assistant"}</p>
@@ -452,7 +452,7 @@ export default function ChatWidget() {
               <div className="bb-empty-icon">
                 {logoUrl
                   ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                  : <BridgeBotLogo size={22} />}
+                  : <BridgeBotLogo size={28} />}
               </div>
               <p className="bb-empty-title">Hi there!</p>
               <p className="bb-empty-sub">Type a message to get started.</p>
@@ -465,7 +465,7 @@ export default function ChatWidget() {
                 <div className="bb-msg-avatar">
                   {logoUrl
                     ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                    : <BridgeBotLogo size={11} />}
+                    : <BridgeBotLogo size={16} />}
                 </div>
               )}
               <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
@@ -485,7 +485,7 @@ export default function ChatWidget() {
               <div className="bb-msg-avatar">
                 {logoUrl
                   ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                  : <BridgeBotLogo size={11} />}
+                  : <BridgeBotLogo size={16} />}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                 <div className="bb-typing">

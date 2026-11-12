@@ -712,8 +712,8 @@ export default function Docs() {
       <div style={{ borderBottom: `1px solid ${colors.border.default}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
-            <BridgeBotLogo size={24} />
-            <span style={{ fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700", color: colors.text.primary }}>
+            <BridgeBotLogo size={40} />
+            <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
               Bridge<span style={{ color: colors.brand.light }}>Bot</span>
             </span>
           </Link>

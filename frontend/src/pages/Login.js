@@ -34,8 +34,8 @@ export default function Login() {
       <div style={{ width: "100%", maxWidth: "400px", fontFamily: fonts.body }}>
           {/* Logo — links home */}
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "40px", justifyContent: "center", textDecoration: "none" }}>
-            <BridgeBotLogo size={28} />
-            <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
+            <BridgeBotLogo size={44} />
+            <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
               Bridge<span style={{ color: colors.brand.light }}>Bot</span>
             </span>
           </Link>

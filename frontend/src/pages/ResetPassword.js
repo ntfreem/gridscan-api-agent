@@ -30,7 +30,7 @@ export default function ResetPassword() {
     <div style={{ minHeight: "100vh", backgroundColor: colors.bg.base, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fonts.body, padding: "20px" }}>
       <div style={{ width: "100%", maxWidth: "400px", backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: radius.xl, padding: "40px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", justifyContent: "center", textDecoration: "none" }}>
-          <BridgeBotLogo size={44} />
+          <BridgeBotLogo size={52} />
           <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>Bridge<span style={{ color: colors.brand.light }}>Bot</span></span>
         </Link>
         <h1 style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, textAlign: "center", margin: "0 0 8px" }}>Reset password</h1>

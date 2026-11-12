@@ -79,8 +79,8 @@ function InstanceRow({ instance, onRefresh }) {
     <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden", marginBottom: "8px", transition: "border-color 0.3s" }}>
       <div style={{ display: "flex", alignItems: "center", padding: "16px 20px", gap: "14px", cursor: "pointer" }}
         onClick={() => setExpanded(!expanded)}>
-        <div style={{ width: "40px", height: "40px", backgroundColor: "rgba(59,130,246,0.1)", border: `1px solid ${colors.border.default}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <BridgeBotLogo size={24} />
+        <div style={{ width: "46px", height: "46px", backgroundColor: "rgba(59,130,246,0.1)", border: `1px solid ${colors.border.default}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <BridgeBotLogo size={30} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>{instance.name}</p>
@@ -180,7 +180,7 @@ export default function Instances() {
 
       {instances.length === 0 ? (
         <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", padding: "48px", textAlign: "center" }}>
-          <BridgeBotLogo size={50} style={{ marginBottom: "16px" }} />
+          <BridgeBotLogo size={58} style={{ marginBottom: "16px" }} />
           <p style={{ color: colors.text.secondary, fontSize: "15px", fontFamily: fonts.body, marginBottom: "8px" }}>No instances yet</p>
           <p style={{ color: colors.text.muted, fontSize: "13px", fontFamily: fonts.body, marginBottom: "20px" }}>Create your first bot instance to get started</p>
           <button onClick={() => setShowCreate(true)} style={T.btnPrimary}><Plus size={15} /> Create First Instance</button>
