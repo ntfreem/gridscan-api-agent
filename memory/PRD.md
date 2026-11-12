@@ -46,33 +46,29 @@ Core platform, API integrations, LLM config, diagnostics, pipeline fixes, scrape
 - Updated PlatformBadge to support all 5 platforms with distinct colors
 
 ### Phase 22 — Zendesk Integration (Nov 2026)
-- **Backend**: New `zendesk_routes.py` module with:
-  - `GET /api/admin/zendesk-config` — Fetch per-instance config (token masked)
-  - `PUT /api/admin/zendesk-config` — Save/update credentials (validates against Zendesk API)
-  - `DELETE /api/admin/zendesk-config` — Disconnect and clean up
-  - `POST /api/admin/zendesk-config/test` — Test saved credentials
-  - `GET /api/admin/zendesk-config/webhook-url` — Return webhook URL for Zendesk trigger setup
-  - `GET /api/admin/zendesk-tickets` — Recent processed tickets
-  - `POST /api/zendesk/webhook/{instance_id}/{secret}` — Public webhook for new ticket events
-  - `GET /api/zendesk/suggestion/{instance_id}/{ticket_id}` — Public endpoint for ZAF sidebar app
+- **Backend**: New `zendesk_routes.py` module with config CRUD, webhook, auto-reply, agent-assist
 - **Auth**: API token auth (`email/token:token`) — validated via `/users/me.json`
-- **Auto-Reply Mode**: Posts public AI comment + internal audit note, tags `ai_processed` + `bridgebot`
-- **Agent-Assist Mode**: Stores AI suggestion in `zendesk_suggestions` collection for sidebar retrieval
-- **Both modes independently toggleable** by admin with visual toggle switches
-- **Event Deduplication**: `zendesk_events` collection prevents duplicate processing
-- **AI Pipeline**: Full BridgeBot pipeline (KB + APIs) + Zendesk-specific system prompt additions
-- **Frontend**: `ZendeskSettings.js` admin page with:
-  - Connection card (subdomain with `.zendesk.com` suffix, email, API token)
-  - Auto-Reply toggle with warning about public responses
-  - Agent-Assist toggle
-  - Active/Paused status toggle
-  - Webhook URL display with copy button
-  - Link to Zendesk Triggers page
-  - Recent Processed Tickets list with action badges
-  - "How It Works" guide
-- **Navigation**: "Zendesk" nav item with Headphones icon
-- **Dashboard**: Zendesk added to platform cards, trend chart, and platform breakdown
-- **Conversations**: Zendesk filter button added
+- **Auto-Reply Mode**: Posts public AI comment + internal audit note
+- **Agent-Assist Mode**: Stores AI suggestion for sidebar retrieval
+- **Frontend**: `ZendeskSettings.js` admin page with toggles, webhook URL, processed tickets
+
+### Phase 23 — Documentation, Onboarding & Changelog (Nov 2026)
+- Updated site documentation to reflect all new channels and architecture
+- Built Onboarding Wizard for guided first-time admin setup
+- Admin-editable Changelog page
+- Search bar on Docs page
+
+### Phase 24 — Homepage Redesign (Feb 2026)
+- **New marketing landing page** at root `/` route replacing the previous redirect to `/admin`
+- **File**: `/app/frontend/src/pages/LandingPage.js`
+- **11 sections**: Navbar, Hero, Channels, Knowledge Base, Live API Data, Zendesk, Widget Customization, Dashboard & Analytics, How It Works, FAQ, Final CTA, Footer
+- **Color palette**: Midnight Blue (#0B1020 bg, #131D30 surfaces, #2A3850 borders, #EDF3FF primary text, #A7B7D0 secondary, #3B82F6 action blue, #83ADFF electric highlights, #63E2EE cyan accents)
+- **Typography**: Outfit (headings), IBM Plex Sans (body), JetBrains Mono (mono)
+- **Interactive elements**: FAQ accordion, Zendesk mode toggle, Widget color picker
+- **CTAs**: All linked to existing routes (/register, /login, /chat, /docs)
+- **Responsive**: Mobile hamburger nav, grid layouts adapt at breakpoints
+- **Accessibility**: Reduced-motion support, keyboard-navigable, semantic HTML
+- **Testing**: 100% pass rate (25/25 tests) — all sections, CTAs, interactivity, and existing routes verified
 
 ## DB Collections (Zendesk)
 - `zendesk_config`: {instance_id (unique), subdomain, email, api_token, webhook_secret, auto_reply_enabled, agent_assist_enabled, is_active}
@@ -80,6 +76,7 @@ Core platform, API integrations, LLM config, diagnostics, pipeline fixes, scrape
 - `zendesk_events`: {instance_id, event_id (unique per instance), ticket_id, received_at}
 
 ## Backlog
+- P1: WhatsApp Integration (MUST use integration_playbook_expert_v2)
 - P2: Refactor server.py into modular route files (/routes, /models, /services)
 - P2: APP_MODE env splitting (worker vs api)
 - P2: Multi-server Discord feature

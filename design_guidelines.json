@@ -1,130 +1,195 @@
 {
-  "theme": "dark",
-  "archetype": "7 (Electric & Neon)",
-  "design_philosophy": {
-    "concept": "Tactical Futurism & Blue Legacy Tron",
-    "description": "A high-end, data-driven 'Control Room' interface blending Deep Navy and Void Black with Electric Cyan and Royal Blue glows. Emphasizes geometric simplicity, strict grids, and terminal-inspired aesthetics over generic SaaS layouts. The glow is earned through interactions.",
-    "key_traits": ["Sharp Corners", "Glowing Accents", "Monospace Tech Text", "Bento Grid Dashboard", "Neon Shadows"]
+  "project_name": "BridgeBot Homepage Redesign",
+  "archetype": "THE PERFORMANCE PRO / TECH PRECISION (Midnight Blue & Electric Accents)",
+  "context": "Marketing & SaaS Landing Page for BridgeBot AI Assistant Platform",
+  "theme": {
+    "mode": "dark",
+    "background": "#0B1020",
+    "elevated_surface": "#131D30",
+    "surface_secondary": "#1A263D",
+    "border": "#2A3850",
+    "border_glow": "rgba(59, 130, 246, 0.4)",
+    "primary_text": "#EDF3FF",
+    "secondary_text": "#A7B7D0",
+    "muted_text": "#6B7C96",
+    "primary_action": "#3B82F6",
+    "primary_action_hover": "#2563EB",
+    "electric_highlight": "#83ADFF",
+    "cyan_accent": "#63E2EE",
+    "success_accent": "#10B981",
+    "warning_accent": "#F59E0B"
   },
   "typography": {
-    "fonts": [
-      {
-        "role": "Headings",
-        "family": "Outfit",
-        "type": "sans-serif",
-        "classes": "font-sans tracking-tight"
-      },
-      {
-        "role": "Body",
-        "family": "IBM Plex Sans",
-        "type": "sans-serif",
-        "classes": "font-sans leading-relaxed"
-      },
-      {
-        "role": "Accents/Overlines",
-        "family": "JetBrains Mono",
-        "type": "monospace",
-        "classes": "font-mono tracking-[0.2em] uppercase text-xs"
-      }
-    ]
-  },
-  "colors": {
-    "background": {
-      "base": "#030712",
-      "surface": "#050B14",
-      "panel": "#0B132B",
-      "glass": "rgba(11, 19, 43, 0.6)"
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-none text-[#EDF3FF]",
+      "h2": "text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight leading-tight text-[#EDF3FF]",
+      "h3": "text-xl sm:text-2xl font-medium text-[#EDF3FF]",
+      "h4": "text-lg sm:text-xl font-medium text-[#EDF3FF]"
     },
-    "text": {
-      "primary": "#FFFFFF",
-      "secondary": "#94A3B8",
-      "accent": "#00F5FF",
-      "muted": "#475569"
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "base": "text-base font-normal text-[#A7B7D0] leading-relaxed",
+      "small": "text-sm text-[#A7B7D0]",
+      "micro": "text-xs text-[#6B7C96]"
     },
-    "brand": {
-      "cyan_glow": "#00F5FF",
-      "royal_blue": "#0088FF",
-      "void_black": "#050510",
-      "error": "#FF003C",
-      "success": "#00FF66"
-    },
-    "borders": {
-      "default": "rgba(0, 136, 255, 0.3)",
-      "active": "#00F5FF",
-      "muted": "rgba(255, 255, 255, 0.1)"
+    "mono": {
+      "font_family": "JetBrains Mono, monospace",
+      "code": "font-mono text-xs sm:text-sm text-[#63E2EE] bg-[#0B1020]/80 p-3 rounded-lg border border-[#2A3850]"
     }
   },
   "spacing_and_layout": {
-    "strategy": "Control Room Grid",
-    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
-    "card_padding": "p-6 md:p-8",
-    "section_spacing": "py-12 md:py-16",
-    "border_radius": "rounded-sm"
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "section_padding": "py-20 sm:py-28 lg:py-32",
+    "grid_gap": "gap-6 sm:gap-8 lg:gap-10",
+    "card_padding": "p-6 sm:p-8"
   },
-  "components": {
-    "buttons": {
-      "primary": "bg-[#0088FF] text-white hover:bg-[#00F5FF] hover:text-[#050510] hover:shadow-[0_0_15px_rgba(0,245,255,0.6)] transition-all duration-300 font-medium rounded-sm border border-[#00F5FF]/50",
-      "secondary": "bg-transparent text-[#00F5FF] border border-[#0088FF]/50 hover:border-[#00F5FF] hover:shadow-[0_0_10px_rgba(0,136,255,0.4)] transition-all duration-300 rounded-sm",
-      "ghost": "text-[#94A3B8] hover:text-[#00F5FF] hover:bg-[#0088FF]/10 transition-colors"
+  "key_sections": [
+    {
+      "name": "Navigation Bar",
+      "type": "Header",
+      "features": [
+        "Sticky navbar with glassmorphism (backdrop-blur-xl bg-[#0B1020]/85 border-b border-[#2A3850]/70)",
+        "Refined bot logo mark with glowing cyan node",
+        "Links: Features, Channels, Knowledge Base, Live APIs, Dashboard Preview, FAQ",
+        "Right CTAs: 'Sign In' (ghost button) and 'Start Building Free' (primary electric blue glowing button)"
+      ]
     },
-    "cards": {
-      "base": "bg-[#050B14] border border-[#0088FF]/30 rounded-sm",
-      "hover": "hover:border-[#00F5FF]/80 hover:shadow-[0_4px_20px_rgba(0,136,255,0.15)] transition-all duration-300"
+    {
+      "name": "Hero Section",
+      "type": "Hero",
+      "features": [
+        "Headline with electric blue gradient text: 'Turn Your Knowledge & Live APIs into Autonomous AI Assistants'",
+        "Subheadline explaining multi-channel deployment (Web, Discord, Telegram, Zendesk, REST API)",
+        "Dual CTAs: 'Start Free Trial' (Primary blue button with subtle glow) and 'Interactive Demo' (Secondary border button with play icon)",
+        "Interactive Bot Simulator Card: Live chat box mockup showcasing real-time answers using knowledge base + live API lookup",
+        "Trust badges / Supported platform icons marquee"
+      ]
     },
-    "inputs": {
-      "base": "bg-[#030712] border border-[#0088FF]/40 text-white rounded-sm focus:border-[#00F5FF] focus:ring-1 focus:ring-[#00F5FF] transition-all placeholder:text-slate-600"
+    {
+      "name": "Supported Channels Grid",
+      "type": "Bento Grid",
+      "features": [
+        "Interactive tabbed preview or grid for Web Widget, Discord, Telegram, Zendesk, and Custom REST API",
+        "Detailed card per channel showing latency, features (e.g. Markdown formatting, rich media, reactions, agent handoff)",
+        "Live status pill indicators ('Connected', '1-Click Install')"
+      ]
     },
-    "sidebar": {
-      "container": "bg-[#050B14] border-r border-[#0088FF]/20",
-      "link_active": "border-l-2 border-[#00F5FF] bg-gradient-to-r from-[#00F5FF]/10 to-transparent text-[#00F5FF]",
-      "link_idle": "text-[#94A3B8] hover:text-[#00F5FF] hover:bg-[#0088FF]/5"
+    {
+      "name": "Knowledge Base & Semantic Search",
+      "type": "Feature Section",
+      "features": [
+        "Demonstrates multi-source ingestion: Text documents, PDFs, Website URLs, GitHub repositories",
+        "Interactive knowledge search test component (users can type a test query and see chunk matching & vector confidence score)",
+        "High density grid showing sync frequency, vector embeddings engine, and document processing pipeline"
+      ]
+    },
+    {
+      "name": "Live API Data Integration",
+      "type": "Feature Section",
+      "features": [
+        "Visual API pipeline graph showing BridgeBot executing external REST calls in real-time during user chats",
+        "Endpoint health monitor mockup with real-time latency indicators (e.g., GET /user/orders -> 42ms)",
+        "Security & authentication specs (API Keys, OAuth2, Bearer tokens)"
+      ]
+    },
+    {
+      "name": "Zendesk Dual-Mode Engine",
+      "type": "Interactive Showcase",
+      "features": [
+        "Toggle control between 'Auto-Reply Mode' (Instant autonomous ticket resolution) and 'Agent-Assist Co-Pilot' (Drafting response suggestions for human agents)",
+        "Side-by-side comparison visualization of agent productivity metrics"
+      ]
+    },
+    {
+      "name": "Widget Customizer & Embed Sandbox",
+      "type": "Interactive Studio",
+      "features": [
+        "Interactive customization sandbox on the page: change bot primary color, avatar style, positioning (left/right), welcome message",
+        "1-Click Embed code generator box with copy-to-clipboard button and tab switcher (HTML Script tag, React Component, iFrame)"
+      ]
+    },
+    {
+      "name": "Admin Dashboard & Analytics",
+      "type": "Dashboard Preview",
+      "features": [
+        "Interactive dashboard preview with instance switcher dropdown",
+        "Recharts interactive line chart showing response volume, resolution rate, channel breakdown, token costs",
+        "Filters for date ranges and bot instances"
+      ]
+    },
+    {
+      "name": "How It Works 3-Step Flow",
+      "type": "Step-by-step",
+      "features": [
+        "Step 1: Connect Knowledge & Live APIs (PDFs, Web Scraping, REST Endpoints)",
+        "Step 2: Configure Assistant & Channels (System prompt, tone, channel tokens)",
+        "Step 3: Deploy & Monitor (Embed widget, connect Discord/Telegram/Zendesk, view live analytics)",
+        "Numbered step cards with connected glowing line accents"
+      ]
+    },
+    {
+      "name": "FAQ Section",
+      "type": "Accordion",
+      "features": [
+        "Accordion with Radix/Shadcn accordion component",
+        "Covers setup time, data privacy/GDPR, Zendesk integration, API rate limits, custom domain support"
+      ]
+    },
+    {
+      "name": "Final CTA Conversion Section",
+      "type": "CTA Banner",
+      "features": [
+        "High-contrast banner with background glow effect",
+        "Direct CTA: 'Deploy Your Assistant in under 5 minutes'",
+        "No credit card required tag, instant deployment guarantee"
+      ]
     }
-  },
-  "visual_enhancers": {
-    "glow_effects": [
-      "shadow-[0_0_15px_rgba(0,245,255,0.4)]",
-      "drop-shadow-[0_0_8px_rgba(0,136,255,0.6)]"
-    ],
-    "glassmorphism": "backdrop-blur-xl bg-[#0B132B]/60 border border-[#00F5FF]/20",
-    "micro_interactions": "All interactive elements MUST have a state change. Text color shifts to Cyan, borders illuminate on hover/focus."
-  },
-  "media": {
-    "auth_background": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/a9ed4607-9191-4987-997f-567023b29223/images/8644f8b8f1ed8ab3df7a7849c3cfbba50c74f9818fdaf7a3115cf18dc70e7161.png",
-      "description": "Abstract futuristic digital grid background in deep navy blue and pure black, subtle electric cyan glowing lines intersecting"
+  ],
+  "image_urls": [
+    {
+      "category": "hero_visual",
+      "url": "https://images.unsplash.com/photo-1710957987034-cea509422852?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwxfHxmdXR1cmlzdGljJTIwbmVvbiUyMEFJJTIwYXNzaXN0YW50JTIwdGVjaG5vbG9neSUyMGRhcmslMjBibHVlfGVufDB8fHx8MTc5NDQ3Mjc3NXww&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract neon glowing lines and futuristic network nodes on dark blue canvas"
     },
-    "dashboard_hero": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/a9ed4607-9191-4987-997f-567023b29223/images/11956bd17b8cd891f7c0ff5972efa6c07f8e2ef6cf98cddd44372425b64ed602.png",
-      "description": "High-end abstract data visualization, glowing cyan and royal blue nodes"
-    },
-    "bot_avatar_placeholder": {
-      "url": "https://images.unsplash.com/photo-1760931969401-9bd6ee902798?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxuZW9uJTIwZ2xvd2luZyUyMG9yYiUyMHJvYm90JTIwaGVhZCUyMGF2YXRhciUyMGRhcmt8ZW58MHx8fHwxNzc1ODk0NDEzfDA&ixlib=rb-4.1.0&q=85",
-      "description": "Futuristic robot head with glowing red triangle symbol, to be used as default bot persona avatar."
+    {
+      "category": "dashboard_analytics",
+      "url": "https://images.unsplash.com/photo-1671417722838-3fbaa7f66203?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHw0fHxmdXR1cmlzdGljJTIwbmVvbiUyMEFJJTIwYXNzaXN0YW50JTIwdGVjaG5vbG9neSUyMGRhcmslMjBibHVlfGVufDB8fHx8MTc5NDQ3Mjc3NXww&ixlib=rb-4.1.0&q=85",
+      "description": "Futuristic cyan holographic display interface"
     }
+  ],
+  "component_structure": {
+    "landing_page": "/app/frontend/src/pages/LandingPage.js",
+    "sub_components": [
+      "/app/frontend/src/components/landing/Navbar.js",
+      "/app/frontend/src/components/landing/HeroSection.js",
+      "/app/frontend/src/components/landing/ChannelsSection.js",
+      "/app/frontend/src/components/landing/KnowledgeBaseSection.js",
+      "/app/frontend/src/components/landing/LiveApiSection.js",
+      "/app/frontend/src/components/landing/ZendeskSection.js",
+      "/app/frontend/src/components/landing/WidgetCustomizerSection.js",
+      "/app/frontend/src/components/landing/DashboardPreviewSection.js",
+      "/app/frontend/src/components/landing/HowItWorksSection.js",
+      "/app/frontend/src/components/landing/FaqSection.js",
+      "/app/frontend/src/components/landing/CtaSection.js",
+      "/app/frontend/src/components/landing/Footer.js"
+    ]
   },
-  "page_specific_instructions": {
-    "auth_pages": "Login/Register/Verify/Forgot: Split screen layout. Left side: Form with sharp inputs. Right side: auth_background image with a dark gradient overlay (bg-gradient-to-r from-[#030712] to-transparent) so it blends seamlessly.",
-    "admin_sidebar": "Deep navy background with instance switcher at the top. Use JetBrains Mono for instance names. Active states have neon cyan left-borders.",
-    "dashboard_overview": "Top section uses bento grid for stats (Instances, Users, Messages). Recharts for analytics using cyan/blue strokes on transparent backgrounds.",
-    "knowledge_base": "Upload area styled as a dropzone with dashed cyan border, glowing on drag-over. Document list uses tight data tables.",
-    "bot_settings": "Form sections categorized in cards with subtle glowing borders. Persona editor includes a preview panel resembling a terminal window.",
-    "conversations_and_users": "Data tables using Shadcn. Dark rows, cyan hover state (hover:bg-[#00F5FF]/10). Dense grid layout.",
-    "analytics": "Recharts with heavy customization: hide generic grids, use solid horizontal gridlines (rgba(0,136,255,0.1)), neon strokes, and glowing tooltips.",
-    "discord_settings": "Discord blue (#5865F2) mixed with the Tron theme. Dedicated card layout for Webhook/Bot Token setups.",
-    "embed_generator": "Code block styled using a dark terminal aesthetic (bg-[#030712], border-[#0088FF]/30) with JetBrains Mono font. Include a 'Copy' button with cyan hover.",
-    "chat_widget": "Floating action button with cyan pulse animation. When expanded, an edge-to-edge dark chat interface with neon blue message bubbles (User) and dark gray (Bot).",
-    "standalone_chat": "Full-screen interface. Sidebar for history, main chat area uses a sleek, cardless message list. Focus on readability with high contrast typography."
-  },
-  "accessibility_and_testing": {
-    "contrast": "Ensure pure white text on dark navy backgrounds meets APCA standards. Cyan text should be reserved for larger accents, borders, or high-contrast states.",
-    "testing_attributes": "Add `data-testid` to all forms, submit buttons, navigation links, and settings toggles (e.g., `data-testid='login-submit-button'`, `data-testid='nav-dashboard'`)."
-  },
-  "dependencies": [
-    "lucide-react",
-    "recharts",
-    "framer-motion",
-    "@studio-freight/lenis",
-    "clsx",
-    "tailwind-merge"
+  "instructions_to_main_agent": [
+    "Create a brand new dedicated homepage component at `/app/frontend/src/pages/LandingPage.js` and mount it as the root route (`/`) in `/app/frontend/src/App.js`.",
+    "Ensure the existing `/admin` routes, `/login`, `/register`, `/widget`, `/chat`, and `/docs` routes remain fully functional.",
+    "Follow the exact color system: Background `#0B1020`, Elevated cards `#131D30`, Borders `#2A3850`, Primary text `#EDF3FF`, Secondary text `#A7B7D0`, Action Blue `#3B82F6`, Electric Blue `#83ADFF`, Cyan `#63E2EE`.",
+    "Use Lucide-react icons exclusively for channel badges, features, checkmarks, copy buttons, and actions.",
+    "Ensure all interactive buttons, tabs, toggles, form elements, and links have explicit `data-testid` attributes (e.g. `data-testid='hero-signup-btn'`, `data-testid='zendesk-mode-toggle'`, `data-testid='widget-color-picker'`).",
+    "Implement rich interactive previews: live interactive chat sandbox in hero, live widget color modifier with preview box, live Zendesk mode switcher, live knowledge base query simulator, and interactive embed code block with instant clipboard copy toast notification using `sonner`.",
+    "Use Recharts for the Dashboard preview section showing live trend graphs.",
+    "Do not use transparent header without backdrop blur. Sticky nav header must have `backdrop-blur-xl bg-[#0B1020]/85 border-b border-[#2A3850]`."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic outputs. Avoid this: build crisp, polished, high-contrast dark UIs with precise pixel alignment.",
+    "All interactive and key informational elements MUST include a `data-testid` attribute to facilitate automated testing.",
+    "Use generous padding (`p-6` to `p-10`) inside cards to prevent border collisions.",
+    "Use sonner for toast notifications (e.g., when copying embed code or testing API connections).",
+    "Mobile-first responsive layout with proper breakpoints (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`)."
   ]
 }

@@ -27,7 +27,9 @@ import ApiIntegrations from "@/pages/ApiIntegrations";
 import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
 import TelegramSettings from "@/pages/TelegramSettings";
 import ZendeskSettings from "@/pages/ZendeskSettings";
+import ChangelogPage from "@/pages/ChangelogPage";
 import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
+import LandingPage from "@/pages/LandingPage";
 import "@/App.css";
 
 function ProtectedRoute({ children }) {
@@ -82,6 +84,7 @@ function AppRoutes() {
         <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
         <Route path="telegram" element={<TelegramSettings />} />
         <Route path="zendesk" element={<ZendeskSettings />} />
+        <Route path="changelog" element={<ChangelogPage />} />
         <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>
@@ -91,8 +94,8 @@ function AppRoutes() {
       <Route path="/widget" element={<ChatWidget />} />
       <Route path="/docs" element={<Docs />} />
 
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/admin" replace />} />
+      {/* Public landing page */}
+      <Route path="/" element={<LandingPage />} />
     </Routes>
   );
 }

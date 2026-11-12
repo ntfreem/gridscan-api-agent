@@ -6203,6 +6203,86 @@ async def debug_discord_roles(instance_id: str = Depends(get_instance_access)):
         result["exception"] = str(e)
     return result
 
+
+# ==================== CHANGELOG CRUD ====================
+
+class ChangelogEntryCreate(BaseModel):
+    version: str
+    title: str
+    description: str
+    features: list = []
+    date: Optional[str] = None
+
+@api_router.get("/changelog")
+async def list_changelog(current_user: dict = Depends(get_current_user)):
+    entries = await db.changelog.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"entries": entries}
+
+@api_router.post("/admin/changelog")
+async def create_changelog_entry(body: ChangelogEntryCreate, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    entry = {
+        "id": str(uuid.uuid4()),
+        "version": body.version,
+        "title": body.title,
+        "description": body.description,
+        "features": body.features,
+        "date": body.date or now[:10],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.changelog.insert_one(entry)
+    return {"success": True, "entry": {k: v for k, v in entry.items() if k != "_id"}}
+
+@api_router.put("/admin/changelog/{entry_id}")
+async def update_changelog_entry(entry_id: str, body: ChangelogEntryCreate, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.changelog.update_one({"id": entry_id}, {"$set": {
+        "version": body.version, "title": body.title,
+        "description": body.description, "features": body.features,
+        "date": body.date or now[:10], "updated_at": now,
+    }})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"success": True}
+
+@api_router.delete("/admin/changelog/{entry_id}")
+async def delete_changelog_entry(entry_id: str, admin: dict = Depends(require_admin)):
+    result = await db.changelog.delete_one({"id": entry_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"success": True}
+
+# ==================== ONBOARDING ====================
+
+@api_router.get("/onboarding/status")
+async def get_onboarding_status(current_user: dict = Depends(get_current_user)):
+    rec = await db.onboarding.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not rec:
+        return {"completed": False, "dismissed": False}
+    return rec
+
+@api_router.post("/onboarding/complete")
+async def complete_onboarding(current_user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    await db.onboarding.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"user_id": current_user["id"], "completed": True, "dismissed": True, "completed_at": now}},
+        upsert=True,
+    )
+    return {"success": True}
+
+@api_router.post("/onboarding/dismiss")
+async def dismiss_onboarding(current_user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    await db.onboarding.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"user_id": current_user["id"], "dismissed": True, "dismissed_at": now}},
+        upsert=True,
+    )
+    return {"success": True}
+
+
 # ==================== APP SETUP ====================
 
 app.include_router(api_router)

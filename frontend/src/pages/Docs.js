@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch, Send, Headphones, Plug } from "lucide-react";
+import { Bot, ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch, Send, Headphones, Plug, Search, X } from "lucide-react";
 import { colors, fonts, radius } from "../theme";
 
 const sections = [
@@ -690,6 +690,20 @@ export default function Docs() {
   const [openSection, setOpenSection] = useState(
     sections.some(s => s.id === initial) ? initial : "getting-started"
   );
+  const [search, setSearch] = useState("");
+
+  // Search across all sections
+  const searchResults = search.trim().length >= 2
+    ? sections.flatMap(s =>
+        s.content
+          .filter(c =>
+            c.title.toLowerCase().includes(search.toLowerCase()) ||
+            c.body.toLowerCase().includes(search.toLowerCase())
+          )
+          .map(c => ({ sectionId: s.id, sectionTitle: s.title, icon: s.icon, ...c }))
+      )
+    : [];
+  const isSearching = search.trim().length >= 2;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: colors.bg.base, fontFamily: fonts.body }}>
@@ -714,7 +728,30 @@ export default function Docs() {
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", maxWidth: "1200px", margin: "0 auto", minHeight: "calc(100vh - 65px)" }}>
         {/* Sidebar nav */}
         <div style={{ borderRight: `1px solid ${colors.border.default}`, padding: "24px 16px" }}>
-          <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "16px", paddingLeft: "18px" }}>Sections</p>
+          {/* Search bar */}
+          <div style={{ position: "relative", marginBottom: "16px", paddingLeft: "2px", paddingRight: "2px" }}>
+            <Search size={14} color={colors.text.muted} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search docs..."
+              data-testid="docs-search-input"
+              style={{
+                width: "100%", padding: "9px 32px 9px 32px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.primary, fontFamily: fonts.body, fontSize: "12px",
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} data-testid="docs-search-clear"
+                style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "2px", color: colors.text.muted }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "16px", paddingLeft: "18px" }}>
+            {isSearching ? `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""}` : "Sections"}
+          </p>
           {sections.map(s => (
             <button key={s.id} onClick={() => setOpenSection(s.id)} data-testid={`nav-${s.id}`} style={{
               width: "100%", display: "flex", alignItems: "center", gap: "10px", padding: "10px 18px",
@@ -732,6 +769,48 @@ export default function Docs() {
 
         {/* Content */}
         <div style={{ padding: "32px 40px", maxWidth: "800px" }}>
+          {isSearching ? (
+            <>
+              <div style={{ marginBottom: "32px" }}>
+                <h1 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px" }}>
+                  Search Results
+                </h1>
+                <div style={{ width: "40px", height: "3px", backgroundColor: colors.brand.cyan, borderRadius: "2px" }} />
+              </div>
+              {searchResults.length === 0 ? (
+                <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.muted, textAlign: "center", padding: "40px 0" }}>
+                  No results found for "{search}"
+                </p>
+              ) : (
+                searchResults.map((item, i) => (
+                  <div key={i} data-testid="docs-search-result"
+                    onClick={() => { setOpenSection(item.sectionId); setSearch(""); }}
+                    style={{
+                      marginBottom: "16px", padding: "16px 20px", borderRadius: "10px", cursor: "pointer",
+                      backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
+                      transition: "border-color 0.2s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = colors.brand.cyan}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = colors.border.default}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <item.icon size={13} color={colors.brand.cyan} />
+                      <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase" }}>
+                        {item.sectionTitle}
+                      </span>
+                    </div>
+                    <h3 style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 6px" }}>
+                      {item.title}
+                    </h3>
+                    <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                      {item.body.slice(0, 200).replace(/\*\*/g, "")}...
+                    </p>
+                  </div>
+                ))
+              )}
+            </>
+          ) : (
+            <>
           <div style={{ marginBottom: "32px" }}>
             <h1 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px" }}>
               {sections.find(s => s.id === openSection)?.title}
@@ -774,6 +853,8 @@ export default function Docs() {
               )}
             </div>
           ))}
+            </>
+          )}
         </div>
       </div>
     </div>
