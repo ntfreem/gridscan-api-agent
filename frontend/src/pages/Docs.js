@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch } from "lucide-react";
+import { Bot, ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch, Send, Headphones, Plug } from "lucide-react";
 import { colors, fonts, radius } from "../theme";
 
 const sections = [
@@ -11,24 +11,26 @@ const sections = [
     content: [
       {
         title: "What is BridgeBot?",
-        body: `BridgeBot is a multi-tenant AI chatbot platform that lets you create intelligent support agents powered by your own knowledge base. Deploy bots on your website via an embeddable widget or connect them to Discord servers.
+        body: `BridgeBot is a multi-tenant AI chatbot platform that lets you create intelligent support agents powered by your own knowledge base and external API integrations. Deploy bots across multiple channels — web widget, Discord, Telegram, and Zendesk.
 
 **Key capabilities:**
 - Create multiple bot instances for different products or teams
-- Train your bot using FAQs, URLs, and documents with priority levels
-- Deploy on web (chat page + widget) and Discord
-- Smart human takeover — bot steps aside when staff intervenes
-- Full analytics and conversation monitoring
-- Multi-user access with role-based permissions`
+- Train your bot using FAQs, URLs, documents, and GitHub repos with priority levels
+- Deploy on web (chat page + embeddable widget), Discord, Telegram, and Zendesk
+- Connect external APIs — the bot can fetch live data (blockchain, weather, etc.) alongside KB answers
+- Smart human takeover — bot steps aside when staff intervenes (Discord)
+- Full platform analytics with per-channel message breakdowns
+- Multi-user access with role-based permissions
+- Customizable widget theming, bot logos, and welcome messages`
       },
       {
         title: "Quick Start (5 minutes)",
         body: `1. **Log in** with your admin credentials
 2. **Select or create** a workspace (instance)
-3. **Add knowledge** — go to Knowledge Base and add FAQs, scrape URLs, or upload documents
+3. **Add knowledge** — go to Knowledge Base and add FAQs, scrape URLs, upload documents, or import from GitHub
 4. **Set priority** — mark your most important FAQs as High priority
 5. **Test your bot** — click "Open Chat Demo" in the sidebar
-6. **Deploy** — embed the widget on your site or connect to Discord
+6. **Deploy** — embed the widget on your site, connect to Discord, Telegram, or Zendesk
 
 That's it! Your bot immediately starts answering questions based on your knowledge base. It understands user intent semantically — users don't need to phrase questions exactly like your FAQs.`
       },
@@ -37,8 +39,8 @@ That's it! Your bot immediately starts answering questions based on your knowled
         body: `**Admin (superadmin)**
 - Full access to all workspaces
 - Can create/delete instances, manage users, delete users
-- Access to analytics, Discord settings, embed codes
-- Can configure Discord app credentials and human takeover settings
+- Access to analytics, all channel settings, embed codes
+- Can configure integrations and API connections
 
 **User**
 - Access only to assigned workspaces
@@ -54,20 +56,20 @@ That's it! Your bot immediately starts answering questions based on your knowled
     content: [
       {
         title: "How It Works",
-        body: `Your bot's intelligence comes entirely from the knowledge base you build. Every FAQ, URL, and document you add is fed to the AI when answering questions.
+        body: `Your bot's intelligence comes from the knowledge base you build. Every FAQ, URL, document, and GitHub repo you add is fed to the AI when answering questions.
 
 **The bot will:**
 - Use ALL your active knowledge sources for every question
 - Match user intent semantically — users can ask in their own words
-- Answer confidently when it finds relevant information
-- Ask permission before using general knowledge if no match is found
+- Combine KB answers with live API data when integrations are configured
+- Respect the Knowledge Gate slider to control how freely it answers
 
 **Priority System:**
 - **High** — given preference in answers, shown first to the AI
 - **Medium** — standard priority
 - **Normal** — lowest priority, used as supplementary context
 
-Every new FAQ you add immediately makes the bot smarter. No retraining needed.`
+Every new source you add immediately makes the bot smarter. No retraining needed.`
       },
       {
         title: "Adding FAQs",
@@ -82,7 +84,7 @@ Every new FAQ you add immediately makes the bot smarter. No retraining needed.`
 
 **Example:**
 - Title: "How long does a transfer take?"
-- Content: "Transfers require 400 confirmations and typically take 30-60 minutes. Status will show 'Submitting' during this time. If stuck for 4+ hours, open a support ticket."
+- Content: "Transfers require 400 confirmations and typically take 30-60 minutes."
 - Priority: High`
       },
       {
@@ -91,15 +93,16 @@ Every new FAQ you add immediately makes the bot smarter. No retraining needed.`
 
 **Steps:**
 1. Go to Knowledge Base → URL Scraper tab
-2. Enter the URL
-3. Optionally add a custom title
-4. Set priority level
-5. If the page requires login, enter credentials in the Authentication section (optional)
-6. Click "Scrape & Save"
+2. Enter the URL and optionally add a custom title
+3. Set priority level and category
+4. Optionally enable **Sub-Page Crawling** to discover and scrape linked pages (depth 1-3, up to 50 pages)
+5. Click "Scrape & Save"
 
-**Authentication:** For password-protected pages, enter the username/email and password. Uses HTTP Basic Auth to access the page. Credentials are used only for the scrape request and are NOT stored.
+**Sub-Page Crawling:** When enabled, BridgeBot discovers same-domain sub-pages and imports them all. Progress is shown in real-time via a streaming progress bar.
 
-**Best for:** Documentation pages, FAQ pages, product pages, help center articles`
+**Re-scraping:** Use the refresh icon on any URL source to re-scrape its content. Use "Refresh All URLs" to bulk re-scrape all URL sources with a progress indicator.
+
+**Content Viewer:** Click any source title to open the Content Viewer, which shows the exact stored text with search, character stats, and corruption detection.`
       },
       {
         title: "Uploading Documents",
@@ -112,17 +115,89 @@ Every new FAQ you add immediately makes the bot smarter. No retraining needed.`
 4. Set priority level
 5. Click "Upload Document"
 
-**Limits:** Content is extracted up to ~6,000 characters per document. For longer documents, consider splitting them or extracting the most relevant sections as FAQs.`
+**Limits:** Content is extracted up to ~6,000 characters per document. Large files are automatically chunked into 8K-character parts for better retrieval.`
       },
       {
-        title: "Managing Sources",
-        body: `**Edit:** Click the pencil icon on any source to update its title, content, URL, or priority. All source types (FAQ, URL, document) are fully editable.
+        title: "GitHub Repository Import",
+        body: `Import documentation directly from GitHub repositories.
 
-**Toggle Active/Inactive:** Click the toggle to temporarily disable a source without deleting it. Inactive sources are not used when answering questions.
+**Steps:**
+1. Go to Knowledge Base → GitHub Crawler tab
+2. Enter the repository URL (e.g., https://github.com/org/repo)
+3. Optionally enter a GitHub token for private repos
+4. Click "Scan Repository" to discover documentation files
+5. Use file filters (by extension: .md, .rst, .txt; by max size) to narrow results
+6. Select the files you want and click "Import Selected"
 
-**Change Priority:** Use the up/down arrows in the Priority column to quickly adjust priority levels. Sources are automatically sorted highest priority first.
+**Supported files:** README, .md, .rst, .txt, CHANGELOG, CONTRIBUTING, files in docs/ and wiki/ directories. Category badges are auto-assigned (Overview, Docs, Changelog, Examples, etc.).
 
-**Delete:** Click the trash icon to permanently remove a source.`
+Import progress streams in real-time. Code blocks in Markdown are preserved.`
+      },
+      {
+        title: "KB Export, Import & Share",
+        body: `**Export:** Click "Export KB" to download your entire knowledge base as a portable JSON file.
+
+**Import:** Click "Import KB" to load sources from an exported JSON. Choose between:
+- **Merge** — skips duplicates, adds only new sources
+- **Overwrite** — archives existing sources, imports fresh
+
+**Share Across Bots:** Select sources and click "Share Selected" to copy them to another bot instance. Useful when multiple bots share common knowledge. Source grouping is maintained in the target instance.`
+      },
+      {
+        title: "Knowledge Gate",
+        body: `The Knowledge Gate controls how strictly the bot sticks to your KB.
+
+**Slider range (0–100%):**
+- **0–20% (Strict)** — KB only, refuses all external questions
+- **21–40% (Mostly Strict)** — KB only, acknowledges gaps politely
+- **41–60% (Balanced)** — KB first, general knowledge with disclaimer
+- **61–80% (Mostly Open)** — KB preferred, general knowledge freely
+- **81–100% (Fully Open)** — uses everything, KB as trusted reference
+
+**Presets:** Quick buttons for Conservative (10%), Balanced (50%), and Open (85%).
+
+Find the Knowledge Gate slider in Bot Settings.`
+      }
+    ]
+  },
+  {
+    id: "api-integrations",
+    icon: Plug,
+    title: "API Integrations",
+    content: [
+      {
+        title: "What Are API Integrations?",
+        body: `Connect external REST APIs so your bot can fetch live data alongside KB answers. When a user asks a question, the bot can intelligently decide to call an API and merge the result into its response.
+
+**Example use cases:**
+- Blockchain data (Gridscan, Etherscan)
+- Weather and location data
+- Product inventory or pricing
+- CRM or ticketing system lookups
+
+The bot uses AI to route questions — it decides which API endpoint to call, what parameters to use, and how to present the result.`
+      },
+      {
+        title: "Adding an Integration",
+        body: `1. Go to **API Integrations** in the sidebar
+2. Click "Add Integration"
+3. Enter the API name, base URL, and optional description
+4. Add authentication (API key, Bearer token, or custom headers)
+5. Click "Save"
+
+**Endpoint Discovery:** If the API has an OpenAPI/Swagger spec, BridgeBot can auto-discover endpoints. Click "Discover Endpoints" and provide the spec URL. Otherwise, add endpoints manually with path, method, parameters, and description.`
+      },
+      {
+        title: "How the Bot Uses APIs",
+        body: `When a user asks a question:
+1. The AI router analyzes the question against all available endpoints
+2. If an API call would help answer the question, the bot selects the best endpoint
+3. The API is called with appropriate parameters
+4. The response is merged with KB context into a unified AI answer
+
+The bot will NOT call APIs when the KB alone can answer. It also won't hallucinate API calls — if no endpoint matches, it falls back to KB-only answers.
+
+**Outbound Analytics:** All API calls are logged with latency, success/failure, and response size. View per-integration stats in the Usage Analytics page.`
       }
     ]
   },
@@ -134,8 +209,7 @@ Every new FAQ you add immediately makes the bot smarter. No retraining needed.`
       {
         title: "Setting Up Discord",
         body: `**Prerequisites:**
-- A Discord account
-- A Discord server where you have admin permissions
+- A Discord account and server with admin permissions
 - A Discord Application (created in the Developer Portal)
 
 **Setup Steps:**
@@ -146,70 +220,163 @@ Go to https://discord.com/developers/applications and create a new application.
 **Step 2: Enable Privileged Intents**
 In your app's Bot settings, enable:
 - "Message Content Intent"
-- "Server Members Intent" (required for Human Takeover feature)
+- "Server Members Intent" (required for Human Takeover)
 
 **Step 3: Configure Credentials**
-In BridgeBot, go to Discord settings and expand "Discord App Credentials". Enter:
+In BridgeBot → Discord settings, expand "Discord App Credentials". Enter:
 - **Client ID** — from General Information
 - **Client Secret** — from General Information
-- **Redirect URI** — your domain + /api/discord/callback (e.g., https://yourdomain.com/api/discord/callback)
+- **Redirect URI** — your domain + /api/discord/callback
 - **Bot Token** — from Bot → Reset Token
 
-**Important:** Add the same Redirect URI in Discord Developer Portal → OAuth2 → Redirects.
-
-**Step 4: Invite the Bot**
-Click "Invite Bot to Server" and select your Discord server.
-
-**Step 5: Configure & Start**
-Set your preferred listen mode, save, and click "Start Bot".
-
-**Note:** All credentials can be updated from the UI at any time — no redeployment needed.`
+**Step 4: Invite & Start**
+Click "Invite Bot to Server", select your Discord server, configure listen mode, and click "Start Bot".`
       },
       {
         title: "Listen Modes",
-        body: `**Mention Only** — Bot responds only when @mentioned or in DMs. Best for busy servers where you don't want the bot to respond to every message.
+        body: `**Mention Only** — Bot responds only when @mentioned or in DMs. Best for busy servers.
 
-**All Channels** — Bot responds to every human message in every channel. Best for dedicated support servers.
+**All Channels** — Bot responds to every message. Best for dedicated support servers.
 
-**Specific Channels** — Bot only responds in channels you select. Click "Fetch Channels" to load your server's channels and pick which ones to monitor.
+**Specific Channels** — Bot only responds in channels you select. Click "Fetch Channels" to load your server's channels.
 
-All listen mode changes take effect immediately — no need to restart the bot.`
-      },
-      {
-        title: "Reply Styles",
-        body: `**Natural Reply** — Bot replies normally without tagging the user. Cleaner conversation flow.
-
-**With @mention** — Bot tags the user in its reply. Useful in busy channels so users get notified.`
+All listen mode changes take effect immediately.`
       },
       {
         title: "Human Takeover",
-        body: `The Human Takeover feature lets your team seamlessly step in and take over conversations from the bot.
+        body: `When a team member with the designated **Staff Role** replies in a channel:
+1. The bot automatically goes silent **in that specific channel only**
+2. The bot continues responding in **all other channels**
+3. After the configured **cooldown period** (default: 15 minutes), the bot re-engages
+4. Staff can type **!bot resume** to hand back immediately
 
-**How it works:**
-1. When a team member with the designated **Staff Role** replies in a channel, the bot automatically goes silent **in that specific channel only**
-2. The bot continues monitoring and responding in **all other channels** — it's per-channel, not global
-3. After the configured **cooldown period** (default: 15 minutes) with no staff activity, the bot re-engages with a follow-up message
-4. Staff can type **!bot resume** to hand back to the bot immediately
+**Configuration:** Staff Role Name, Cooldown (1-120 minutes), Follow-up Message.`
+      }
+    ]
+  },
+  {
+    id: "telegram",
+    icon: Send,
+    title: "Telegram Integration",
+    content: [
+      {
+        title: "Setting Up Telegram",
+        body: `Connect a Telegram bot to respond to messages using your knowledge base and API integrations.
 
-**Configuration:**
-- **Staff Role Name** — the Discord role name for your support staff (e.g., "Support", "Moderator")
-- **Cooldown** — how long the bot waits after the last staff message before re-engaging (1-120 minutes)
-- **Follow-up Message** — what the bot says when it re-engages (e.g., "Is there anything else I can help with?")
+**Steps:**
+1. Create a bot with **@BotFather** on Telegram (send /newbot and follow the prompts)
+2. Copy the bot token
+3. In BridgeBot → Telegram settings, paste the token and click "Connect"
+4. BridgeBot automatically registers a webhook with Telegram
+5. Set your preferred listen mode and activate the bot
 
-**Important:** Enable "Server Members Intent" in Discord Developer Portal for role detection to work.`
+**Important:** If you want the bot to read all group messages (not just commands), disable "Group Privacy" in BotFather settings for your bot.`
       },
       {
-        title: "Bot Name Sync",
-        body: `The bot's display name in Discord is controlled separately from its username.
+        title: "Listen Modes",
+        body: `**All Messages** — Responds to every message in groups and DMs. Best for dedicated support groups.
 
-To change what users see in your server:
-1. Go to Bot Settings and set the bot name
-2. Go to Discord settings
-3. Click "Sync Name to Discord"
+**Mention / Command** — Responds only when:
+- @mentioned in a group
+- /ask command is used (e.g., /ask how do I stake?)
+- Someone replies to one of the bot's messages
+- In private DMs (always responds)
 
-This sets the bot's **server nickname** (what users see), not just the global username.
+Best for busy groups where you don't want the bot to answer everything.
 
-**Note:** Discord limits name changes to 2 per hour.`
+**DMs Only** — Only responds in private 1-on-1 conversations. Ignores all group messages.`
+      },
+      {
+        title: "Smart Follow-Up Buttons",
+        body: `When the bot replies to a Telegram message, it can include **inline keyboard buttons** with contextual follow-up suggestions.
+
+**How it works:**
+- The AI decides dynamically whether follow-up suggestions are appropriate
+- Buttons appear below the response (1-3 suggestions)
+- Tapping a button sends that question to the bot as a new message
+- Suggestions only appear when they add genuine value (not for greetings or simple acknowledgements)
+
+This feature works automatically — no configuration needed.`
+      },
+      {
+        title: "Managing the Bot",
+        body: `**Test Connection** — Click "Test" to verify your bot token is still valid.
+
+**Pause/Resume** — Toggle the bot active/paused. When paused, the webhook remains registered but messages are ignored.
+
+**Change Token** — Click "Change Token" to connect a different bot.
+
+**Disconnect** — Removes the webhook and deletes the configuration.
+
+All Telegram conversations appear in the Conversations tab with a "telegram" platform badge.`
+      }
+    ]
+  },
+  {
+    id: "zendesk",
+    icon: Headphones,
+    title: "Zendesk Integration",
+    content: [
+      {
+        title: "Setting Up Zendesk",
+        body: `Connect Zendesk to auto-reply to support tickets and provide AI suggestions to agents.
+
+**Prerequisites:**
+- A Zendesk account with admin access
+- An API token from Zendesk Admin Center
+
+**Steps:**
+1. In BridgeBot → Zendesk settings, enter your subdomain, admin email, and API token
+2. Click "Connect" — BridgeBot validates your credentials against Zendesk
+3. Copy the **Webhook URL** displayed on the settings page
+4. In Zendesk Admin Center → Objects and Rules → Triggers, create a trigger:
+   - Condition: "Ticket is Created"
+   - Action: "Notify Target" → your webhook URL (send ticket_id as JSON)
+5. Configure your response mode and activate`
+      },
+      {
+        title: "Response Modes",
+        body: `BridgeBot supports two independently toggleable modes:
+
+**Auto-Reply** — When a new ticket arrives:
+1. BridgeBot fetches the ticket content from Zendesk
+2. Searches your KB and runs API integrations
+3. Posts a public AI-generated reply on the ticket
+4. Adds an internal audit note ("BridgeBot AI auto-reply posted")
+5. Tags the ticket with \`ai_processed\` and \`bridgebot\`
+
+**Agent Assist** — When a new ticket arrives:
+1. Same AI processing pipeline
+2. The suggestion is stored and available via the sidebar API
+3. Agents can view the AI suggestion in a Zendesk sidebar app
+4. Agents choose whether to use, edit, or ignore the suggestion
+
+Both modes can be enabled simultaneously. Toggle them independently in the settings.`
+      },
+      {
+        title: "Webhook Setup Details",
+        body: `After connecting, BridgeBot generates a unique webhook URL for your instance.
+
+**In Zendesk Admin Center:**
+1. Go to Apps and Integrations → Webhooks → Create Webhook
+2. Set the endpoint URL to your BridgeBot webhook URL
+3. Request method: POST, Content type: JSON
+4. Create a Trigger: Condition = "Ticket is Created", Action = notify this webhook
+
+**Payload format:** The webhook should send JSON with at least a \`ticket_id\` field:
+\`{"ticket_id": "{{ticket.id}}"}\`
+
+**Deduplication:** BridgeBot tracks event IDs to prevent processing the same ticket twice.`
+      },
+      {
+        title: "Processed Tickets",
+        body: `The Zendesk settings page shows your most recently processed tickets with:
+- Ticket ID and subject
+- Action taken (auto_reply or agent_assist)
+- AI suggestion preview
+- Timestamp
+
+All Zendesk conversations appear in the Conversations tab with a "zendesk" platform badge.`
       }
     ]
   },
@@ -231,11 +398,34 @@ Share this URL with users for a full-page chat experience. No login required for
         body: `Add a chat widget to any website with a single script tag.
 
 **Steps:**
-1. Go to Embed Code in the sidebar
-2. Copy the embed snippet
-3. Paste it before the closing \`</body>\` tag on your website
+1. Go to **Embed Code** in the sidebar
+2. Choose your embed method: Popup Widget, Inline Embed, or Full Page
+3. Customize colors using the built-in Theme Configurator
+4. Copy the embed snippet and paste it before the closing \`</body>\` tag on your website
 
-The widget appears as a floating chat bubble in the bottom-right corner. Users can click it to open a chat window and interact with your bot.`
+The popup widget appears as a floating chat bubble in the bottom-right corner with a smooth slide-up animation. On mobile (<480px), it expands to full screen.`
+      },
+      {
+        title: "Theme Configurator",
+        body: `Customize the widget's appearance to match your brand.
+
+**Built-in presets:**
+- Default Dark, Violet Cyber, Ocean Blue, Emerald, Rose
+
+**Customizable colors:**
+- Accent, Accent Light, Background, Surface, Panel, Border, User Bubble, Bot Bubble
+
+The live preview iframe updates as you change colors. Theme settings are embedded as \`data-*\` attributes in the script tag, so no server-side configuration needed.`
+      },
+      {
+        title: "Widget Customization",
+        body: `**Welcome Message** — Set a custom greeting that appears when users open the widget. Supports Markdown formatting.
+
+**Default Open** — Configure the widget to auto-expand on page load (useful for support-focused pages).
+
+**Bot Logo** — Upload a custom avatar (PNG, JPEG, WebP, GIF; max 2MB) that appears in the widget header, message bubbles, and the floating trigger button. Also syncable to Discord.
+
+Configure all of these in **Embed Code → Widget Behavior**.`
       }
     ]
   },
@@ -252,32 +442,24 @@ The widget appears as a floating chat bubble in the bottom-right corner. Users c
 
 **Assign to Workspaces:** Go to Instances → select an instance → assign users by email.
 
-**Delete Users:** Click the trash icon next to any non-admin user. This:
-- Permanently deletes their account
-- Removes them from all workspace assignments
-- They must register again to regain access
+**Delete Users:** Click the trash icon next to any non-admin user.
 
 **Note:** Admin accounts cannot be deleted for security.`
       },
       {
         title: "Password Reset",
         body: `If a user forgets their password:
-1. Go to the login page and click "Forgot password?"
+1. Click "Forgot password?" on the login page
 2. Enter the account email
-3. A 6-digit reset code is sent to their email
-4. Enter the code and choose a new password — all on the same page
+3. A 6-digit reset code is sent
+4. Enter the code and choose a new password
 5. Click "Reset Password"
 
-The reset code expires after 15 minutes. Click "Resend" to get a new code.`
+The reset code expires after 15 minutes.`
       },
       {
         title: "Registration",
-        body: `New users can register with:
-- **Email** — used for password reset and notifications
-- **Username** — unique, used for login (along with email)
-- **Password** — minimum 6 characters
-
-After registration, a verification code is sent to their email. Users can log in with either their email or username.`
+        body: `New users register with email, username, and password (min 6 characters). A verification code is sent to their email. Users can log in with either email or username.`
       }
     ]
   },
@@ -290,9 +472,10 @@ After registration, a verification code is sent to their email. Users can log in
         title: "What Are Workspaces?",
         body: `Workspaces (instances) are isolated bot environments. Each workspace has its own:
 - Knowledge base with priority-ranked sources
-- Bot personality and settings
-- Conversations and chat history
-- Discord connection and configuration
+- Bot personality, settings, and knowledge gate
+- Conversations and chat history across all platforms
+- Discord, Telegram, and Zendesk connections
+- API integrations and endpoint configurations
 - Analytics and usage tracking
 
 **Use cases:**
@@ -301,12 +484,12 @@ After registration, a verification code is sent to their email. Users can log in
 - Staging vs. production environments`
       },
       {
-        title: "Creating & Managing Workspaces",
+        title: "Creating & Managing",
         body: `**Create:** Go to Instances → Create Instance. Enter a name and optional description.
 
-**Switch:** Use the workspace dropdown in the top-left sidebar to switch between workspaces.
+**Switch:** Use the workspace dropdown in the top-left sidebar.
 
-**Delete:** Click delete on an instance to remove it and ALL its data (knowledge, conversations, configs).
+**Delete:** Click delete on an instance to remove it and ALL its data.
 
 **Assign Users:** Click on an instance → enter a user's email to give them access.`
       }
@@ -320,21 +503,36 @@ After registration, a verification code is sent to their email. Users can log in
       {
         title: "Dashboard Overview",
         body: `The dashboard shows:
-- **Total Conversations** — all chat sessions across web and Discord
-- **Total Messages** — individual messages exchanged
-- **Knowledge Sources** — how many sources are in your knowledge base
-- **Training Examples** — approved conversation examples for tone matching
-- **Platform Breakdown** — how many conversations come from web vs. Discord
-- **Recent Conversations** — latest chat sessions with preview`
+- **Conversations & Messages** — totals across all platforms
+- **Knowledge Sources** — active sources in your KB
+- **Training Examples** — approved conversation examples
+- **Platform Breakdown** — per-platform conversation counts (Web, Discord, Telegram, API, Zendesk) as visual cards
+- **7-Day Trend Chart** — daily message counts per platform as a grouped bar chart
+- **Recent Conversations** — latest chat sessions with platform badges
+- **Quick Actions** — shortcuts to add knowledge, test chat, or connect Telegram`
       },
       {
         title: "AI Usage & Reliability",
         body: `The Analytics page tracks AI API usage:
 - **Total API Calls** — how many times the AI was queried
 - **Success Rate** — percentage of successful responses
-- **Failed Calls** — errors encountered
-- **Retry Attempts** — automatic retries on failures
+- **Failed Calls & Retries** — errors and automatic retries
 - **Daily Breakdown** — 7-day chart of calls, errors, and retries`
+      },
+      {
+        title: "Integration Usage Analytics",
+        body: `Track outbound API calls to your external integrations (e.g., Gridscan):
+- **Per-integration cards** — call count, avg latency, data transferred, success rate
+- **Integration Calls Over Time** — daily bar chart
+- **Top Endpoints** — most frequently called endpoints with latency data
+- **Integration Errors** — error breakdown and recent failed calls
+- **Activity Logs** — filterable by date with daily request breakdown and masked API keys`
+      },
+      {
+        title: "Conversation Filters",
+        body: `In the Conversations tab, filter by platform: **Web**, **Discord**, **Telegram**, **API**, **Zendesk**, or **Approved**. Click a filter to toggle it. Search conversations by message content using the search bar.
+
+Auto-refresh polls every 10 seconds — a banner appears when new conversations arrive.`
       }
     ]
   },
@@ -345,15 +543,37 @@ After registration, a verification code is sent to their email. Users can log in
     content: [
       {
         title: "Configuring Your Bot",
-        body: `**Bot Name** — The display name used in conversations and Discord. Can be synced to Discord via the Discord settings page.
+        body: `**Bot Name** — Display name used in conversations. Can be synced to Discord.
 
-**Persona** — Define your bot's personality. Example: "You are a friendly crypto support agent who specializes in USDCx on Cardano."
+**Persona** — Define your bot's personality. Example: "You are a friendly crypto support agent."
 
-**Custom Instructions** — Additional rules the bot should follow. Example: "Always recommend users open a support ticket for transaction issues."
+**Custom Instructions** — Additional rules. Example: "Always recommend opening a ticket for transaction issues."
 
-**Tone Instructions** — Guide the bot's communication style. Example: "Be professional but approachable. Use simple language. Avoid jargon."
+**Tone Instructions** — Guide communication style. Example: "Be professional but approachable."
 
-**Tone Examples** — Add example conversations showing how the bot should respond. These are used as reference for the AI to match your desired communication style.`
+**Tone Examples** — Example conversations showing how the bot should respond. Used as reference for the AI.`
+      },
+      {
+        title: "Bot Avatar / Logo",
+        body: `Upload a custom avatar for your bot (PNG, JPEG, WebP, GIF; max 2MB).
+
+The logo appears in:
+- Web widget header and message bubbles
+- Typing indicator avatar
+- Embed trigger button (floating chat icon)
+- Can be synced to Discord as the bot's avatar
+
+Upload in Bot Settings → Bot Avatar section.`
+      },
+      {
+        title: "Knowledge Gate",
+        body: `Control how strictly the bot stays within your KB using a 0-100% slider.
+
+- **Strict (0-20%)** — refuses anything not in KB
+- **Balanced (40-60%)** — KB first, general knowledge with disclaimers
+- **Open (80-100%)** — uses everything, KB as trusted reference
+
+Quick presets: Conservative (10%), Balanced (50%), Open (85%).`
       }
     ]
   },
@@ -364,124 +584,81 @@ After registration, a verification code is sent to their email. Users can log in
     content: [
       {
         title: "Message Flow (end-to-end)",
-        body: `How a user message travels through BridgeBot — from Discord/web all the way to the AI reply.
+        body: `How a user message travels through BridgeBot from any channel to the AI reply.
 
-**Key stages:** routing → gate checks → context build → prompt assembly → LLM call → response delivery.`,
-        diagram: `┌─────────────────────────────────────────────────────────────────────────┐
-│  USERS                                                                  │
-│                                                                         │
-│   Discord User           Web Chat User           Embedded Widget        │
-│   (in a server)          (chat page)             (on customer site)     │
-└────────┬──────────────────────┬─────────────────────────┬───────────────┘
-         │ message              │ HTTP POST               │ HTTP POST
-         ▼                      │                         │
-┌──────────────────────┐        │                         │
-│  Discord Gateway     │        │                         │
-│  (WebSocket)         │        │                         │
-└────────┬─────────────┘        │                         │
-         │ on_message event     │                         │
-         ▼                      ▼                         ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       BRIDGEBOT BACKEND  (FastAPI)                      │
-│                                                                         │
-│  1. ROUTING — figure out which instance owns this message               │
-│       Discord:  guild_id  →  discord_config  →  instance_id             │
-│       Web:      instance_id passed in request body                      │
-│       Widget:   instance_id from embed URL parameter                    │
-│                                                                         │
-│  2. GATE CHECKS  (Discord only)                                         │
-│       • Is bot Active for this instance?                                │
-│       • Does listen_mode allow it? (mention / all / specific)           │
-│       • Is the channel in specific_channels list?                       │
-│       • Human Takeover: did staff just reply? (15-min cooldown)         │
-│                                                                         │
-│  3. CONTEXT BUILD  (parallel reads from MongoDB Atlas)                  │
-│       bot_config        →  persona, tone, instructions                  │
-│       knowledge_sources →  ALL active (priority-sorted: High→Med→Norm)  │
-│       conversations     →  recent session history (web/widget)          │
-│       If 0 active sources → skip LLM, reply "No knowledge configured"   │
-│                                                                         │
-│  4. PROMPT ASSEMBLY                                                     │
-│       System = persona + Knowledge Gate Protocol + whole KB + history   │
-│       User   = the incoming message text                                │
-│                                                                         │
-│  5. LLM CALL                                                            │
-│       Emergent LLM Key  →  Claude Sonnet                                │
-│       Log tokens to llm_usage                                           │
-│                                                                         │
-│  6. RESPONSE DELIVERY                                                   │
-│       Discord:  channel.send() with reply_style (natural / @mention)    │
-│       Web:      JSON + save to conversations                            │
-│       Widget:   JSON + save to conversations                            │
-│       Log analytics row in conversations                                │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-                       User receives reply`
-      },
-      {
-        title: "Discord App ↔ Instance ↔ Server Mapping",
-        body: `BridgeBot uses a single Discord application that powers every instance. A bot instance maps to one Discord server via its guild_id. Messages are routed by guild_id → instance, and the instance's knowledge base and persona are used to generate replies.`,
-        diagram: `┌─────────────────────────────────────────────────────────────────┐
-│                    DISCORD DEVELOPER PORTAL                     │
-│                                                                 │
-│   ONE Discord Application ("BridgeBot")                         │
-│     • Client ID                                                 │
-│     • Client Secret                                             │
-│     • Redirect URI                                              │
-│     • Bot Token  ──────────────────┐                            │
-└────────────────────────────────────┼────────────────────────────┘
-                                     │ (single shared token)
-                                     ▼
-            ┌─────────────────────────────────────────┐
-            │   BridgeBot Backend (FastAPI)           │
-            │                                         │
-            │   discord.Client (1 connection)         │
-            │                                         │
-            │   guild_id → instance_id  routing map   │
-            │                                         │
-            │   ┌─────────────────────────────────┐   │
-            │   │ 158845...  →  Test Demo 1       │   │
-            │   │ 987654...  →  USDCx on Cardano  │   │
-            │   │ 246810...  →  James Support     │   │
-            │   └─────────────────────────────────┘   │
-            └─────────────────────────────────────────┘
-                  │              │              │
-        ┌─────────┘              │              └─────────┐
-        ▼                        ▼                        ▼
-┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-│ Discord Server A │   │ Discord Server B │   │ Discord Server C │
-│   "Test Demo 1"  │   │  "USDCx Server"  │   │   "James Inc"    │
-│  guild 158845... │   │  guild 987654... │   │  guild 246810... │
-└──────────────────┘   └──────────────────┘   └──────────────────┘
-         │ uses                  │ uses                  │ uses
-         ▼                       ▼                       ▼
-┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-│ Test Demo 1 KB   │   │ USDCx KB         │   │ James KB         │
-│ • FAQs           │   │ • 29 sources     │   │ • FAQs           │
-│ • Persona        │   │ • Persona        │   │ • Persona        │
-└──────────────────┘   └──────────────────┘   └──────────────────┘`
+**Key stages:** routing → gate checks → KB search → API query → prompt assembly → LLM call → response delivery.`,
+        diagram: `┌───────────────────────────────────────────────────────────────────────────┐
+│  USERS                                                                    │
+│                                                                           │
+│   Discord     Web Chat     Widget      Telegram     Zendesk Ticket        │
+│   (server)    (page)       (embed)     (bot DM/     (new ticket           │
+│                                         group)       webhook)             │
+└────┬───────────┬───────────┬────────────┬────────────┬────────────────────┘
+     │           │           │            │            │
+     ▼           ▼           ▼            ▼            ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     BRIDGEBOT BACKEND  (FastAPI)                          │
+│                                                                          │
+│  1. ROUTING — resolve instance_id from channel context                   │
+│       Discord:   guild_id  → discord_config → instance_id                │
+│       Web/Widget: instance_id in request body or URL param               │
+│       Telegram:  instance_id in webhook URL path                         │
+│       Zendesk:   instance_id in webhook URL path                         │
+│                                                                          │
+│  2. KNOWLEDGE SEARCH — find relevant KB chunks (top 12)                  │
+│       Semantic vector search across all active sources                    │
+│       Priority-weighted: High → Medium → Normal                          │
+│                                                                          │
+│  3. API QUERY — optionally call external APIs                            │
+│       AI router decides if an API call would help                        │
+│       Selects endpoint, fills parameters, executes call                  │
+│       Merges API response with KB context                                │
+│                                                                          │
+│  4. PROMPT ASSEMBLY                                                      │
+│       System = persona + Knowledge Gate + KB context + API data          │
+│       User = the incoming message                                        │
+│       + Platform-specific additions (Telegram: follow-up suggestions)    │
+│                                                                          │
+│  5. LLM CALL — Claude Sonnet (Emergent Key) or OpenAI (BYOK)            │
+│                                                                          │
+│  6. RESPONSE DELIVERY                                                    │
+│       Discord:  channel.send()                                           │
+│       Web:      SSE stream or JSON                                       │
+│       Telegram: sendMessage + inline keyboard buttons                    │
+│       Zendesk:  public comment (auto-reply) or stored suggestion         │
+│       + Save to conversations collection                                 │
+└───────────────────────────────────────────────────────────────────────────┘`
       },
       {
         title: "Data Stores",
-        body: `Everything lives in a single MongoDB Atlas database. Each collection has a specific role:
+        body: `Everything lives in a MongoDB database. Key collections:
 
-**discord_app_config** — global Discord App credentials (single document)
-**bot_instances** — every workspace/instance in the platform
-**bot_config** — per-instance persona, tone, and custom instructions
-**knowledge_sources** — FAQs, scraped URLs, and uploaded documents (scoped by instance_id)
-**discord_config** — per-instance Discord guild mapping, listen mode, reply style, staff role
-**conversations** — chat history (web + Discord), session-scoped
-**llm_usage** — token tracking for analytics
-**users** — accounts + assigned_instances + roles`
+**bot_instances** — every workspace/instance
+**bot_config** — per-instance persona, tone, knowledge gate, custom instructions
+**knowledge_sources** — FAQs, scraped URLs, documents, GitHub imports
+**discord_config** — per-instance Discord guild mapping, listen mode, staff role
+**telegram_config** — per-instance Telegram bot token, listen mode, webhook secret
+**zendesk_config** — per-instance Zendesk subdomain, credentials, response mode toggles
+**zendesk_suggestions** — AI-generated suggestions for agent-assist sidebar
+**conversations** — chat history across all platforms, session-scoped
+**api_integrations** — external API connections with encrypted credentials
+**api_endpoints** — endpoint definitions per integration
+**api_request_logs** — outbound API call tracking for analytics
+**llm_usage** — token tracking, cost analytics, platform breakdown
+**embed_configs** — per-instance widget theming, welcome messages, default-open
+**users** — accounts, roles, assigned instances`
       },
       {
-        title: "Three Key Architectural Decisions",
-        body: `**1. One shared Discord client** — a single WebSocket connection serves every instance. Routing happens in-memory via guild_id → instance_id (rebuilt on discord_config write). Scales to many instances with low overhead.
+        title: "Key Architectural Decisions",
+        body: `**1. One shared Discord client** — a single WebSocket connection serves every instance. Routing happens in-memory via guild_id → instance_id.
 
-**2. Semantic RAG, not keyword search** — instead of pre-filtering sources by keywords, the backend sends the entire knowledge base to Claude and lets the LLM pick relevance. Trade-off: higher token cost, much better answer quality. Future: swap to a vector DB when a KB exceeds ~50k tokens.
+**2. Webhook-based channels** — Telegram and Zendesk use webhooks rather than persistent connections. Messages arrive via HTTP POST, are processed through the pipeline, and replies are sent back via each platform's API.
 
-**3. Knowledge Gate** — the system prompt explicitly tells Claude to answer ONLY from the provided sources. If the KB has the answer, answer it. If not, say "I don't have that information." This prevents hallucinations and keeps replies grounded in YOUR docs.`
+**3. Unified AI pipeline** — all channels (Discord, Web, Telegram, Zendesk) share the same KB search → API query → prompt assembly → LLM call pipeline. Platform-specific behavior is added as prompt modifiers (e.g., Telegram follow-up suggestions, Zendesk professional tone).
+
+**4. Knowledge Gate** — a graduated 0-100% slider controls how strictly the bot sticks to KB. Replaces a binary strict/flexible toggle with five graduated levels.
+
+**5. Modular route files** — channel integrations (Telegram, Zendesk, API diagnostics) are in separate route files to keep the codebase maintainable.`
       }
     ]
   }
