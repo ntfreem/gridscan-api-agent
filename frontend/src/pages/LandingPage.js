@@ -50,7 +50,7 @@ function FadeIn({ children, delay = 0, style }) {
   );
 }
 
-/* ─── palette — soft cyan with subtle accents ─── */
+/* ─── palette — neon blue + cyan accents ─── */
 const C = {
   bg:      "#0B1020",
   surface: "#111B2E",
@@ -59,12 +59,12 @@ const C = {
   text:    "#EDF3FF",
   text2:   "#A7B7D0",
   muted:   "#6B7C96",
-  blue:    "#2B9EB8",
-  blueHov: "#1F8A9E",
-  elec:    "#5CC8D8",
+  blue:    "#3B82F6",
+  blueHov: "#2563EB",
+  elec:    "#6BAAFF",
   cyan:    "#3CDBD3",
-  neonBlue:"rgba(34,184,207,0.18)",
-  neonCyan:"rgba(60,219,211,0.14)",
+  neonBlue:"rgba(59,130,246,0.45)",
+  neonCyan:"rgba(60,219,211,0.35)",
   green:   "#10B981",
   warn:    "#F59E0B",
 };
@@ -135,7 +135,7 @@ function PrimaryBtn({ children, to, href, style, testId, onClick }) {
     color: "#fff", fontFamily: "IBM Plex Sans, sans-serif",
     fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
     textDecoration: "none",
-    boxShadow: `0 0 12px ${C.neonBlue}, 0 0 24px rgba(34,184,207,0.06)`,
+    boxShadow: `0 0 20px ${C.neonBlue}, 0 0 40px rgba(59,130,246,0.15)`,
     transition: "transform 0.2s, box-shadow 0.2s",
     ...style,
   };
@@ -228,9 +228,9 @@ function Navbar() {
     >
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
         {/* Logo */}
-        <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }} data-testid="landing-logo">
-          <BridgeBotLogo size={56} glow />
-          <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 26, fontWeight: 700, color: C.elec }}>
+        <Link to="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }} data-testid="landing-logo">
+          <BridgeBotLogo size={48} />
+          <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 22, fontWeight: 700, color: C.elec }}>
             BitBot <span style={{ color: "#fff" }}>Pro</span>
           </span>
         </Link>
@@ -323,7 +323,7 @@ function HeroSection() {
               }}
             >
               Your knowledge. Live data.{" "}
-              <span style={{ background: `linear-gradient(135deg, ${C.elec}, ${C.cyan})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: `drop-shadow(0 0 8px ${C.neonCyan})` }}>
+              <span style={{ background: `linear-gradient(135deg, ${C.elec}, ${C.cyan})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: `drop-shadow(0 0 18px ${C.neonCyan})` }}>
                 AI answers everywhere.
               </span>
             </h1>
@@ -373,7 +373,7 @@ function HeroSection() {
               border: `1px solid ${C.border}`,
               borderRadius: 16,
               overflow: "hidden",
-              boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 16px ${C.neonBlue}, 0 0 30px rgba(34,184,207,0.05)`,
+              boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${C.neonBlue}, 0 0 60px rgba(59,130,246,0.1)`,
               height: 420,
             }}>
               <iframe
@@ -1087,7 +1087,7 @@ function HowItWorksSection() {
                 background: `${C.blue}15`, border: `1px solid ${C.blue}30`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 position: "relative", zIndex: 1,
-                boxShadow: `0 0 10px ${C.neonBlue}`,
+                boxShadow: `0 0 20px ${C.neonBlue}`,
               }}>
                 <s.icon size={24} color={C.elec} />
               </div>
@@ -1167,7 +1167,7 @@ function FaqSection() {
                 background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
                 overflow: "hidden", transition: "border-color 0.2s",
                 borderColor: openIdx === i ? `${C.blue}60` : C.border,
-                boxShadow: openIdx === i ? `0 0 8px ${C.neonBlue}` : "none",
+                boxShadow: openIdx === i ? `0 0 16px ${C.neonBlue}` : "none",
               }}
             >
               <button

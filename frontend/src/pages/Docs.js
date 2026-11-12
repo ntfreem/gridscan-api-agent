@@ -713,8 +713,8 @@ export default function Docs() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
             <BridgeBotLogo size={40} />
-            <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.brand.light }}>
-              BitBot <span style={{ color: "#fff" }}>Pro</span>
+            <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
+              BitBot <span style={{ color: colors.brand.light }}>Pro</span>
             </span>
           </Link>
           <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, backgroundColor: colors.bg.panel, padding: "2px 8px", borderRadius: "6px" }}>

@@ -38,7 +38,7 @@ export default function VerifyEmail() {
       <div style={{ width: "100%", maxWidth: "420px", backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: radius.xl, padding: "40px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", justifyContent: "center", textDecoration: "none" }}>
           <BridgeBotLogo size={52} />
-          <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.brand.light }}>BitBot <span style={{ color: "#fff" }}>Pro</span></span>
+          <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>BitBot <span style={{ color: colors.brand.light }}>Pro</span></span>
         </Link>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "24px" }}>
           <div style={{ width: "56px", height: "56px", background: `linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.08))`, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>

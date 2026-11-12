@@ -1,5 +1,5 @@
 // BitBot Pro — Soft AI Bot Design System
-// Rounded, approachable, cyan-forward palette
+// Rounded, approachable, lighter blue palette
 
 export const colors = {
   bg: {
@@ -7,43 +7,43 @@ export const colors = {
     surface: "#111827",
     panel: "#1E293B",
     glass: "rgba(30, 41, 59, 0.7)",
-    hover: "rgba(34, 184, 207, 0.04)",
+    hover: "rgba(96, 165, 250, 0.06)",
   },
   text: {
     primary: "#F1F5F9",
     secondary: "#94A3B8",
-    accent: "#5CC8D8",
+    accent: "#6BAAFF",
     muted: "#64748B",
     white: "#FFFFFF",
   },
   brand: {
-    primary: "#22B8CF",
-    light: "#5CC8D8",
-    lighter: "#7DD8E4",
-    soft: "#C4F1F9",
-    glow: "rgba(34, 184, 207, 0.10)",
-    neonBlue: "rgba(34, 184, 207, 0.18)",
-    neonCyan: "rgba(60, 219, 211, 0.14)",
+    primary: "#3B82F6",
+    light: "#6BAAFF",
+    lighter: "#93C5FD",
+    soft: "#DBEAFE",
+    glow: "rgba(59, 130, 246, 0.25)",
+    neonBlue: "rgba(59, 130, 246, 0.45)",
+    neonCyan: "rgba(60, 219, 211, 0.35)",
     error: "#F43F5E",
     success: "#34D399",
     warning: "#FBBF24",
     discord: "#5865F2",
     cyan: "#3CDBD3",
-    blue: "#2B9EB8",
+    blue: "#3B82F6",
   },
   border: {
     default: "rgba(148, 163, 184, 0.15)",
-    active: "#5CC8D8",
+    active: "#6BAAFF",
     muted: "rgba(148, 163, 184, 0.08)",
     subtle: "rgba(148, 163, 184, 0.1)",
     faint: "rgba(148, 163, 184, 0.06)",
   },
   shadow: {
     card: "0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15)",
-    cardHover: "0 8px 25px rgba(34, 184, 207, 0.08), 0 4px 10px rgba(0,0,0,0.2)",
-    glow: "0 0 24px rgba(34, 184, 207, 0.10)",
-    neonGlow: "0 0 20px rgba(34, 184, 207, 0.16), 0 0 40px rgba(60, 219, 211, 0.06)",
-    input: "0 0 0 3px rgba(34, 184, 207, 0.08)",
+    cardHover: "0 8px 25px rgba(59, 130, 246, 0.2), 0 4px 10px rgba(0,0,0,0.2)",
+    glow: "0 0 24px rgba(59, 130, 246, 0.25)",
+    neonGlow: "0 0 20px rgba(59, 130, 246, 0.4), 0 0 40px rgba(60, 219, 211, 0.15)",
+    input: "0 0 0 3px rgba(59, 130, 246, 0.2)",
   },
 };
 
@@ -148,7 +148,7 @@ export const T = {
     alignItems: "center",
     gap: "8px",
     transition: "all 0.25s ease",
-    boxShadow: "0 2px 8px rgba(34, 184, 207, 0.12)",
+    boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)",
   },
   btnSecondary: {
     padding: "10px 20px",

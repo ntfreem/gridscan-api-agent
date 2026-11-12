@@ -46,7 +46,7 @@ export default function Register() {
       }}>
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px", justifyContent: "center", textDecoration: "none" }}>
           <BridgeBotLogo size={44} />
-          <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.brand.light }}>BitBot <span style={{ color: "#fff" }}>Pro</span></span>
+          <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>BitBot <span style={{ color: colors.brand.light }}>Pro</span></span>
         </Link>
 
         <h1 style={{ fontFamily: fonts.heading, fontSize: "24px", fontWeight: "700", color: colors.text.primary, textAlign: "center", margin: "0 0 6px" }}>Create account</h1>
