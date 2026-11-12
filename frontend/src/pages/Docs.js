@@ -710,14 +710,14 @@ export default function Docs() {
     <div style={{ minHeight: "100vh", backgroundColor: colors.bg.base, fontFamily: fonts.body }}>
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${colors.border.default}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ width: "36px", height: "36px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <BridgeBotLogo size={20} />
-          </div>
-          <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
-            Bridge<span style={{ color: colors.brand.light }}>Bot</span>
-          </span>
-          <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, backgroundColor: colors.bg.panel, padding: "2px 8px", borderRadius: "6px", marginLeft: "4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
+            <BridgeBotLogo size={24} />
+            <span style={{ fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700", color: colors.text.primary }}>
+              Bridge<span style={{ color: colors.brand.light }}>Bot</span>
+            </span>
+          </Link>
+          <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, backgroundColor: colors.bg.panel, padding: "2px 8px", borderRadius: "6px" }}>
             Documentation
           </span>
         </div>

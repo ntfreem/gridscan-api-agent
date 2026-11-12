@@ -135,13 +135,7 @@ export default function ChatPage() {
         position: "sticky", top: 0, zIndex: 10,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{
-            width: "34px", height: "34px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-            borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: `0 0 12px rgba(59, 130, 246, 0.4)`,
-          }}>
-            <BridgeBotLogo size={18} />
-          </div>
+          <BridgeBotLogo size={28} />
           <div>
             <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.3px" }}>
               {botConfig.name || "BridgeBot Assistant"}
@@ -178,11 +172,9 @@ export default function ChatPage() {
         {messages.length === 0 && !isLoading && (
           <div style={{ textAlign: "center", paddingTop: "100px", animation: "fade-in 0.4s ease" }}>
             <div style={{
-              width: "60px", height: "60px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-              borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 20px", boxShadow: `0 0 30px rgba(59, 130, 246, 0.3)`,
+              margin: "0 auto 20px",
             }}>
-              <BridgeBotLogo size={28} />
+              <BridgeBotLogo size={56} />
             </div>
             <h2 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: "0 0 10px", letterSpacing: "-0.5px" }}>
               How can I help you?
@@ -197,13 +189,7 @@ export default function ChatPage() {
           <div key={`${msg.role}-${msg.timestamp || i}`} className="message-enter bb-prow"
             style={{ display: "flex", alignItems: "flex-start", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: "16px" }}>
             {msg.role === "assistant" && (
-              <div style={{
-                width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-                borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
-                marginRight: "10px", flexShrink: 0, marginTop: "4px",
-              }}>
-                <BridgeBotLogo size={14} />
-              </div>
+              <BridgeBotLogo size={24} style={{ marginRight: "10px", flexShrink: 0, marginTop: "4px" }} />
             )}
             <div style={{
               maxWidth: "72%", padding: "12px 16px", borderRadius: "12px",
@@ -232,9 +218,7 @@ export default function ChatPage() {
 
         {isLoading && !isStreaming && (
           <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }} data-testid="typing-indicator">
-            <div style={{ width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "10px", flexShrink: 0 }}>
-              <BridgeBotLogo size={14} />
-            </div>
+            <BridgeBotLogo size={24} style={{ marginRight: "10px", flexShrink: 0 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ padding: "14px 18px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "5px", alignItems: "center" }}>
                 {[0, 1, 2].map(i => (

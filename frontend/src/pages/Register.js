@@ -44,14 +44,10 @@ export default function Register() {
         border: `1px solid ${colors.border.default}`, borderRadius: radius.xl,
         padding: "40px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative", zIndex: 1,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "32px", justifyContent: "center" }}>
-          <div style={{ width: "40px", height: "40px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 15px rgba(59,130,246,0.35)" }}>
-            <BridgeBotLogo size={22} />
-          </div>
-          <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
-            Bridge<span style={{ color: colors.brand.light }}>Bot</span>
-          </span>
-        </div>
+        <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px", justifyContent: "center", textDecoration: "none" }}>
+          <BridgeBotLogo size={28} />
+          <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>Bridge<span style={{ color: colors.brand.light }}>Bot</span></span>
+        </Link>
 
         <h1 style={{ fontFamily: fonts.heading, fontSize: "24px", fontWeight: "700", color: colors.text.primary, textAlign: "center", margin: "0 0 6px" }}>Create account</h1>
         <p style={{ fontSize: "14px", color: colors.text.secondary, textAlign: "center", marginBottom: "28px" }}>Join BridgeBot and start building</p>

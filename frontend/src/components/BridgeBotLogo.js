@@ -1,45 +1,57 @@
 /**
- * BridgeBotLogo — SVG logo mark (overlapping chat bubbles with robot eyes).
- * Replaces the lucide-react <Bot> icon across the entire app.
+ * BridgeBotLogo — SVG mark: two overlapping chat bubbles with robot eyes.
+ *
+ * Designed to be legible at every size from 16px to 64px+.
+ * The left bubble is blue, the right is cyan, with prominent white eyes
+ * centred in the overlap zone.
  *
  * Props:
- *   size  — outer dimension in px (default 24)
- *   color — optional override; when set, renders a flat single-colour icon
- *           instead of the blue→cyan gradient (useful for muted / monochrome contexts)
+ *   size   — outer px dimension (default 24)
+ *   style  — optional inline styles on the <svg>
  */
-export default function BridgeBotLogo({ size = 24, color, style, className }) {
-  const id = `bbg_${Math.random().toString(36).slice(2, 8)}`;
+export default function BridgeBotLogo({ size = 24, style, className }) {
+  // Unique gradient id per instance (avoids SVG id collisions)
+  const id = `bb_${Math.random().toString(36).slice(2, 7)}`;
+
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 48 40"
+      viewBox="0 0 64 56"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={style}
       className={className}
+      aria-hidden="true"
     >
-      {!color && (
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#83ADFF" />
-            <stop offset="100%" stopColor="#3B82F6" />
-          </linearGradient>
-        </defs>
-      )}
-      {/* Left bubble */}
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0.9" y2="1">
+          <stop offset="0%" stopColor="#83ADFF" />
+          <stop offset="100%" stopColor="#3B82F6" />
+        </linearGradient>
+      </defs>
+
+      {/* Left bubble — blue gradient */}
       <path
-        d="M3,7 C3,3.1 6.1,0 10,0 H26 C29.9,0 33,3.1 33,7 V17 C33,20.9 29.9,24 26,24 H14 L7,31 L9,24 C5.1,24 3,20.9 3,17 Z"
-        fill={color || `url(#${id})`}
+        d="M4,10 C4,4.5 8.5,0 14,0 H34 C39.5,0 44,4.5 44,10 V26 C44,31.5 39.5,36 34,36 H20 L10,46 L13,36 H14 C8.5,36 4,31.5 4,26 Z"
+        fill={`url(#${id})`}
       />
-      {/* Right bubble */}
+
+      {/* Right bubble — solid cyan */}
       <path
-        d="M15,12 C15,8.1 18.1,5 22,5 H38 C41.9,5 45,8.1 45,12 V24 C45,27.9 41.9,31 38,31 H36 L41,38 L32,31 H22 C18.1,31 15,27.9 15,24 Z"
-        fill={color ? color : "#63E2EE"}
+        d="M20,16 C20,10.5 24.5,6 30,6 H50 C55.5,6 60,10.5 60,16 V34 C60,39.5 55.5,44 50,44 H47 L54,54 L42,44 H30 C24.5,44 20,39.5 20,34 Z"
+        fill="#63E2EE"
       />
-      {/* Eyes */}
-      <ellipse cx="24.5" cy="19" rx="2.2" ry="2.7" fill="white" />
-      <ellipse cx="33.5" cy="19" rx="2.2" ry="2.7" fill="white" />
+
+      {/* Left eye */}
+      <ellipse cx="31" cy="26" rx="3.5" ry="4.5" fill="white" />
+
+      {/* Right eye */}
+      <ellipse cx="44" cy="26" rx="3.5" ry="4.5" fill="white" />
+
+      {/* Pupils (visible at ≥ 28px) */}
+      <ellipse cx="32" cy="27" rx="1.5" ry="2" fill="#1a2540" />
+      <ellipse cx="45" cy="27" rx="1.5" ry="2" fill="#1a2540" />
     </svg>
   );
 }

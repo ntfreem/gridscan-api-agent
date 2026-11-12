@@ -133,14 +133,7 @@ export default function AdminLayout() {
         {/* Logo */}
         <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid ${colors.border.default}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-            <div style={{
-              width: "36px", height: "36px",
-              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-              borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
-            }}>
-              <BridgeBotLogo size={20} />
-            </div>
+            <BridgeBotLogo size={30} />
             <div>
               <span style={{
                 fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700",

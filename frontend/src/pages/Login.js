@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
@@ -32,20 +32,13 @@ export default function Login() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.base, padding: "40px 20px" }}>
       <div style={{ width: "100%", maxWidth: "400px", fontFamily: fonts.body }}>
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "48px", justifyContent: "center" }}>
-            <div style={{
-              width: "40px", height: "40px",
-              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
-              borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 15px rgba(59, 130, 246, 0.35)",
-            }}>
-              <BridgeBotLogo size={22} />
-            </div>
-            <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
+          {/* Logo — links home */}
+          <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "40px", justifyContent: "center", textDecoration: "none" }}>
+            <BridgeBotLogo size={28} />
+            <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
               Bridge<span style={{ color: colors.brand.light }}>Bot</span>
             </span>
-          </div>
+          </Link>
 
           <h1 style={{ fontFamily: fonts.heading, fontSize: "30px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px", letterSpacing: "-0.3px", textAlign: "center" }}>
             Welcome back
@@ -85,11 +78,6 @@ export default function Login() {
           <p style={{ textAlign: "center", marginTop: "28px", fontSize: "14px", color: colors.text.secondary }}>
             Don't have an account?{" "}
             <Link to="/register" style={{ color: colors.brand.light, textDecoration: "none", fontWeight: "600" }}>Create one</Link>
-          </p>
-          <p style={{ textAlign: "center", marginTop: "12px", fontSize: "13px" }}>
-            <Link to="/docs" data-testid="login-docs-link" style={{ color: colors.text.muted, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-              <BookOpen size={13} /> Documentation
-            </Link>
           </p>
       </div>
     </div>

@@ -227,14 +227,7 @@ function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
         {/* Logo */}
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }} data-testid="landing-logo">
-          <div style={{
-            width: 34, height: 34, borderRadius: 9,
-            background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: `0 2px 12px rgba(59,130,246,0.3)`,
-          }}>
-            <BridgeBotLogo size={19} />
-          </div>
+          <BridgeBotLogo size={30} />
           <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 20, fontWeight: 700, color: C.text }}>
             Bridge<span style={{ color: C.elec }}>Bot</span>
           </span>
@@ -1261,9 +1254,7 @@ function Footer() {
           {/* Logo */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <BridgeBotLogo size={15} />
-              </div>
+              <BridgeBotLogo size={24} />
               <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 17, fontWeight: 700, color: C.text }}>
                 Bridge<span style={{ color: C.elec }}>Bot</span>
               </span>
