@@ -297,7 +297,7 @@ function HeroSection() {
       style={{
         position: "relative",
         overflow: "hidden",
-        paddingTop: 168,
+        paddingTop: 196,
         paddingBottom: 80,
         background: C.bg,
       }}
