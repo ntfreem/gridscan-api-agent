@@ -356,8 +356,8 @@ export default function TelegramSettings() {
               How It Works
             </h3>
             <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, lineHeight: 1.8 }}>
-              <li>Messages arrive via Telegram webhook to BridgeBot</li>
-              <li>BridgeBot searches your Knowledge Base and executes API integrations</li>
+              <li>Messages arrive via Telegram webhook to BitBot Pro</li>
+              <li>BitBot Pro searches your Knowledge Base and executes API integrations</li>
               <li>An AI response is generated and sent back to the Telegram chat</li>
               <li>All conversations appear in your Conversations tab with platform: <code style={{ fontSize: "11px", padding: "1px 5px", backgroundColor: "rgba(96,165,250,0.1)", borderRadius: "3px", color: "#93C5FD" }}>telegram</code></li>
               <li>Use <code style={{ fontSize: "11px", padding: "1px 5px", backgroundColor: "rgba(96,165,250,0.1)", borderRadius: "3px", color: "#93C5FD" }}>/ask</code> command in groups when in "Mention / Command" mode</li>

@@ -1,5 +1,5 @@
 /**
- * BridgeBotLogo — renders the actual logo PNG with animated pupils.
+ * BitBot Pro Logo — renders the actual logo PNG with animated pupils.
  *
  * Uses /assets/bridgebot-logo.png (1000×1000 transparent PNG of two
  * interlocking blue/cyan speech bubbles with white eye areas).

@@ -1,5 +1,5 @@
 """
-Test API Key Analytics endpoints for BridgeBot.
+Test API Key Analytics endpoints for BitBot Pro.
 Tests the new analytics feature that tracks API key usage including:
 - Request counts, success/failure rates
 - Token usage and cost tracking

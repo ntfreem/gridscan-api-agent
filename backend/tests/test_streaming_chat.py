@@ -1,5 +1,5 @@
 """
-Test suite for BridgeBot Streaming Chat functionality.
+Test suite for BitBot Pro Streaming Chat functionality.
 Tests SSE streaming endpoints for web chat, widget, and external API.
 """
 import pytest

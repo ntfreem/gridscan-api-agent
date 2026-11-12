@@ -1,5 +1,5 @@
 """
-Telegram Bot Integration Tests for BridgeBot
+Telegram Bot Integration Tests for BitBot Pro
 Tests: Config CRUD, webhook validation, listen modes
 """
 import pytest

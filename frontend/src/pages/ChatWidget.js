@@ -82,7 +82,7 @@ export default function ChatWidget() {
           const link = document.createElement("link");
           link.rel = "stylesheet";
           link.href = cfg.custom_css_url;
-          link.setAttribute("data-bridgebot-css", "true");
+          link.setAttribute("data-bitbotpro-css", "true");
           document.head.appendChild(link);
         }
         // Apply theme CSS variables
@@ -108,7 +108,7 @@ export default function ChatWidget() {
     }
     return () => {
       // Cleanup injected CSS on unmount
-      const link = document.querySelector('link[data-bridgebot-css]');
+      const link = document.querySelector('link[data-bitbotpro-css]');
       if (link) link.remove();
     };
   }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -523,7 +523,7 @@ export default function ChatWidget() {
               <Send size={13} color={!isLoading && !isStreaming && input.trim() ? "#FFFFFF" : "#64748B"} />
             </button>
           </div>
-          <p className="bb-footer">Powered by BridgeBot</p>
+          <p className="bb-footer">Powered by BitBot Pro</p>
         </div>
       </div>
     </>

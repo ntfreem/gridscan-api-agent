@@ -434,7 +434,7 @@ export default function DiscordAppSetup() {
             </a>
 
             <StepCard step="1" title="Create the Application">
-              On the Developer Portal, click <b>New Application</b>, name it (e.g. "BridgeBot"), and accept the terms.
+              On the Developer Portal, click <b>New Application</b>, name it (e.g. "BitBot Pro"), and accept the terms.
             </StepCard>
 
             <StepCard step="2" title="Set App Branding">

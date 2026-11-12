@@ -168,15 +168,15 @@ export default function EmbedCode() {
       return {
         primary: {
           label: "Script Tag (Recommended)",
-          code: `<!-- BridgeBot Popup Widget -->\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="popup"${dataAttrs}>\n</script>`,
+          code: `<!-- BitBot Pro Popup Widget -->\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="popup"${dataAttrs}>\n</script>`,
         },
         alt: {
           label: "Manual iframe",
-          code: `<!-- BridgeBot Popup (iframe) -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;bottom:20px;right:20px;width:380px;\n    height:580px;border:none;z-index:9999;\n    border-radius:16px;\n    box-shadow:0 12px 48px rgba(0,0,0,0.3)"\n  title="Chat"\n></iframe>`,
+          code: `<!-- BitBot Pro Popup (iframe) -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;bottom:20px;right:20px;width:380px;\n    height:580px;border:none;z-index:9999;\n    border-radius:16px;\n    box-shadow:0 12px 48px rgba(0,0,0,0.3)"\n  title="Chat"\n></iframe>`,
         },
         react: {
           label: "React Component",
-          code: `import { useEffect } from 'react';\n\nexport function BridgeBotPopup() {\n  useEffect(() => {\n    const s = document.createElement('script');\n    s.src = '${scriptSrc}';\n    s.dataset.instance = '${instanceId}';\n    s.dataset.mode = 'popup';${Object.entries(theme).filter(([, v]) => v?.trim()).map(([k, v]) => `\n    s.dataset.${k} = '${v.trim()}';`).join("")}\n    s.async = true;\n    document.body.appendChild(s);\n    return () => s.remove();\n  }, []);\n  return null;\n}`,
+          code: `import { useEffect } from 'react';\n\nexport function BitBotProPopup() {\n  useEffect(() => {\n    const s = document.createElement('script');\n    s.src = '${scriptSrc}';\n    s.dataset.instance = '${instanceId}';\n    s.dataset.mode = 'popup';${Object.entries(theme).filter(([, v]) => v?.trim()).map(([k, v]) => `\n    s.dataset.${k} = '${v.trim()}';`).join("")}\n    s.async = true;\n    document.body.appendChild(s);\n    return () => s.remove();\n  }, []);\n  return null;\n}`,
         },
       };
     }
@@ -185,15 +185,15 @@ export default function EmbedCode() {
       return {
         primary: {
           label: "HTML + Script (Recommended)",
-          code: `<!-- BridgeBot Inline Chat -->\n<div id="bridgebot-container"\n  style="width:100%;height:600px;border-radius:12px;\n    overflow:hidden;border:1px solid #e2e8f0">\n</div>\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="inline"${dataAttrs}>\n</script>`,
+          code: `<!-- BitBot Pro Inline Chat -->\n<div id="bitbotpro-container"\n  style="width:100%;height:600px;border-radius:12px;\n    overflow:hidden;border:1px solid #e2e8f0">\n</div>\n<script src="${scriptSrc}"\n    data-instance="${instanceId}"\n    data-mode="inline"${dataAttrs}>\n</script>`,
         },
         alt: {
           label: "Direct iframe",
-          code: `<!-- BridgeBot Inline Chat -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="width:100%;height:600px;border:none;\n    border-radius:12px"\n  title="Chat"\n></iframe>`,
+          code: `<!-- BitBot Pro Inline Chat -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="width:100%;height:600px;border:none;\n    border-radius:12px"\n  title="Chat"\n></iframe>`,
         },
         react: {
           label: "React Component",
-          code: `export function BridgeBotInline({ height = '600px' }) {\n  return (\n    <iframe\n      src="${widgetUrl}${cssParam}"\n      title="Chat"\n      style={{\n        width: '100%', height, border: 'none',\n        borderRadius: '12px'\n      }}\n    />\n  );\n}`,
+          code: `export function BitBotProInline({ height = '600px' }) {\n  return (\n    <iframe\n      src="${widgetUrl}${cssParam}"\n      title="Chat"\n      style={{\n        width: '100%', height, border: 'none',\n        borderRadius: '12px'\n      }}\n    />\n  );\n}`,
         },
       };
     }
@@ -201,11 +201,11 @@ export default function EmbedCode() {
     return {
       primary: {
         label: "Redirect / Link",
-        code: `<!-- Link to BridgeBot -->\n<a href="${widgetUrl}${cssParam}"\n  target="_blank" rel="noopener">\n  Open Chat\n</a>`,
+        code: `<!-- Link to BitBot Pro -->\n<a href="${widgetUrl}${cssParam}"\n  target="_blank" rel="noopener">\n  Open Chat\n</a>`,
       },
       alt: {
         label: "Full Page iframe",
-        code: `<!-- BridgeBot Full Page -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;top:0;left:0;width:100%;\n    height:100%;border:none;z-index:99999"\n  title="Chat"\n></iframe>`,
+        code: `<!-- BitBot Pro Full Page -->\n<iframe\n  src="${widgetUrl}${cssParam}"\n  style="position:fixed;top:0;left:0;width:100%;\n    height:100%;border:none;z-index:99999"\n  title="Chat"\n></iframe>`,
       },
       react: {
         label: "React Route",
@@ -399,7 +399,7 @@ export default function EmbedCode() {
               <div style={{ flex: 1, position: "relative" }}>
                 <Link2 size={14} color={colors.text.muted} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
                 <input value={cssUrl} onChange={e => setCssUrl(e.target.value)}
-                  placeholder="https://your-site.com/bridgebot-theme.css" data-testid="css-url-input"
+                  placeholder="https://your-site.com/bitbotpro-theme.css" data-testid="css-url-input"
                   style={{ ...T.input, paddingLeft: "34px" }} onFocus={onFocus} onBlur={onBlur} />
               </div>
               <button onClick={saveEmbedConfig} disabled={saving} data-testid="save-css-btn"

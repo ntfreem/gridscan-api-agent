@@ -55,7 +55,7 @@ export default function ForgotPassword() {
       <div style={{ width: "100%", maxWidth: "420px", backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: radius.xl, padding: "40px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", justifyContent: "center", textDecoration: "none" }}>
           <BridgeBotLogo size={44} />
-          <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>Bridge<span style={{ color: colors.brand.light }}>Bot</span></span>
+          <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>BitBot <span style={{ color: colors.brand.light }}>Pro</span></span>
         </Link>
 
         {/* Step indicator */}

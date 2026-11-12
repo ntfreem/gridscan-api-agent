@@ -1,9 +1,9 @@
-# BridgeBot PRD
+# BitBot Pro PRD
 
 ## Original Problem Statement
-Redesign BridgeBot's homepage to clearly sell its main features (Knowledge, API data, Channels, Customization) using a Midnight Blue theme with sleek neon blue and cyan accents. Implement fade-in animations, an embedded live chat demo, and integrate a custom interlinking chat-bubble logo with animated drifting pupils on hover. Clean up repetitive graphical elements across auth pages.
+Redesign the homepage to clearly sell main features (Knowledge, API data, Channels, Customization) using a Midnight Blue theme with sleek neon blue and cyan accents. Implement fade-in animations, an embedded live chat demo, and integrate a custom interlinking chat-bubble logo with animated drifting pupils on hover. Clean up repetitive graphical elements across auth pages.
 
-PRODUCT REQUIREMENTS UPDATE: Add "API key usage stats", onboarding wizard, changelog, and scope out WhatsApp integration.
+PRODUCT REQUIREMENTS UPDATE: Add "API key usage stats", onboarding wizard, changelog, and scope out WhatsApp integration. Rename entire site from "BridgeBot" to "BitBot Pro".
 
 ## Product Overview
 Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI backend and React frontend. Features KB system (GitHub/URL crawling), API diagnostics, admin dashboard, and polished marketing landing page.
@@ -21,7 +21,8 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 - [x] Auth pages cleaned (Login, Register, ForgotPassword) — no repetitive gradient boxes
 - [x] BridgeBotLogo component with animated drifting pupils on hover (PNG-based)
 - [x] Logo replaced globally across all pages
-- [x] Logo sizes increased to chunky/prominent (48px navbar, 44px admin, 40px footer) — Nov 12, 2026
+- [x] Logo sizes increased to chunky/prominent (56px navbar, 52px admin, 48px footer) — Nov 12, 2026
+- [x] Full site rename: BridgeBot → BitBot Pro (all 20+ files, 100+ occurrences, frontend + backend + docs + emails + embeds) — Nov 12, 2026
 
 ## P0 — Current Sprint
 - [ ] WhatsApp channel integration (config page + webhook messaging)
@@ -49,3 +50,9 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 
 ## Credentials
 - Admin: administrator / Admin@123
+
+## Brand Notes
+- Product name: "BitBot Pro" (with "Pro" in accent color)
+- Logo: PNG at /assets/bridgebot-logo.png (file name kept for compatibility, displays as BitBot Pro)
+- Component name: BridgeBotLogo (internal code identifier, not user-visible)
+- Production domain: bridgebot.tech (domain check kept in AdminLayout.js)

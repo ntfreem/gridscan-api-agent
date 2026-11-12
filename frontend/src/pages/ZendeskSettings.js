@@ -539,8 +539,8 @@ export default function ZendeskSettings() {
               How It Works
             </h3>
             <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, lineHeight: 1.8 }}>
-              <li>A Zendesk trigger fires when a new ticket is created and sends a webhook to BridgeBot</li>
-              <li>BridgeBot fetches the ticket content, searches your Knowledge Base, and runs API integrations</li>
+              <li>A Zendesk trigger fires when a new ticket is created and sends a webhook to BitBot Pro</li>
+              <li>BitBot Pro fetches the ticket content, searches your Knowledge Base, and runs API integrations</li>
               <li>An AI response is generated based on your bot&apos;s personality and knowledge</li>
               <li><strong>Auto-Reply</strong>: Response is posted as a public ticket comment</li>
               <li><strong>Agent Assist</strong>: Response is stored for agents to view in the Zendesk sidebar app</li>

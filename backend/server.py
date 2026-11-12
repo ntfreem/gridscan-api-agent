@@ -162,7 +162,7 @@ async def send_verification_email(to_email: str, code: str):
     try:
         html = f"""
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#111;color:#fff;padding:32px;border-radius:8px">
-          <h2 style="margin:0 0 8px;font-size:22px">BridgeBot</h2>
+          <h2 style="margin:0 0 8px;font-size:22px">BitBot Pro</h2>
           <p style="color:#a1a1aa;margin:0 0 28px;font-size:14px">Email Verification</p>
           <p style="font-size:14px;margin:0 0 16px">Your verification code is:</p>
           <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:20px;text-align:center;margin-bottom:24px">
@@ -174,7 +174,7 @@ async def send_verification_email(to_email: str, code: str):
         params = {
             "from": FROM_EMAIL,
             "to": [to_email],
-            "subject": "Your BridgeBot verification code",
+            "subject": "Your BitBot Pro verification code",
             "html": html,
         }
         await asyncio.to_thread(resend.Emails.send, params)
@@ -190,7 +190,7 @@ async def send_reset_email(to_email: str, code: str):
     try:
         html = f"""
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#111;color:#fff;padding:32px;border-radius:8px">
-          <h2 style="margin:0 0 8px;font-size:22px">BridgeBot</h2>
+          <h2 style="margin:0 0 8px;font-size:22px">BitBot Pro</h2>
           <p style="color:#a1a1aa;margin:0 0 28px;font-size:14px">Password Reset</p>
           <p style="font-size:14px;margin:0 0 16px">Your password reset code is:</p>
           <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:20px;text-align:center;margin-bottom:24px">
@@ -202,7 +202,7 @@ async def send_reset_email(to_email: str, code: str):
         params = {
             "from": FROM_EMAIL,
             "to": [to_email],
-            "subject": "Reset your BridgeBot password",
+            "subject": "Reset your BitBot Pro password",
             "html": html,
         }
         await asyncio.to_thread(resend.Emails.send, params)
@@ -2023,7 +2023,7 @@ async def start_shared_discord_bot(token: str):
                 await message.channel.send(
                     f"Sorry, I hit an error while generating a reply.\n"
                     f"Diagnostic: `{err_kind}: {short}`\n"
-                    f"If this persists, an admin should check **Analytics → LLM Usage** on the BridgeBot dashboard."
+                    f"If this persists, an admin should check **Analytics → LLM Usage** on the BitBot Pro dashboard."
                 )
 
         await _shared_discord_client.start(token)
@@ -2139,7 +2139,7 @@ async def shutdown_event():
 
 @api_router.get("/")
 async def root():
-    return {"message": "BridgeBot API", "version": "2.0.0"}
+    return {"message": "BitBot Pro API", "version": "2.0.0"}
 @api_router.post("/auth/register")
 async def register(body: UserRegister):
     if not body.email or not body.password or not body.username:
@@ -3602,9 +3602,9 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   // ── Inline mode ──
   if (MODE === "inline") {{
     var target = document.getElementById("bridgebot-container") || document.querySelector("[data-bridgebot]");
-    if (!target) {{ console.warn("BridgeBot: No #bridgebot-container found."); return; }}
+    if (!target) {{ console.warn("BitBot Pro: No #bridgebot-container found."); return; }}
     var f = document.createElement("iframe");
-    f.src = widgetUrl; f.title = "BridgeBot Chat";
+    f.src = widgetUrl; f.title = "BitBot Pro Chat";
     f.style.cssText = "width:100%;height:100%;border:none;min-height:500px;";
     f.setAttribute("data-testid", "bridgebot-inline-iframe");
     target.innerHTML = ""; target.appendChild(f);
@@ -3614,7 +3614,7 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
   // ── Fullpage mode ──
   if (MODE === "fullpage") {{
     var f = document.createElement("iframe");
-    f.src = widgetUrl; f.title = "BridgeBot Chat";
+    f.src = widgetUrl; f.title = "BitBot Pro Chat";
     f.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:99999;";
     f.setAttribute("data-testid", "bridgebot-fullpage-iframe");
     document.body.appendChild(f);
@@ -3674,7 +3674,7 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
     "box-shadow:0 12px 48px rgba(0,0,0,0.3);display:none;";
 
   var iframe = document.createElement("iframe");
-  iframe.src = widgetUrl; iframe.title = "BridgeBot Chat";
+  iframe.src = widgetUrl; iframe.title = "BitBot Pro Chat";
   iframe.style.cssText = "width:100%;height:100%;border:none;";
   iframe.setAttribute("data-testid", "bridgebot-popup-iframe");
   panel.appendChild(iframe);
@@ -5502,7 +5502,7 @@ async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str 
         raise HTTPException(status_code=400, detail="Invite URL is required")
     inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0}) or {}
     bot_cfg = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
-    bot_name = bot_cfg.get("name") or inst.get("name") or "BridgeBot"
+    bot_name = bot_cfg.get("name") or inst.get("name") or "BitBot Pro"
     recipient = (body.recipient_name or "there").strip()
     note_html = ""
     if body.custom_note and body.custom_note.strip():
@@ -5511,16 +5511,16 @@ async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str 
     html = f"""<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F8FAFC;margin:0;padding:24px;color:#0F172A;">
 <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:32px;">
 <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A;">You{"'"}re invited to add {bot_name} to your Discord server</h1>
-<p style="margin:0 0 20px;color:#475569;line-height:1.6;">Hi {recipient}, the BridgeBot admin has invited you to install our Discord bot on a server you manage.</p>
+<p style="margin:0 0 20px;color:#475569;line-height:1.6;">Hi {recipient}, the BitBot Pro admin has invited you to install our Discord bot on a server you manage.</p>
 {note_html}
 <a href="{body.invite_url}" style="display:inline-block;padding:14px 28px;background:#5865F2;color:#FFFFFF;text-decoration:none;border-radius:10px;font-weight:600;font-size:14px;">Invite Bot to Your Server</a>
-<p style="margin:24px 0 8px;color:#64748B;font-size:12px;line-height:1.6;">You{"'"}ll need <strong>Manage Server</strong> permission on the Discord server you want to add the bot to. After clicking the button, Discord will ask you to authorize the bot. No BridgeBot account needed — the admin will configure the bot{"'"}s knowledge base and behavior on their end.</p>
+<p style="margin:24px 0 8px;color:#64748B;font-size:12px;line-height:1.6;">You{"'"}ll need <strong>Manage Server</strong> permission on the Discord server you want to add the bot to. After clicking the button, Discord will ask you to authorize the bot. No BitBot Pro account needed — the admin will configure the bot{"'"}s knowledge base and behavior on their end.</p>
 <p style="margin:16px 0 0;color:#94A3B8;font-size:11px;">If the button doesn{"'"}t work, copy this link into your browser:<br><code style="word-break:break-all;color:#475569;">{body.invite_url}</code></p>
-<div style="margin-top:28px;padding-top:16px;border-top:1px solid #E2E8F0;color:#94A3B8;font-size:11px;">Sent via BridgeBot · This invite was prepared by your contact.</div>
+<div style="margin-top:28px;padding-top:16px;border-top:1px solid #E2E8F0;color:#94A3B8;font-size:11px;">Sent via BitBot Pro · This invite was prepared by your contact.</div>
 </div></body></html>"""
     try:
         result = resend.Emails.send({
-            "from": "BridgeBot <noreply@bridgebot.tech>",
+            "from": "BitBot Pro <noreply@bridgebot.tech>",
             "to": [body.to_email.strip()],
             "subject": f"Invite {bot_name} to your Discord server",
             "html": html,
@@ -5616,7 +5616,7 @@ async def discord_oauth_callback(
                     _shared_discord_task.cancel()
                 _shared_discord_task = asyncio.create_task(start_shared_discord_bot(bot_token))
 
-            bot_name = (await db.bot_config.find_one({'instance_id': instance_id}, {'_id': 0}) or {}).get('name', 'BridgeBot')
+            bot_name = (await db.bot_config.find_one({'instance_id': instance_id}, {'_id': 0}) or {}).get('name', 'BitBot Pro')
             return RedirectResponse(
                 url=f"{frontend_base}/discord/invited?guild={guild.get('name', '')}&bot={bot_name}"
             )

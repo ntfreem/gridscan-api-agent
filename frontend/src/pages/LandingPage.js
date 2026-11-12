@@ -231,7 +231,7 @@ function Navbar() {
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }} data-testid="landing-logo">
           <BridgeBotLogo size={56} glow />
           <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 26, fontWeight: 700, color: C.text }}>
-            Bridge<span style={{ color: C.elec }}>Bot</span>
+            BitBot <span style={{ color: C.elec }}>Pro</span>
           </span>
         </Link>
 
@@ -378,7 +378,7 @@ function HeroSection() {
             }}>
               <iframe
                 src="/widget?mode=inline"
-                title="BridgeBot Live Demo"
+                title="BitBot Pro Live Demo"
                 data-testid="hero-live-demo"
                 style={{
                   width: "100%",
@@ -705,7 +705,7 @@ function ZendeskSection() {
           <SectionTag>Zendesk Integration</SectionTag>
           <SectionHeading style={{ margin: "12px auto 0" }}>Support customers directly — or help your agents respond.</SectionHeading>
           <SectionSub style={{ margin: "16px auto 0", textAlign: "center" }}>
-            Two independently toggleable modes let you choose how BridgeBot participates in your Zendesk workflow.
+            Two independently toggleable modes let you choose how BitBot Pro participates in your Zendesk workflow.
           </SectionSub>
         </div>
 
@@ -900,7 +900,7 @@ function WidgetSection() {
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}>
                 <code style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: C.cyan, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {'<script src="bridgebot.tech/embed.js"></script>'}
+                  {'<script src="bitbotpro.app/embed.js"></script>'}
                 </code>
                 <Copy size={14} color={C.muted} style={{ cursor: "pointer", flexShrink: 0 }} />
               </div>
@@ -1125,8 +1125,8 @@ function FaqSection() {
       a: "You can upload text documents and PDFs, scrape website content (including sub-pages), and connect GitHub repositories. All content is processed into semantic chunks for retrieval.",
     },
     {
-      q: "Which channels does BridgeBot support?",
-      a: "BridgeBot deploys to five channels: a customizable website chat widget, Discord servers, Telegram (DMs, mentions, and commands), Zendesk (auto-reply and agent-assist), and a REST API for custom applications.",
+      q: "Which channels does BitBot Pro support?",
+      a: "BitBot Pro deploys to five channels: a customizable website chat widget, Discord servers, Telegram (DMs, mentions, and commands), Zendesk (auto-reply and agent-assist), and a REST API for custom applications.",
     },
     {
       q: "Can answers include live external API data?",
@@ -1146,7 +1146,7 @@ function FaqSection() {
     },
     {
       q: "Which AI providers are supported?",
-      a: "BridgeBot uses Claude and GPT models through the Emergent Universal Key. You can also bring your own OpenAI API key (BYOK) for direct OpenAI access.",
+      a: "BitBot Pro uses Claude and GPT models through the Emergent Universal Key. You can also bring your own OpenAI API key (BYOK) for direct OpenAI access.",
     },
   ];
 
@@ -1260,7 +1260,7 @@ function Footer() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <BridgeBotLogo size={48} />
               <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 22, fontWeight: 700, color: C.text }}>
-                Bridge<span style={{ color: C.elec }}>Bot</span>
+                BitBot <span style={{ color: C.elec }}>Pro</span>
               </span>
             </div>
             <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.muted, maxWidth: 260, lineHeight: 1.5 }}>
@@ -1302,7 +1302,7 @@ function Footer() {
           fontFamily: "IBM Plex Sans, sans-serif", fontSize: 12, color: C.muted,
           textAlign: "center",
         }}>
-          Built with BridgeBot
+          Built with BitBot Pro
         </div>
       </div>
     </footer>

@@ -28,7 +28,7 @@ class TestEmbedJsEndpoint:
         
         content = response.text
         assert "(function()" in content, "Should be an IIFE"
-        assert "BridgeBot" in content or "bridgebot" in content.lower(), "Should reference BridgeBot"
+        assert "BitBot Pro" in content or "bridgebot" in content.lower(), "Should reference BitBot Pro"
         print("PASS: embed.js returns valid JavaScript")
 
     def test_embed_js_contains_data_attribute_reading(self):

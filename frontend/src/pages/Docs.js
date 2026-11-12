@@ -11,8 +11,8 @@ const sections = [
     title: "Getting Started",
     content: [
       {
-        title: "What is BridgeBot?",
-        body: `BridgeBot is a multi-tenant AI chatbot platform that lets you create intelligent support agents powered by your own knowledge base and external API integrations. Deploy bots across multiple channels — web widget, Discord, Telegram, and Zendesk.
+        title: "What is BitBot Pro?",
+        body: `BitBot Pro is a multi-tenant AI chatbot platform that lets you create intelligent support agents powered by your own knowledge base and external API integrations. Deploy bots across multiple channels — web widget, Discord, Telegram, and Zendesk.
 
 **Key capabilities:**
 - Create multiple bot instances for different products or teams
@@ -99,7 +99,7 @@ Every new source you add immediately makes the bot smarter. No retraining needed
 4. Optionally enable **Sub-Page Crawling** to discover and scrape linked pages (depth 1-3, up to 50 pages)
 5. Click "Scrape & Save"
 
-**Sub-Page Crawling:** When enabled, BridgeBot discovers same-domain sub-pages and imports them all. Progress is shown in real-time via a streaming progress bar.
+**Sub-Page Crawling:** When enabled, BitBot Pro discovers same-domain sub-pages and imports them all. Progress is shown in real-time via a streaming progress bar.
 
 **Re-scraping:** Use the refresh icon on any URL source to re-scrape its content. Use "Refresh All URLs" to bulk re-scrape all URL sources with a progress indicator.
 
@@ -186,7 +186,7 @@ The bot uses AI to route questions — it decides which API endpoint to call, wh
 4. Add authentication (API key, Bearer token, or custom headers)
 5. Click "Save"
 
-**Endpoint Discovery:** If the API has an OpenAPI/Swagger spec, BridgeBot can auto-discover endpoints. Click "Discover Endpoints" and provide the spec URL. Otherwise, add endpoints manually with path, method, parameters, and description.`
+**Endpoint Discovery:** If the API has an OpenAPI/Swagger spec, BitBot Pro can auto-discover endpoints. Click "Discover Endpoints" and provide the spec URL. Otherwise, add endpoints manually with path, method, parameters, and description.`
       },
       {
         title: "How the Bot Uses APIs",
@@ -224,7 +224,7 @@ In your app's Bot settings, enable:
 - "Server Members Intent" (required for Human Takeover)
 
 **Step 3: Configure Credentials**
-In BridgeBot → Discord settings, expand "Discord App Credentials". Enter:
+In BitBot Pro → Discord settings, expand "Discord App Credentials". Enter:
 - **Client ID** — from General Information
 - **Client Secret** — from General Information
 - **Redirect URI** — your domain + /api/discord/callback
@@ -267,8 +267,8 @@ All listen mode changes take effect immediately.`
 **Steps:**
 1. Create a bot with **@BotFather** on Telegram (send /newbot and follow the prompts)
 2. Copy the bot token
-3. In BridgeBot → Telegram settings, paste the token and click "Connect"
-4. BridgeBot automatically registers a webhook with Telegram
+3. In BitBot Pro → Telegram settings, paste the token and click "Connect"
+4. BitBot Pro automatically registers a webhook with Telegram
 5. Set your preferred listen mode and activate the bot
 
 **Important:** If you want the bot to read all group messages (not just commands), disable "Group Privacy" in BotFather settings for your bot.`
@@ -327,8 +327,8 @@ All Telegram conversations appear in the Conversations tab with a "telegram" pla
 - An API token from Zendesk Admin Center
 
 **Steps:**
-1. In BridgeBot → Zendesk settings, enter your subdomain, admin email, and API token
-2. Click "Connect" — BridgeBot validates your credentials against Zendesk
+1. In BitBot Pro → Zendesk settings, enter your subdomain, admin email, and API token
+2. Click "Connect" — BitBot Pro validates your credentials against Zendesk
 3. Copy the **Webhook URL** displayed on the settings page
 4. In Zendesk Admin Center → Objects and Rules → Triggers, create a trigger:
    - Condition: "Ticket is Created"
@@ -337,14 +337,14 @@ All Telegram conversations appear in the Conversations tab with a "telegram" pla
       },
       {
         title: "Response Modes",
-        body: `BridgeBot supports two independently toggleable modes:
+        body: `BitBot Pro supports two independently toggleable modes:
 
 **Auto-Reply** — When a new ticket arrives:
-1. BridgeBot fetches the ticket content from Zendesk
+1. BitBot Pro fetches the ticket content from Zendesk
 2. Searches your KB and runs API integrations
 3. Posts a public AI-generated reply on the ticket
-4. Adds an internal audit note ("BridgeBot AI auto-reply posted")
-5. Tags the ticket with \`ai_processed\` and \`bridgebot\`
+4. Adds an internal audit note ("BitBot Pro AI auto-reply posted")
+5. Tags the ticket with \`ai_processed\` and \`bitbotpro\`
 
 **Agent Assist** — When a new ticket arrives:
 1. Same AI processing pipeline
@@ -356,18 +356,18 @@ Both modes can be enabled simultaneously. Toggle them independently in the setti
       },
       {
         title: "Webhook Setup Details",
-        body: `After connecting, BridgeBot generates a unique webhook URL for your instance.
+        body: `After connecting, BitBot Pro generates a unique webhook URL for your instance.
 
 **In Zendesk Admin Center:**
 1. Go to Apps and Integrations → Webhooks → Create Webhook
-2. Set the endpoint URL to your BridgeBot webhook URL
+2. Set the endpoint URL to your BitBot Pro webhook URL
 3. Request method: POST, Content type: JSON
 4. Create a Trigger: Condition = "Ticket is Created", Action = notify this webhook
 
 **Payload format:** The webhook should send JSON with at least a \`ticket_id\` field:
 \`{"ticket_id": "{{ticket.id}}"}\`
 
-**Deduplication:** BridgeBot tracks event IDs to prevent processing the same ticket twice.`
+**Deduplication:** BitBot Pro tracks event IDs to prevent processing the same ticket twice.`
       },
       {
         title: "Processed Tickets",
@@ -585,7 +585,7 @@ Quick presets: Conservative (10%), Balanced (50%), Open (85%).`
     content: [
       {
         title: "Message Flow (end-to-end)",
-        body: `How a user message travels through BridgeBot from any channel to the AI reply.
+        body: `How a user message travels through BitBot Pro from any channel to the AI reply.
 
 **Key stages:** routing → gate checks → KB search → API query → prompt assembly → LLM call → response delivery.`,
         diagram: `┌───────────────────────────────────────────────────────────────────────────┐
@@ -598,7 +598,7 @@ Quick presets: Conservative (10%), Balanced (50%), Open (85%).`
      │           │           │            │            │
      ▼           ▼           ▼            ▼            ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                     BRIDGEBOT BACKEND  (FastAPI)                          │
+│                     BITBOT PRO BACKEND  (FastAPI)                          │
 │                                                                          │
 │  1. ROUTING — resolve instance_id from channel context                   │
 │       Discord:   guild_id  → discord_config → instance_id                │
@@ -714,7 +714,7 @@ export default function Docs() {
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
             <BridgeBotLogo size={40} />
             <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
-              Bridge<span style={{ color: colors.brand.light }}>Bot</span>
+              BitBot <span style={{ color: colors.brand.light }}>Pro</span>
             </span>
           </Link>
           <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, backgroundColor: colors.bg.panel, padding: "2px 8px", borderRadius: "6px" }}>

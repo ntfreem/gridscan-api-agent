@@ -1,4 +1,4 @@
-// BridgeBot — Soft AI Bot Design System
+// BitBot Pro — Soft AI Bot Design System
 // Rounded, approachable, lighter blue palette
 
 export const colors = {

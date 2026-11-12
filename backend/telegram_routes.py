@@ -1,5 +1,5 @@
 """
-Telegram Bot integration routes for BridgeBot.
+Telegram Bot integration routes for BitBot Pro.
 Handles: config CRUD, webhook setup, incoming message processing.
 """
 import os
@@ -375,7 +375,7 @@ async def _process_telegram_message(
     instance_id: str, chat_id: int, user_text: str,
     username: str, user_id: str, bot_token: str, message_id: int = None,
 ):
-    """Process a Telegram message through the BridgeBot AI pipeline."""
+    """Process a Telegram message through the BitBot Pro AI pipeline."""
     session_id = f"tg_{chat_id}_{instance_id}"
 
     try:

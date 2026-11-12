@@ -1,5 +1,5 @@
 """
-BridgeBot API Integrations Module
+BitBot Pro API Integrations Module
 Handles: multi-API integrations, endpoint registry, credential encryption,
 enhanced OpenAPI parsing, SSRF-safe execution, and CRUD endpoints.
 """

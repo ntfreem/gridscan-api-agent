@@ -1,5 +1,5 @@
 """
-Zendesk Integration Tests for BridgeBot
+Zendesk Integration Tests for BitBot Pro
 Tests: Config CRUD, webhook handling, suggestion endpoint, analytics integration
 """
 import pytest

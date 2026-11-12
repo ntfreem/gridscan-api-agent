@@ -255,7 +255,7 @@ function ShareInviteLink() {
       </div>
       <p style={{ margin: "0 0 10px", fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.5" }}>
         Send this link to anyone with Manage Server permission on a Discord server. They click it, authorize the bot,
-        and it lands in your admin panel ready to configure. They never need to log into BridgeBot.
+        and it lands in your admin panel ready to configure. They never need to log into BitBot Pro.
       </p>
       <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
         <input
@@ -355,7 +355,7 @@ function ShareInviteLink() {
 
       <p style={{ margin: "8px 0 0", fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, lineHeight: "1.5" }}>
         Anyone with this link can invite the bot. The new server auto-links to <strong>this</strong> instance, and the
-        invited admin lands on a friendly thank-you page (no BridgeBot login needed). To rotate, visit <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a>.
+        invited admin lands on a friendly thank-you page (no BitBot Pro login needed). To rotate, visit <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a>.
       </p>
     </div>
   );
@@ -589,7 +589,7 @@ export default function DiscordSettings() {
 
 
   const disconnectGuild = async () => {
-    if (!window.confirm("Disconnect this Discord server from BridgeBot? This only clears the link in BridgeBot — if the bot is still in the server, you must also remove it via Discord's Integrations page.")) {
+    if (!window.confirm("Disconnect this Discord server from BitBot Pro? This only clears the link in BitBot Pro — if the bot is still in the server, you must also remove it via Discord's Integrations page.")) {
       return;
     }
     setDisconnecting(true);

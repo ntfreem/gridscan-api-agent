@@ -1003,7 +1003,7 @@ export default function ApiKeyAnalytics() {
       {/* ── Integration API Key Usage (TOP) ── */}
       <IntegrationUsageSection days={days} />
 
-      {/* ── BridgeBot API Keys ── */}
+      {/* ── BitBot Pro API Keys ── */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "48px", color: colors.text.muted }}>Loading...</div>
       ) : keys.length === 0 ? (

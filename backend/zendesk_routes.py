@@ -1,5 +1,5 @@
 """
-Zendesk integration routes for BridgeBot.
+Zendesk integration routes for BitBot Pro.
 Handles: config CRUD, webhook processing, auto-reply, agent-assist suggestions.
 """
 import os
@@ -267,7 +267,7 @@ async def get_suggestion(instance_id: str, ticket_id: str):
 
 @router.get("/admin/zendesk-tickets")
 async def get_recent_zendesk_tickets(request: Request):
-    """Return recent Zendesk tickets processed by BridgeBot."""
+    """Return recent Zendesk tickets processed by BitBot Pro."""
     instance_id = await _get_instance_access(request)
     tickets = await _db.zendesk_suggestions.find(
         {"instance_id": instance_id}
@@ -415,14 +415,14 @@ Do not mention that you are an AI unless directly asked."""
                     cfg["subdomain"], cfg["email"], cfg["api_token"],
                     "PUT", f"/tickets/{ticket_id}.json",
                     {"ticket": {"comment": {"body": ai_response, "public": True},
-                                "tags": ["ai_processed", "bridgebot"]}}
+                                "tags": ["ai_processed", "bitbotpro"]}}
                 )
                 # Post internal audit note
                 await _zendesk_request(
                     cfg["subdomain"], cfg["email"], cfg["api_token"],
                     "PUT", f"/tickets/{ticket_id}.json",
                     {"ticket": {"comment": {
-                        "body": f"[BridgeBot] AI auto-reply posted for ticket #{ticket_id}.",
+                        "body": f"[BitBot Pro] AI auto-reply posted for ticket #{ticket_id}.",
                         "public": False,
                     }}}
                 )

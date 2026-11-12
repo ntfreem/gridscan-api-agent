@@ -442,7 +442,7 @@ export default function BotSettings() {
                   onFocus={onFocus} onBlur={onBlur}
                   style={T.input}
                 />
-                <p style={T.hint}>Where your Ollama server is reachable from the BridgeBot backend. Leave blank to fall back to <code>OLLAMA_BASE_URL</code> env (default localhost:11434).</p>
+                <p style={T.hint}>Where your Ollama server is reachable from the BitBot Pro backend. Leave blank to fall back to <code>OLLAMA_BASE_URL</code> env (default localhost:11434).</p>
               </>
             )}
 

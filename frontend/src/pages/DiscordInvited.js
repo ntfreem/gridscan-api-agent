@@ -8,7 +8,7 @@ import { colors, fonts } from "../theme";
 export default function DiscordInvited() {
   const [params] = useSearchParams();
   const guild = params.get("guild") || "your Discord server";
-  const bot = params.get("bot") || "BridgeBot";
+  const bot = params.get("bot") || "BitBot Pro";
   const hasError = params.get("error") === "1";
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -70,7 +70,7 @@ export default function DiscordInvited() {
                 What happens next?
               </p>
               <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, lineHeight: "1.6" }}>
-                The BridgeBot admin will configure {bot}{`'`}s knowledge base, persona, and channel
+                The BitBot Pro admin will configure {bot}{`'`}s knowledge base, persona, and channel
                 permissions on their end. The bot will start responding in your server once setup
                 is complete. You don{`'`}t need to do anything else — you can close this page.
               </p>

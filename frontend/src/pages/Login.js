@@ -36,7 +36,7 @@ export default function Login() {
           <Link to="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "40px", justifyContent: "center", textDecoration: "none" }}>
             <BridgeBotLogo size={44} />
             <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
-              Bridge<span style={{ color: colors.brand.light }}>Bot</span>
+              BitBot <span style={{ color: colors.brand.light }}>Pro</span>
             </span>
           </Link>
 

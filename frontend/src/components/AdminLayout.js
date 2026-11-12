@@ -139,7 +139,7 @@ export default function AdminLayout() {
                 fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700",
                 color: colors.text.primary, letterSpacing: "-0.3px",
               }}>
-                Bridge<span style={{ color: colors.brand.light }}>Bot</span>
+                BitBot <span style={{ color: colors.brand.light }}>Pro</span>
               </span>
               <p style={{
                 fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted,
