@@ -8,7 +8,6 @@ import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useEffect } from "react";
 import { colors, fonts, radius } from "@/theme";
 import api from "../utils/api";
-import OnboardingWizard from "./OnboardingWizard";
 
 const ALL_NAV_ITEMS = [
   { path: "/admin/discord-app-setup", label: "Discord App Setup", icon: SlidersHorizontal, adminOnly: true },
@@ -93,26 +92,6 @@ export default function AdminLayout() {
   const { user, instances, selectedInstance, selectInstance, logout } = useAuth();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [showWizard, setShowWizard] = useState(false);
-
-  // Check onboarding status on mount
-  useEffect(() => {
-    api.get("/onboarding/status").then(res => {
-      if (!res.data.dismissed && !res.data.completed) {
-        setShowWizard(true);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const handleWizardComplete = () => {
-    setShowWizard(false);
-    api.post("/onboarding/complete").catch(() => {});
-  };
-
-  const handleWizardDismiss = () => {
-    setShowWizard(false);
-    api.post("/onboarding/dismiss").catch(() => {});
-  };
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) => !item.adminOnly || user?.role === "superadmin"
@@ -295,20 +274,20 @@ export default function AdminLayout() {
           >
             <HelpCircle size={12} /> Documentation
           </a>
-          <button
-            onClick={() => setShowWizard(true)}
+          <NavLink
+            to="/admin/setup-guide"
             data-testid="setup-guide-btn"
-            style={{
+            style={({ isActive }) => ({
               display: "flex", alignItems: "center", gap: "7px",
-              color: colors.text.secondary, fontSize: "12px",
+              color: isActive ? colors.brand.light : colors.text.secondary, fontSize: "12px",
               fontFamily: fonts.body, fontWeight: "500",
-              background: "none", border: "none", cursor: "pointer",
-              padding: 0, marginBottom: "14px",
+              textDecoration: "none",
+              marginBottom: "14px",
               transition: "color 0.2s",
-            }}
+            })}
           >
             <Rocket size={12} /> Setup Guide
-          </button>
+          </NavLink>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "10px 0",
@@ -344,9 +323,6 @@ export default function AdminLayout() {
       >
         <Outlet />
       </main>
-      {showWizard && (
-        <OnboardingWizard onComplete={handleWizardComplete} onDismiss={handleWizardDismiss} />
-      )}
     </div>
   );
 }

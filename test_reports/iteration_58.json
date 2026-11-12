@@ -1,0 +1,98 @@
+{
+  "summary": "Completed comprehensive testing of Onboarding Wizard (Setup Guide) feature. Backend API GET /api/onboarding/step-status returns correct dynamic completion status. Frontend page at /admin/setup-guide displays all 5 steps with progress bar, left navigation, step details, action buttons, and channel cards. All navigation and functionality working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_step_status.py",
+    "/app/test_reports/pytest/iter58_onboarding_step_status.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_onboarding_step_status.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "seed_data_creation": "No seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Setup Guide feature fully tested. Backend endpoint GET /api/onboarding/step-status dynamically checks: bot_instances for step 1, knowledge_sources for step 2, bot_config for step 3, conversations for step 4, discord_config/telegram_config/zendesk_config for step 5. Current admin account shows 4 of 5 steps complete (all except connect_channel). Frontend page at /admin/setup-guide has data-testid attributes: setup-guide-page, step-nav-{key}, wizard-action-{key}, wizard-channel-{label}, wizard-prev-btn, wizard-next-btn, wizard-done-btn, setup-guide-btn (sidebar).",
+  "features_tested": [
+    {
+      "feature": "Setup Guide page loads at /admin/setup-guide",
+      "status": "PASS",
+      "details": "Page loads with data-testid='setup-guide-page', displays 5 steps with progress bar showing '4 of 5 steps complete'"
+    },
+    {
+      "feature": "Left sidebar shows step navigation with completion states",
+      "status": "PASS",
+      "details": "All 5 step nav buttons found (create_instance, add_knowledge, customize_persona, test_bot, connect_channel). Completed steps show checkmarks and 'Complete' text, pending step shows 'Go live'"
+    },
+    {
+      "feature": "Clicking each step switches right panel content",
+      "status": "PASS",
+      "details": "Each step shows title, description, tip, and action button. Step 5 shows 4 channel cards instead of single action button"
+    },
+    {
+      "feature": "Step 1 (Create Instance) shows 'Done' badge and navigates to /admin/instances",
+      "status": "PASS",
+      "details": "Done badge visible, action button 'Go to Bot Instances' navigates correctly"
+    },
+    {
+      "feature": "Step 2 (Add Knowledge) shows 'Done' badge and navigates to /admin/knowledge",
+      "status": "PASS",
+      "details": "Done badge visible, action button 'Open Knowledge Base' navigates correctly"
+    },
+    {
+      "feature": "Step 3 (Set Persona) shows 'Done' badge and navigates to /admin/settings",
+      "status": "PASS",
+      "details": "Done badge visible, action button 'Open Bot Settings' navigates correctly"
+    },
+    {
+      "feature": "Step 4 (Test Bot) shows 'Done' badge and opens chat in new tab",
+      "status": "PASS",
+      "details": "Done badge visible, action button 'Open Chat Demo' configured for external link (new tab)"
+    },
+    {
+      "feature": "Step 5 (Deploy Channel) shows 4 channel cards navigating to respective pages",
+      "status": "PASS",
+      "details": "Web Widget -> /admin/embed, Discord -> /admin/discord, Telegram -> /admin/telegram, Zendesk -> /admin/zendesk"
+    },
+    {
+      "feature": "Previous/Next navigation buttons work correctly",
+      "status": "PASS",
+      "details": "Previous disabled on step 1 (opacity=0.4), Next button advances steps, 'Go to Dashboard' button on step 5 navigates to /admin"
+    },
+    {
+      "feature": "Setup Guide link in sidebar bottom area",
+      "status": "PASS",
+      "details": "NavLink with data-testid='setup-guide-btn' found, highlights when active (color: rgb(107, 170, 255))"
+    },
+    {
+      "feature": "Backend API GET /api/onboarding/step-status returns correct completion status",
+      "status": "PASS",
+      "details": "Returns {create_instance: true, add_knowledge: true, customize_persona: true, test_bot: true, connect_channel: false} based on real data"
+    }
+  ],
+  "api_verification": {
+    "endpoint": "GET /api/onboarding/step-status",
+    "requires_auth": true,
+    "requires_instance_header": "Optional (steps 2-5 require X-Instance-ID for accurate status)",
+    "response_format": {
+      "create_instance": "boolean - true if user has bot instances",
+      "add_knowledge": "boolean - true if instance has knowledge sources",
+      "customize_persona": "boolean - true if bot_config has name or system_prompt",
+      "test_bot": "boolean - true if instance has conversations",
+      "connect_channel": "boolean - true if discord/telegram/zendesk configured"
+    }
+  }
+}

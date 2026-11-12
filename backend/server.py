@@ -6282,6 +6282,54 @@ async def dismiss_onboarding(current_user: dict = Depends(get_current_user)):
     )
     return {"success": True}
 
+@api_router.get("/onboarding/step-status")
+async def get_onboarding_step_status(request: Request, current_user: dict = Depends(get_current_user)):
+    """Dynamically check which onboarding steps are complete based on real data."""
+    inst_id = request.headers.get("X-Instance-ID")
+    user_id = current_user["id"]
+    is_admin = current_user.get("role") == "superadmin"
+
+    # Step 1: Has at least one instance?
+    if is_admin:
+        inst_count = await db.bot_instances.count_documents({})
+    else:
+        user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "instances": 1})
+        inst_count = len(user_doc.get("instances", [])) if user_doc else 0
+    has_instance = inst_count > 0
+
+    # Steps 2-5 depend on having a selected instance
+    has_knowledge = False
+    has_persona = False
+    has_tested = False
+    has_channel = False
+
+    if inst_id:
+        # Step 2: Has knowledge entries?
+        kb_count = await db.knowledge_sources.count_documents({"instance_id": inst_id})
+        has_knowledge = kb_count > 0
+
+        # Step 3: Has customized bot persona?
+        bot_cfg = await db.bot_config.find_one({"instance_id": inst_id}, {"_id": 0})
+        has_persona = bool(bot_cfg and (bot_cfg.get("name") or bot_cfg.get("system_prompt")))
+
+        # Step 4: Has tested (any conversation)?
+        conv_count = await db.conversations.count_documents({"instance_id": inst_id})
+        has_tested = conv_count > 0
+
+        # Step 5: Has connected a channel?
+        discord = await db.discord_config.find_one({"instance_id": inst_id, "guild_id": {"$exists": True, "$ne": None}})
+        telegram = await db.telegram_config.find_one({"instance_id": inst_id, "is_active": True})
+        zendesk = await db.zendesk_config.find_one({"instance_id": inst_id, "is_active": True})
+        has_channel = bool(discord or telegram or zendesk)
+
+    return {
+        "create_instance": has_instance,
+        "add_knowledge": has_knowledge,
+        "customize_persona": has_persona,
+        "test_bot": has_tested,
+        "connect_channel": has_channel,
+    }
+
 
 # ==================== APP SETUP ====================
 
