@@ -1,88 +1,111 @@
 /**
- * BridgeBotLogo — Interlocking stroked speech bubbles with robot eyes.
+ * BridgeBotLogo — renders the actual logo PNG with animated pupils.
  *
- * Matches the official logo: blue bubble (left, tail bottom-left) interlinks
- * with cyan bubble (right, tail bottom-right). Blue goes OVER cyan at the top,
- * cyan goes OVER blue at the bottom. Subtle white oval eyes in center.
+ * Uses /assets/bridgebot-logo.png (1000×1000 transparent PNG of two
+ * interlocking blue/cyan speech bubbles with white eye areas).
+ *
+ * On hover, two dark pupils appear inside the white eyes and drift
+ * subtly, giving the logo a playful "alive" personality.
  *
  * Props:
  *   size  — outer px dimension (default 24)
- *   glow  — adds a neon drop-shadow when true
+ *   glow  — adds neon drop-shadow when true
  */
-export default function BridgeBotLogo({ size = 24, glow, style, className }) {
-  const uid = `bb_${Math.random().toString(36).slice(2, 7)}`;
-  const sw = 7.5; // stroke width
+import { useId } from "react";
 
-  // The two bubble paths
-  const bluePath =
-    "M 16,62 L 9,74 L 19,64 C 11,62 5,52 5,41 C 5,26 17,15 33,15 L 61,15 C 75,15 83,24 83,36 C 83,46 77,54 67,57 L 31,61 Z";
-  const cyanPath =
-    "M 84,68 L 91,80 L 81,70 C 89,68 95,58 95,48 C 95,33 83,22 67,22 L 39,22 C 25,22 17,31 17,43 C 17,53 23,61 33,64 L 69,68 Z";
+export default function BridgeBotLogo({ size = 36, glow, style, className }) {
+  const id = useId();
 
-  const filterStyle = glow
-    ? { filter: `drop-shadow(0 0 ${size * 0.15}px rgba(91,158,245,0.6)) drop-shadow(0 0 ${size * 0.08}px rgba(60,219,211,0.4))` }
-    : {};
+  // Pupils are only rendered and visible at ≥22 px
+  const showPupils = size >= 22;
+
+  // Pupil proportions relative to logo size
+  const pw = Math.max(2, size * 0.065);  // pupil width
+  const ph = Math.max(2.5, size * 0.08); // pupil height
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 90"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ ...filterStyle, ...style }}
-      className={className}
-      aria-hidden="true"
+    <span
+      className={`bb-logo${className ? ` ${className}` : ""}`}
+      data-testid="bridgebot-logo"
+      style={{
+        display: "inline-flex",
+        position: "relative",
+        width: size,
+        height: size,
+        flexShrink: 0,
+        filter: glow
+          ? `drop-shadow(0 0 ${Math.max(3, size * 0.12)}px rgba(59,130,246,0.55)) drop-shadow(0 0 ${Math.max(2, size * 0.06)}px rgba(60,219,211,0.35))`
+          : undefined,
+        ...style,
+      }}
     >
-      <defs>
-        {/* Clip to reveal only the TOP of the blue path (for interlocking) */}
-        <clipPath id={`${uid}_top`}>
-          <rect x="0" y="0" width="100" height="40" />
-        </clipPath>
-        <linearGradient id={`${uid}_bg`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#6BAAFF" />
-          <stop offset="100%" stopColor="#3B82F6" />
-        </linearGradient>
-        <linearGradient id={`${uid}_cg`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#5DE8DA" />
-          <stop offset="100%" stopColor="#3CDBD3" />
-        </linearGradient>
-      </defs>
-
-      {/* Layer 1: Blue bubble — full, behind everything */}
-      <path
-        d={bluePath}
-        stroke={`url(#${uid}_bg)`}
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+      <img
+        src="/assets/bridgebot-logo.png"
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        style={{ display: "block", width: size, height: size, pointerEvents: "none" }}
       />
 
-      {/* Layer 2: Cyan bubble — full, covers blue at the bottom (natural overlap) */}
-      <path
-        d={cyanPath}
-        stroke={`url(#${uid}_cg)`}
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
+      {/* Animated pupils — appear inside the white eye ovals on hover */}
+      {showPupils && (
+        <>
+          <span
+            className="bb-pupil bb-pupil-l"
+            style={{
+              position: "absolute",
+              left: "34.5%",
+              top: "40%",
+              width: pw,
+              height: ph,
+              borderRadius: "50%",
+              background: "#15243a",
+              opacity: 0,
+              pointerEvents: "none",
+              transition: "opacity 0.2s",
+            }}
+          />
+          <span
+            className="bb-pupil bb-pupil-r"
+            style={{
+              position: "absolute",
+              left: "53%",
+              top: "40%",
+              width: pw,
+              height: ph,
+              borderRadius: "50%",
+              background: "#15243a",
+              opacity: 0,
+              pointerEvents: "none",
+              transition: "opacity 0.2s",
+            }}
+          />
+        </>
+      )}
 
-      {/* Layer 3: Blue bubble TOP portion re-drawn ON TOP of cyan (creates interlocking) */}
-      <path
-        d={bluePath}
-        stroke={`url(#${uid}_bg)`}
-        strokeWidth={sw}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        clipPath={`url(#${uid}_top)`}
-      />
-
-      {/* Robot eyes — subtle white ovals */}
-      <ellipse cx="43" cy="44" rx="4" ry="5.5" fill="white" opacity="0.22" />
-      <ellipse cx="59" cy="44" rx="4" ry="5.5" fill="white" opacity="0.22" />
-    </svg>
+      {/* Inject keyframes + hover rules once */}
+      <style>{`
+        .bb-logo:hover .bb-pupil {
+          opacity: 1 !important;
+          animation: bbPupilDrift 1.6s ease-in-out infinite alternate;
+        }
+        .bb-logo:hover .bb-pupil-r {
+          animation-delay: 0.08s;
+        }
+        @keyframes bbPupilDrift {
+          0%   { transform: translate(0, 0); }
+          30%  { transform: translate(20%, -15%); }
+          70%  { transform: translate(-15%, 10%); }
+          100% { transform: translate(10%, -5%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bb-logo:hover .bb-pupil {
+            animation: none !important;
+            transform: translate(0, 0) !important;
+          }
+        }
+      `}</style>
+    </span>
   );
 }

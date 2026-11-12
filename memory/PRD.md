@@ -1,46 +1,51 @@
-# BridgeBot — Product Requirements Document
+# BridgeBot PRD
+
+## Original Problem Statement
+Redesign BridgeBot's homepage to clearly sell its main features (Knowledge, API data, Channels, Customization) using a Midnight Blue theme with sleek neon blue and cyan accents. Implement fade-in animations, an embedded live chat demo, and integrate a custom interlinking chat-bubble logo with animated drifting pupils on hover. Clean up repetitive graphical elements across auth pages.
+
+PRODUCT REQUIREMENTS UPDATE: Add "API key usage stats", onboarding wizard, changelog, and scope out WhatsApp integration.
 
 ## Product Overview
-Multi-tenant SaaS chatbot platform enabling AI-powered Discord, Web, Telegram, and Zendesk bots with Knowledge Base, multi-API integrations, and unified AI reasoning.
-
-## Core Requirements
-- Multi-tenant bot instance management with admin dashboard
-- Knowledge Base ingestion (text, PDF, web scrape) with vector search
-- Discord, Web, Telegram, and Zendesk chat interfaces
-- Unified AI reasoning: LLM receives KB context + live API data simultaneously
-- Multi-API integration management with endpoint CRUD
-- BYOK OpenAI support + Emergent Universal Key fallback
+Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI backend and React frontend. Features KB system (GitHub/URL crawling), API diagnostics, admin dashboard, and polished marketing landing page.
 
 ## Architecture
-- **Backend**: FastAPI on port 8001, MongoDB
-- **Frontend**: React SPA on port 3000
-- **AI**: Emergent Universal Key (Claude/GPT), BYOK OpenAI
-- **Integrations**: Discord.py, Telegram Bot API, Zendesk REST API, external REST APIs
+- Frontend: React (CRA) with Tailwind-inspired inline styles, Shadcn/UI
+- Backend: FastAPI (server.py >6.2k lines, needs future refactor)
+- Database: MongoDB Atlas
+- Integrations: OpenAI/Claude (Emergent LLM Key), Discord, Telegram, Zendesk, Emergent Object Storage
 
-## Visual Identity
-- **Logo**: Two thick-stroked outlined speech bubbles that interlink — blue (left, tail bottom-left) goes OVER cyan at top; cyan (right, tail bottom-right) goes OVER blue at bottom. Subtle white oval robot eyes in center. SVG at `/app/frontend/src/components/BridgeBotLogo.js`
-- **Palette**: Midnight Blue (#0B1020 bg), neon blue (#3B82F6 primary, #6BAAFF highlights), neon cyan (#3CDBD3 accents), with glow effects on interactive elements
-- **Typography**: Outfit (headings), IBM Plex Sans (body), JetBrains Mono (mono)
+## Completed Features
+- [x] Redesigned landing page with marketing copy, hero, neon cyan/blue theme
+- [x] Embedded live chat demo on homepage hero
+- [x] Scroll-based fade-in animations (IntersectionObserver)
+- [x] Auth pages cleaned (Login, Register, ForgotPassword) — no repetitive gradient boxes
+- [x] BridgeBotLogo component with animated drifting pupils on hover (PNG-based)
+- [x] Logo replaced globally across all pages
+- [x] Logo sizes increased to chunky/prominent (48px navbar, 44px admin, 40px footer) — Nov 12, 2026
 
-## Implemented Features
+## P0 — Current Sprint
+- [ ] WhatsApp channel integration (config page + webhook messaging)
 
-### Phase 1–23 (Previously Completed)
-Core platform, API integrations, LLM config, diagnostics, scraper improvements, conversations, knowledge gate, KB export/import, GitHub crawler, widget theming, embed.js, integration analytics, copy button fix, Telegram integration (rich replies, contextual buttons), Platform Stats Dashboard, Conversation Filters, Zendesk integration (auto-reply + agent-assist), Documentation, Onboarding Wizard, Changelog page, Docs search bar.
+## P1 — Upcoming
+- [ ] API key usage stats dashboard widget
+- [ ] Onboarding wizard for new users
+- [ ] Changelog page (public-facing)
 
-### Phase 24 — Homepage Redesign (Feb 2026)
-- 11-section marketing landing page at `/`
+## P2 — Future / Backlog
+- [ ] Refactor server.py into modular route files (/routes, /models, /services)
+- [ ] APP_MODE env splitting (worker vs api)
+- [ ] Multi-server Discord feature
 
-### Phase 25–26 — Logo, Animations, Neon Treatment & Cleanup (Feb 2026)
-- **Interlinking BridgeBotLogo SVG**: clipPath-based weave effect, neon glow prop, replaces all old Bot icons across 13+ files
-- **Neon blue/cyan glow effects**: Primary buttons, card hovers, FAQ open state, section tags, hero background, CTA section, step icons
-- **Updated palette**: brand.light=#6BAAFF, brand.cyan=#3CDBD3, added neonBlue/neonCyan/neonGlow shadow tokens in theme.js
-- **Scroll fade-in animations**: IntersectionObserver-based FadeIn on all homepage sections
-- **Live chat demo**: Embedded `/widget?mode=inline` iframe in hero section
-- **Repetitive element cleanup**: Auth pages (Login, Register, ForgotPassword, ResetPassword, VerifyEmail) — removed gradient-box logos, robot-hero.png, redundant Documentation links
-- **Testing**: 100% pass rate across iterations 54–57 (47/47 total tests)
+## Key DB Schema
+- `telegram_config`: {instance_id, bot_token, listen_mode, is_active}
+- `zendesk_config`: {instance_id, subdomain, admin_email, api_token, auto_reply, agent_assist, is_active}
+- `changelog_entries`: {id, version, title, changes, date}
 
-## Backlog
-- P1: WhatsApp Integration (MUST use integration_playbook_expert_v2)
-- P2: Refactor server.py into modular route files (/routes, /models, /services)
-- P2: APP_MODE env splitting (worker vs api)
-- P2: Multi-server Discord feature
+## Key API Endpoints
+- GET/PUT /api/admin/telegram-config
+- GET/PUT /api/admin/zendesk-config
+- GET /api/analytics/daily-by-platform
+- GET /api/admin/onboarding-status
+
+## Credentials
+- Admin: administrator / Admin@123

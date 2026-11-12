@@ -64,7 +64,7 @@ export default function DiscordInvited() {
           marginBottom: "20px",
         }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <BridgeBotLogo size={18} />
+            <BridgeBotLogo size={28} />
             <div>
               <p style={{ margin: "0 0 6px", fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>
                 What happens next?

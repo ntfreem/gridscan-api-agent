@@ -229,8 +229,8 @@ function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
         {/* Logo */}
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }} data-testid="landing-logo">
-          <BridgeBotLogo size={30} glow />
-          <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 20, fontWeight: 700, color: C.text }}>
+          <BridgeBotLogo size={48} glow />
+          <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 24, fontWeight: 700, color: C.text }}>
             Bridge<span style={{ color: C.elec }}>Bot</span>
           </span>
         </Link>
@@ -751,8 +751,8 @@ function ZendeskSection() {
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <BridgeBotLogo size={13} />
+                  <div style={{ width: 30, height: 30, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <BridgeBotLogo size={18} />
                   </div>
                   <div style={{ background: C.bg, border: `1px solid ${C.blue}30`, borderRadius: 10, padding: "12px 16px", flex: 1 }}>
                     <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text, margin: 0, lineHeight: 1.6 }}>
@@ -882,7 +882,7 @@ function WidgetSection() {
                     display: "flex", alignItems: "center", gap: 8,
                     transition: "background 0.3s",
                   }}>
-                    <BridgeBotLogo size={15} />
+                    <BridgeBotLogo size={20} />
                     <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 12, fontWeight: 600, color: "#fff" }}>Assistant</span>
                   </div>
                   <div style={{ padding: "12px 14px" }}>
@@ -936,8 +936,8 @@ function DashboardSection() {
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <BridgeBotLogo size={14} />
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <BridgeBotLogo size={20} />
               </div>
               <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>Dashboard</span>
             </div>
@@ -1258,8 +1258,8 @@ function Footer() {
           {/* Logo */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <BridgeBotLogo size={24} />
-              <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 17, fontWeight: 700, color: C.text }}>
+              <BridgeBotLogo size={40} />
+              <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 20, fontWeight: 700, color: C.text }}>
                 Bridge<span style={{ color: C.elec }}>Bot</span>
               </span>
             </div>

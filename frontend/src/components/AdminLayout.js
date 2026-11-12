@@ -132,17 +132,17 @@ export default function AdminLayout() {
       }}>
         {/* Logo */}
         <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid ${colors.border.default}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-            <BridgeBotLogo size={30} />
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+            <BridgeBotLogo size={44} />
             <div>
               <span style={{
-                fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700",
+                fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700",
                 color: colors.text.primary, letterSpacing: "-0.3px",
               }}>
                 Bridge<span style={{ color: colors.brand.light }}>Bot</span>
               </span>
               <p style={{
-                fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted,
+                fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted,
                 textTransform: "uppercase", letterSpacing: "0.15em", margin: 0,
               }}>AI Platform</p>
             </div>
@@ -168,7 +168,7 @@ export default function AdminLayout() {
                     borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0,
                   }}>
-                    <BridgeBotLogo size={11} />
+                    <BridgeBotLogo size={16} />
                   </div>
                   <span style={{
                     fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
