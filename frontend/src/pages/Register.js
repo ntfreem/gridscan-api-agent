@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { Bot, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
 const BASE = `/api`;
@@ -45,7 +46,7 @@ export default function Register() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "32px", justifyContent: "center" }}>
           <div style={{ width: "40px", height: "40px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 15px rgba(59,130,246,0.35)" }}>
-            <Bot size={22} color="#FFFFFF" />
+            <BridgeBotLogo size={22} />
           </div>
           <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
             Bridge<span style={{ color: colors.brand.light }}>Bot</span>

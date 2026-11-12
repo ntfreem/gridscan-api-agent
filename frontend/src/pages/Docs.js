@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Bot, ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch, Send, Headphones, Plug, Search, X } from "lucide-react";
+import { ChevronRight, ChevronDown, BookOpen, Users, MessageSquare, Database, Zap, Settings, Globe, Shield, BarChart3, Code, HelpCircle, ArrowLeft, UserCheck, GitBranch, Send, Headphones, Plug, Search, X } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius } from "../theme";
 
 const sections = [
@@ -711,7 +712,7 @@ export default function Docs() {
       <div style={{ borderBottom: `1px solid ${colors.border.default}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{ width: "36px", height: "36px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Bot size={20} color="#FFFFFF" />
+            <BridgeBotLogo size={20} />
           </div>
           <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary }}>
             Bridge<span style={{ color: colors.brand.light }}>Bot</span>

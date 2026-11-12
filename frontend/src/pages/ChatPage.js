@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { Bot, Send, Plus, ExternalLink, Copy, Check } from "lucide-react";
+import { Send, Plus, ExternalLink, Copy, Check } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { useSearchParams } from "react-router-dom";
 import { colors, fonts } from "../theme";
 import { streamChat } from "../utils/streamChat";
@@ -139,7 +140,7 @@ export default function ChatPage() {
             borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: `0 0 12px rgba(59, 130, 246, 0.4)`,
           }}>
-            <Bot size={18} color="#FFFFFF" />
+            <BridgeBotLogo size={18} />
           </div>
           <div>
             <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.3px" }}>
@@ -181,7 +182,7 @@ export default function ChatPage() {
               borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center",
               margin: "0 auto 20px", boxShadow: `0 0 30px rgba(59, 130, 246, 0.3)`,
             }}>
-              <Bot size={28} color="#FFFFFF" />
+              <BridgeBotLogo size={28} />
             </div>
             <h2 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: "0 0 10px", letterSpacing: "-0.5px" }}>
               How can I help you?
@@ -201,7 +202,7 @@ export default function ChatPage() {
                 borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
                 marginRight: "10px", flexShrink: 0, marginTop: "4px",
               }}>
-                <Bot size={14} color="#FFFFFF" />
+                <BridgeBotLogo size={14} />
               </div>
             )}
             <div style={{
@@ -232,7 +233,7 @@ export default function ChatPage() {
         {isLoading && !isStreaming && (
           <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "16px" }} data-testid="typing-indicator">
             <div style={{ width: "28px", height: "28px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginRight: "10px", flexShrink: 0 }}>
-              <Bot size={14} color="#FFFFFF" />
+              <BridgeBotLogo size={14} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ padding: "14px 18px", backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`, borderRadius: "12px", display: "flex", gap: "5px", alignItems: "center" }}>

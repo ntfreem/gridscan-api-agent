@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
-import { Plus, Trash2, UserPlus, UserMinus, Bot, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, UserPlus, UserMinus, ChevronDown, ChevronUp } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { toast } from "sonner";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
@@ -79,7 +80,7 @@ function InstanceRow({ instance, onRefresh }) {
       <div style={{ display: "flex", alignItems: "center", padding: "16px 20px", gap: "14px", cursor: "pointer" }}
         onClick={() => setExpanded(!expanded)}>
         <div style={{ width: "36px", height: "36px", backgroundColor: "rgba(59,130,246,0.1)", border: `1px solid ${colors.border.default}`, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Bot size={16} color={colors.brand.blue} />
+          <BridgeBotLogo size={16} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>{instance.name}</p>
@@ -179,7 +180,7 @@ export default function Instances() {
 
       {instances.length === 0 ? (
         <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", padding: "48px", textAlign: "center" }}>
-          <Bot size={32} color={colors.text.muted} style={{ marginBottom: "16px" }} />
+          <BridgeBotLogo size={32} style={{ marginBottom: "16px" }} />
           <p style={{ color: colors.text.secondary, fontSize: "15px", fontFamily: fonts.body, marginBottom: "8px" }}>No instances yet</p>
           <p style={{ color: colors.text.muted, fontSize: "13px", fontFamily: fonts.body, marginBottom: "20px" }}>Create your first bot instance to get started</p>
           <button onClick={() => setShowCreate(true)} style={T.btnPrimary}><Plus size={15} /> Create First Instance</button>

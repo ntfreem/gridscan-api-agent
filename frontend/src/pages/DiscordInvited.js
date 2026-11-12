@@ -1,7 +1,8 @@
 import { useSearchParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { CheckCircle, Bot, AlertCircle, ArrowRight } from "lucide-react";
+import { CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts } from "../theme";
 
 export default function DiscordInvited() {
@@ -63,7 +64,7 @@ export default function DiscordInvited() {
           marginBottom: "20px",
         }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <Bot size={18} color={colors.brand.light} style={{ marginTop: "1px", flexShrink: 0 }} />
+            <BridgeBotLogo size={18} />
             <div>
               <p style={{ margin: "0 0 6px", fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary }}>
                 What happens next?

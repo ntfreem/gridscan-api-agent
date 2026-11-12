@@ -2,8 +2,9 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
-  BarChart2, Zap, Code2, ExternalLink, Bot, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket
+  BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket
 } from "lucide-react";
+import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useEffect } from "react";
 import { colors, fonts, radius } from "@/theme";
 import api from "../utils/api";
@@ -138,7 +139,7 @@ export default function AdminLayout() {
               borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center",
               boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
             }}>
-              <Bot size={20} color="#FFFFFF" />
+              <BridgeBotLogo size={20} />
             </div>
             <div>
               <span style={{
@@ -174,7 +175,7 @@ export default function AdminLayout() {
                     borderRadius: radius.sm, display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0,
                   }}>
-                    <Bot size={11} color={colors.brand.light} />
+                    <BridgeBotLogo size={11} />
                   </div>
                   <span style={{
                     fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { Bot, Send, RotateCcw, Copy, Check } from "lucide-react";
+import { Send, RotateCcw, Copy, Check } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { useSearchParams } from "react-router-dom";
 import { streamChat } from "../utils/streamChat";
 import MarkdownMessage from "../components/MarkdownMessage";
@@ -430,7 +431,7 @@ export default function ChatWidget() {
           <div className="bb-avatar">
             {logoUrl
               ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-              : <Bot size={16} color="#FFFFFF" />}
+              : <BridgeBotLogo size={16} />}
           </div>
           <div style={{ flex: 1 }}>
             <p className="bb-bot-name">{botConfig.name || "Assistant"}</p>
@@ -451,7 +452,7 @@ export default function ChatWidget() {
               <div className="bb-empty-icon">
                 {logoUrl
                   ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                  : <Bot size={22} color="#FFFFFF" />}
+                  : <BridgeBotLogo size={22} />}
               </div>
               <p className="bb-empty-title">Hi there!</p>
               <p className="bb-empty-sub">Type a message to get started.</p>
@@ -464,7 +465,7 @@ export default function ChatWidget() {
                 <div className="bb-msg-avatar">
                   {logoUrl
                     ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                    : <Bot size={11} color="#FFFFFF" />}
+                    : <BridgeBotLogo size={11} />}
                 </div>
               )}
               <div className={`bb-bubble ${msg.role === "user" ? "user" : "bot"} ${msg.isError ? "error" : ""}`}>
@@ -484,7 +485,7 @@ export default function ChatWidget() {
               <div className="bb-msg-avatar">
                 {logoUrl
                   ? <img src={logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                  : <Bot size={11} color="#FFFFFF" />}
+                  : <BridgeBotLogo size={11} />}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                 <div className="bb-typing">

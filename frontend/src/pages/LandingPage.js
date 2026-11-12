@@ -1,13 +1,54 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  Bot, ArrowRight, Globe, MessageSquare, Send, Headphones, Code2,
-  BookOpen, FileText, Github, Search, Database, Upload, RefreshCw,
+  ArrowRight, Globe, MessageSquare, Send, Headphones, Code2,
+  BookOpen, FileText, Github, Search, Upload,
   Zap, BarChart2, Shield, Activity, CheckCircle2, ChevronDown,
-  Palette, MessageCircle, Play, Copy, Terminal, LayoutDashboard,
-  Users, Settings, Filter, TrendingUp, Clock, ExternalLink, Menu, X,
-  Sparkles, Eye, PenTool, Cpu, Layers, ArrowUpRight, ChevronRight
+  Palette, MessageCircle, Play, Copy,
+  Users, Settings, Filter, TrendingUp, Clock, Menu, X,
+  Eye, PenTool, Cpu, Layers, ArrowUpRight
 } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
+
+/* ─── fade-in on scroll ─── */
+function useFadeIn(threshold = 0.12) {
+  const ref = useRef(null);
+  const [vis, setVis] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Respect prefers-reduced-motion
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVis(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVis(true); obs.unobserve(el); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return [ref, vis];
+}
+
+function FadeIn({ children, delay = 0, style }) {
+  const [ref, vis] = useFadeIn();
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: vis ? 1 : 0,
+        transform: vis ? "translateY(0)" : "translateY(32px)",
+        transition: `opacity 0.7s cubic-bezier(.16,1,.3,1) ${delay}s, transform 0.7s cubic-bezier(.16,1,.3,1) ${delay}s`,
+        willChange: "opacity, transform",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /* ─── palette ─── */
 const C = {
@@ -192,7 +233,7 @@ function Navbar() {
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: `0 2px 12px rgba(59,130,246,0.3)`,
           }}>
-            <Bot size={19} color="#fff" />
+            <BridgeBotLogo size={19} />
           </div>
           <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 20, fontWeight: 700, color: C.text }}>
             Bridge<span style={{ color: C.elec }}>Bot</span>
@@ -330,7 +371,7 @@ function HeroSection() {
             </div>
           </div>
 
-          {/* Right: Product preview mockup */}
+          {/* Right: Live chat demo */}
           <div className="hero-preview" style={{ position: "relative" }}>
             <div style={{
               background: C.surface,
@@ -338,94 +379,23 @@ function HeroSection() {
               borderRadius: 16,
               overflow: "hidden",
               boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 40px ${C.blue}08`,
+              height: 420,
             }}>
-              {/* Chat header */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "14px 20px",
-                borderBottom: `1px solid ${C.border}`,
-                background: C.surface2,
-              }}>
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Bot size={15} color="#fff" />
-                </div>
-                <div>
-                  <div style={{ fontFamily: "Outfit, sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>BridgeBot Assistant</div>
-                  <div style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 10, color: C.green, display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, display: "inline-block" }} /> Online
-                  </div>
-                </div>
-              </div>
-
-              {/* Chat messages */}
-              <div style={{ padding: "20px", minHeight: 240 }}>
-                {/* User message */}
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-                  <div style={{
-                    background: `${C.blue}20`, border: `1px solid ${C.blue}30`,
-                    borderRadius: "14px 14px 4px 14px", padding: "10px 16px",
-                    maxWidth: "80%",
-                  }}>
-                    <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text, margin: 0 }}>
-                      What is the current status of the ETH network and how does gas work?
-                    </p>
-                  </div>
-                </div>
-
-                {/* Bot response */}
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                    <Bot size={13} color="#fff" />
-                  </div>
-                  <div style={{
-                    background: C.surface2, border: `1px solid ${C.border}`,
-                    borderRadius: "4px 14px 14px 14px", padding: "12px 16px",
-                    maxWidth: "85%",
-                  }}>
-                    <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text, margin: "0 0 10px", lineHeight: 1.6 }}>
-                      Gas is a unit measuring computational effort on Ethereum. Each transaction requires gas, paid in Gwei.
-                    </p>
-                    {/* Source badges */}
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{
-                        fontFamily: "JetBrains Mono, monospace", fontSize: 10,
-                        background: `${C.blue}15`, color: C.elec, padding: "3px 8px",
-                        borderRadius: 4, border: `1px solid ${C.blue}25`,
-                      }}>
-                        <BookOpen size={9} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />
-                        Knowledge Base
-                      </span>
-                      <span style={{
-                        fontFamily: "JetBrains Mono, monospace", fontSize: 10,
-                        background: `${C.cyan}12`, color: C.cyan, padding: "3px 8px",
-                        borderRadius: 4, border: `1px solid ${C.cyan}25`,
-                      }}>
-                        <Zap size={9} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />
-                        Live API
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{
-                padding: "12px 20px", borderTop: `1px solid ${C.border}`,
-                display: "flex", alignItems: "center", gap: 10,
-              }}>
-                <div style={{
-                  flex: 1, background: C.bg, border: `1px solid ${C.border}`,
-                  borderRadius: 8, padding: "9px 14px",
-                  fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.muted,
-                }}>
-                  Ask anything...
-                </div>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: C.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <ArrowUpRight size={16} color="#fff" />
-                </div>
-              </div>
+              <iframe
+                src="/widget?mode=inline"
+                title="BridgeBot Live Demo"
+                data-testid="hero-live-demo"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                  display: "block",
+                }}
+              />
             </div>
-            <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10 }}>
-              Illustrative example — answers combine your knowledge and live API data
+            <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block", boxShadow: `0 0 6px ${C.green}` }} />
+              Live demo — try asking a question
             </p>
           </div>
         </div>
@@ -787,7 +757,7 @@ function ZendeskSection() {
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <div style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Bot size={13} color="#fff" />
+                    <BridgeBotLogo size={13} />
                   </div>
                   <div style={{ background: C.bg, border: `1px solid ${C.blue}30`, borderRadius: 10, padding: "12px 16px", flex: 1 }}>
                     <p style={{ fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text, margin: 0, lineHeight: 1.6 }}>
@@ -917,7 +887,7 @@ function WidgetSection() {
                     display: "flex", alignItems: "center", gap: 8,
                     transition: "background 0.3s",
                   }}>
-                    <Bot size={15} color="#fff" />
+                    <BridgeBotLogo size={15} />
                     <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 12, fontWeight: 600, color: "#fff" }}>Assistant</span>
                   </div>
                   <div style={{ padding: "12px 14px" }}>
@@ -972,7 +942,7 @@ function DashboardSection() {
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Bot size={14} color="#fff" />
+                <BridgeBotLogo size={14} />
               </div>
               <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>Dashboard</span>
             </div>
@@ -1292,7 +1262,7 @@ function Footer() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.blue}, ${C.elec})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Bot size={15} color="#fff" />
+                <BridgeBotLogo size={15} />
               </div>
               <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 17, fontWeight: 700, color: C.text }}>
                 Bridge<span style={{ color: C.elec }}>Bot</span>
@@ -1350,15 +1320,15 @@ export default function LandingPage() {
     <div style={{ background: C.bg, minHeight: "100vh" }} data-testid="landing-page">
       <Navbar />
       <HeroSection />
-      <ChannelsSection />
-      <KnowledgeSection />
-      <LiveApiSection />
-      <ZendeskSection />
-      <WidgetSection />
-      <DashboardSection />
-      <HowItWorksSection />
-      <FaqSection />
-      <CtaSection />
+      <FadeIn><ChannelsSection /></FadeIn>
+      <FadeIn><KnowledgeSection /></FadeIn>
+      <FadeIn><LiveApiSection /></FadeIn>
+      <FadeIn><ZendeskSection /></FadeIn>
+      <FadeIn><WidgetSection /></FadeIn>
+      <FadeIn><DashboardSection /></FadeIn>
+      <FadeIn><HowItWorksSection /></FadeIn>
+      <FadeIn><FaqSection /></FadeIn>
+      <FadeIn><CtaSection /></FadeIn>
       <Footer />
 
       {/* Responsive CSS */}

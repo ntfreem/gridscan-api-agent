@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Bot, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius } from "../theme";
 
 export default function InstanceSelect() {
@@ -11,7 +12,7 @@ export default function InstanceSelect() {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: colors.bg.base, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px", fontFamily: fonts.body }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "40px" }}>
-        <div style={{ width: "40px", height: "40px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 15px rgba(59,130,246,0.35)" }}><Bot size={22} color="#FFFFFF" /></div>
+        <div style={{ width: "40px", height: "40px", background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 15px rgba(59,130,246,0.35)" }}><BridgeBotLogo size={22} /></div>
         <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>Bridge<span style={{ color: colors.brand.light }}>Bot</span></span>
       </div>
       <div style={{ width: "100%", maxWidth: "520px" }}>
@@ -32,7 +33,7 @@ export default function InstanceSelect() {
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148,163,184,0.15)"; e.currentTarget.style.boxShadow = colors.shadow.card; }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                  <div style={{ width: "38px", height: "38px", background: `linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.08))`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Bot size={18} color={colors.brand.light} /></div>
+                  <div style={{ width: "38px", height: "38px", background: `linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.08))`, borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><BridgeBotLogo size={18} /></div>
                   <div><p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>{inst.name}</p><p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>{inst.id.slice(0, 8)}...</p></div>
                 </div>
                 <ChevronRight size={16} color={colors.text.muted} />

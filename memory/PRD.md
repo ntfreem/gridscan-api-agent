@@ -33,47 +33,45 @@ Core platform, API integrations, LLM config, diagnostics, pipeline fixes, scrape
 
 ### Phase 19 — Platform Stats Dashboard (Nov 2026)
 - Analytics upgrade with `platform_breakdown` (Web, Discord, Telegram, API, Zendesk)
-- Daily trend endpoint: `GET /api/analytics/daily-by-platform` (7-day per-platform message counts)
-- Dashboard: platform cards, grouped bar trend chart, Quick Actions with "Connect Telegram"
+- Daily trend endpoint: `GET /api/analytics/daily-by-platform`
+- Dashboard: platform cards, grouped bar trend chart, Quick Actions
 
 ### Phase 20 — Telegram Rich Replies (Nov 2026)
 - AI-driven contextual inline keyboard buttons (1-3 follow-up suggestions)
-- Suggestion parser: `_parse_suggestions()` extracts from `[SUGGESTIONS: ...]` tags
 - Callback handler: button taps processed as new questions through full AI pipeline
 
 ### Phase 21 — Conversation Platform Filters (Nov 2026)
-- Added Telegram, API, Zendesk filter buttons to Conversations page
-- Updated PlatformBadge to support all 5 platforms with distinct colors
+- Telegram, API, Zendesk filter buttons; PlatformBadge for all 5 platforms
 
 ### Phase 22 — Zendesk Integration (Nov 2026)
-- **Backend**: New `zendesk_routes.py` module with config CRUD, webhook, auto-reply, agent-assist
-- **Auth**: API token auth (`email/token:token`) — validated via `/users/me.json`
-- **Auto-Reply Mode**: Posts public AI comment + internal audit note
-- **Agent-Assist Mode**: Stores AI suggestion for sidebar retrieval
-- **Frontend**: `ZendeskSettings.js` admin page with toggles, webhook URL, processed tickets
+- Backend `zendesk_routes.py` with auto-reply and agent-assist modes
+- Independent toggles, webhook listeners, event deduplication
 
 ### Phase 23 — Documentation, Onboarding & Changelog (Nov 2026)
-- Updated site documentation to reflect all new channels and architecture
-- Built Onboarding Wizard for guided first-time admin setup
-- Admin-editable Changelog page
-- Search bar on Docs page
+- Updated docs, Onboarding Wizard, admin-editable Changelog, Docs search bar
 
 ### Phase 24 — Homepage Redesign (Feb 2026)
-- **New marketing landing page** at root `/` route replacing the previous redirect to `/admin`
-- **File**: `/app/frontend/src/pages/LandingPage.js`
-- **11 sections**: Navbar, Hero, Channels, Knowledge Base, Live API Data, Zendesk, Widget Customization, Dashboard & Analytics, How It Works, FAQ, Final CTA, Footer
-- **Color palette**: Midnight Blue (#0B1020 bg, #131D30 surfaces, #2A3850 borders, #EDF3FF primary text, #A7B7D0 secondary, #3B82F6 action blue, #83ADFF electric highlights, #63E2EE cyan accents)
-- **Typography**: Outfit (headings), IBM Plex Sans (body), JetBrains Mono (mono)
-- **Interactive elements**: FAQ accordion, Zendesk mode toggle, Widget color picker
-- **CTAs**: All linked to existing routes (/register, /login, /chat, /docs)
-- **Responsive**: Mobile hamburger nav, grid layouts adapt at breakpoints
-- **Accessibility**: Reduced-motion support, keyboard-navigable, semantic HTML
-- **Testing**: 100% pass rate (25/25 tests) — all sections, CTAs, interactivity, and existing routes verified
+- 11-section marketing landing page at `/`
+- Midnight Blue palette with restrained neon blue/cyan accents
+- All CTAs linked to existing routes
 
-## DB Collections (Zendesk)
-- `zendesk_config`: {instance_id (unique), subdomain, email, api_token, webhook_secret, auto_reply_enabled, agent_assist_enabled, is_active}
-- `zendesk_suggestions`: {instance_id, ticket_id (unique per instance), subject, suggestion, action_taken}
-- `zendesk_events`: {instance_id, event_id (unique per instance), ticket_id, received_at}
+### Phase 25 — Logo, Animations, Live Demo & Login Cleanup (Feb 2026)
+- **New BridgeBotLogo SVG**: Two overlapping chat bubbles (blue gradient + cyan) with white robot eyes
+  - Created `/app/frontend/src/components/BridgeBotLogo.js`
+  - Replaced all lucide-react `Bot` icons across 13 files: LandingPage, Login, Register, AdminLayout, ChatPage, ChatWidget, Docs, DiscordInvited, InstanceSelect, ResetPassword, VerifyEmail, ForgotPassword, Instances
+- **Scroll Fade-in Animations**: IntersectionObserver-based `FadeIn` wrapper on all homepage sections below hero
+  - Uses cubic-bezier easing, 32px translateY reveal
+  - Respects `prefers-reduced-motion` media query
+- **Live Chat Demo**: Replaced static hero mockup with embedded `/widget?mode=inline` iframe
+  - Visitors can test the bot directly on the homepage
+  - Green "Live demo" indicator
+- **Login Page Cleanup**: Removed robot-hero.png 50/50 split layout, now centered single-column form
+- **Testing**: 100% pass rate (19/19 frontend tests — iteration 55)
+
+## DB Collections
+- `telegram_config`: {instance_id, bot_token, listen_mode, is_active}
+- `zendesk_config`: {instance_id, subdomain, email, api_token, auto_reply, agent_assist, is_active}
+- `changelog_entries`: {id, version, title, changes, date}
 
 ## Backlog
 - P1: WhatsApp Integration (MUST use integration_playbook_expert_v2)

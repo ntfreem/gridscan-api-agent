@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
-import { Bot, ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight, BookOpen } from "lucide-react";
+import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
 const BASE = `/api`;
-const SPACE_ART = "/assets/robot-hero.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -30,32 +30,27 @@ export default function Login() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", backgroundColor: colors.bg.base }}>
-      {/* Left: Form */}
-      <div style={{
-        width: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "40px", fontFamily: fonts.body, position: "relative", zIndex: 2,
-      }}>
-        <div style={{ width: "100%", maxWidth: "400px" }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.base, padding: "40px 20px" }}>
+      <div style={{ width: "100%", maxWidth: "400px", fontFamily: fonts.body }}>
           {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "48px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "48px", justifyContent: "center" }}>
             <div style={{
               width: "40px", height: "40px",
               background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
               borderRadius: radius.md, display: "flex", alignItems: "center", justifyContent: "center",
               boxShadow: "0 4px 15px rgba(59, 130, 246, 0.35)",
             }}>
-              <Bot size={22} color="#FFFFFF" />
+              <BridgeBotLogo size={22} />
             </div>
             <span style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary }}>
               Bridge<span style={{ color: colors.brand.light }}>Bot</span>
             </span>
           </div>
 
-          <h1 style={{ fontFamily: fonts.heading, fontSize: "30px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px", letterSpacing: "-0.3px" }}>
+          <h1 style={{ fontFamily: fonts.heading, fontSize: "30px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px", letterSpacing: "-0.3px", textAlign: "center" }}>
             Welcome back
           </h1>
-          <p style={{ fontSize: "15px", color: colors.text.secondary, marginBottom: "32px", lineHeight: "1.5" }}>
+          <p style={{ fontSize: "15px", color: colors.text.secondary, marginBottom: "32px", lineHeight: "1.5", textAlign: "center" }}>
             Sign in to your AI workspace
           </p>
 
@@ -96,29 +91,6 @@ export default function Login() {
               <BookOpen size={13} /> Documentation
             </Link>
           </p>
-        </div>
-      </div>
-
-      {/* Right: Space Cartoon - takes up full half */}
-      <div style={{
-        width: "50%", position: "relative", overflow: "hidden",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <img
-          src={SPACE_ART}
-          alt="AI Space Bot"
-          style={{
-            width: "100%", height: "100%",
-            objectFit: "cover",
-            position: "absolute", inset: 0,
-          }}
-        />
-        {/* Soft left-edge blend into the form side */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: `linear-gradient(to right, ${colors.bg.base} 0%, transparent 25%)`,
-          pointerEvents: "none",
-        }} />
       </div>
     </div>
   );
