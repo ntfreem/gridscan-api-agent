@@ -50,19 +50,21 @@ function FadeIn({ children, delay = 0, style }) {
   );
 }
 
-/* ─── palette ─── */
+/* ─── palette — neon blue + cyan accents ─── */
 const C = {
   bg:      "#0B1020",
-  surface: "#131D30",
-  surface2:"#1A263D",
-  border:  "#2A3850",
+  surface: "#111B2E",
+  surface2:"#172238",
+  border:  "#1E3050",
   text:    "#EDF3FF",
   text2:   "#A7B7D0",
   muted:   "#6B7C96",
   blue:    "#3B82F6",
   blueHov: "#2563EB",
-  elec:    "#83ADFF",
-  cyan:    "#63E2EE",
+  elec:    "#6BAAFF",
+  cyan:    "#3CDBD3",
+  neonBlue:"rgba(59,130,246,0.45)",
+  neonCyan:"rgba(60,219,211,0.35)",
   green:   "#10B981",
   warn:    "#F59E0B",
 };
@@ -82,7 +84,7 @@ function SectionTag({ children }) {
         gap: "6px",
       }}
     >
-      <span style={{ width: 16, height: 1, background: C.cyan, display: "inline-block" }} />
+      <span style={{ width: 16, height: 1, background: C.cyan, display: "inline-block", boxShadow: `0 0 6px ${C.neonCyan}` }} />
       {children}
     </span>
   );
@@ -133,7 +135,7 @@ function PrimaryBtn({ children, to, href, style, testId, onClick }) {
     color: "#fff", fontFamily: "IBM Plex Sans, sans-serif",
     fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
     textDecoration: "none",
-    boxShadow: `0 2px 16px rgba(59,130,246,0.35)`,
+    boxShadow: `0 0 20px ${C.neonBlue}, 0 0 40px rgba(59,130,246,0.15)`,
     transition: "transform 0.2s, box-shadow 0.2s",
     ...style,
   };
@@ -151,7 +153,7 @@ function GhostBtn({ children, to, href, style, testId }) {
     fontSize: 14, fontWeight: 500,
     border: `1px solid ${C.border}`,
     cursor: "pointer", textDecoration: "none",
-    transition: "border-color 0.2s, color 0.2s",
+    transition: "border-color 0.2s, color 0.2s, box-shadow 0.2s",
     ...style,
   };
   if (to) return <Link to={to} style={s} data-testid={testId}>{children}</Link>;
@@ -169,8 +171,8 @@ function FeatureCard({ icon: Icon, title, desc, accent }) {
         padding: "28px 24px",
         transition: "border-color 0.25s, transform 0.25s",
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = accent || C.blue; e.currentTarget.style.transform = "translateY(-2px)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = accent || C.blue; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 0 20px ${accent || C.blue}30`; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
     >
       <div
         style={{
@@ -227,7 +229,7 @@ function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
         {/* Logo */}
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }} data-testid="landing-logo">
-          <BridgeBotLogo size={30} />
+          <BridgeBotLogo size={30} glow />
           <span style={{ fontFamily: "Outfit, sans-serif", fontSize: 20, fontWeight: 700, color: C.text }}>
             Bridge<span style={{ color: C.elec }}>Bot</span>
           </span>
@@ -300,9 +302,9 @@ function HeroSection() {
         background: C.bg,
       }}
     >
-      {/* Subtle glow accents */}
-      <div style={{ position: "absolute", top: -120, right: -120, width: 500, height: 500, borderRadius: "50%", background: `radial-gradient(circle, ${C.blue}12 0%, transparent 70%)`, pointerEvents: "none" }} />
-      <div style={{ position: "absolute", bottom: -80, left: -80, width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, ${C.cyan}08 0%, transparent 70%)`, pointerEvents: "none" }} />
+      {/* Neon glow accents */}
+      <div style={{ position: "absolute", top: -100, right: -100, width: 600, height: 600, borderRadius: "50%", background: `radial-gradient(circle, ${C.blue}22 0%, ${C.blue}08 40%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: -60, left: -60, width: 500, height: 500, borderRadius: "50%", background: `radial-gradient(circle, ${C.cyan}18 0%, ${C.cyan}06 40%, transparent 70%)`, pointerEvents: "none" }} />
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 48, alignItems: "center" }} className="hero-grid">
@@ -321,7 +323,7 @@ function HeroSection() {
               }}
             >
               Your knowledge. Live data.{" "}
-              <span style={{ background: `linear-gradient(135deg, ${C.blue}, ${C.cyan})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              <span style={{ background: `linear-gradient(135deg, ${C.elec}, ${C.cyan})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: `drop-shadow(0 0 18px ${C.neonCyan})` }}>
                 AI answers everywhere.
               </span>
             </h1>
@@ -371,7 +373,7 @@ function HeroSection() {
               border: `1px solid ${C.border}`,
               borderRadius: 16,
               overflow: "hidden",
-              boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 40px ${C.blue}08`,
+              boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 30px ${C.neonBlue}, 0 0 60px rgba(59,130,246,0.1)`,
               height: 420,
             }}>
               <iframe
@@ -449,8 +451,8 @@ function ChannelsSection() {
                 padding: "28px 22px",
                 transition: "border-color 0.25s, transform 0.25s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = ch.color; e.currentTarget.style.transform = "translateY(-3px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = ch.color; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 0 24px ${ch.color}30`; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
             >
               <div style={{
                 width: 42, height: 42, borderRadius: 10,
@@ -1085,6 +1087,7 @@ function HowItWorksSection() {
                 background: `${C.blue}15`, border: `1px solid ${C.blue}30`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 position: "relative", zIndex: 1,
+                boxShadow: `0 0 20px ${C.neonBlue}`,
               }}>
                 <s.icon size={24} color={C.elec} />
               </div>
@@ -1164,6 +1167,7 @@ function FaqSection() {
                 background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
                 overflow: "hidden", transition: "border-color 0.2s",
                 borderColor: openIdx === i ? `${C.blue}60` : C.border,
+                boxShadow: openIdx === i ? `0 0 16px ${C.neonBlue}` : "none",
               }}
             >
               <button
@@ -1221,7 +1225,7 @@ function CtaSection() {
       overflow: "hidden",
     }}>
       {/* Glow */}
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, borderRadius: "50%", background: `radial-gradient(circle, ${C.blue}10 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 700, height: 700, borderRadius: "50%", background: `radial-gradient(circle, ${C.blue}18 0%, ${C.cyan}06 40%, transparent 70%)`, pointerEvents: "none" }} />
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 24px", textAlign: "center", position: "relative", zIndex: 1 }}>
         <SectionHeading style={{ margin: 0 }}>Bring your knowledge to every conversation.</SectionHeading>

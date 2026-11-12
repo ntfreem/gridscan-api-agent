@@ -17,36 +17,27 @@ Multi-tenant SaaS chatbot platform enabling AI-powered Discord, Web, Telegram, a
 - **AI**: Emergent Universal Key (Claude/GPT), BYOK OpenAI
 - **Integrations**: Discord.py, Telegram Bot API, Zendesk REST API, external REST APIs
 
+## Visual Identity
+- **Logo**: Two thick-stroked outlined speech bubbles that interlink — blue (left, tail bottom-left) goes OVER cyan at top; cyan (right, tail bottom-right) goes OVER blue at bottom. Subtle white oval robot eyes in center. SVG at `/app/frontend/src/components/BridgeBotLogo.js`
+- **Palette**: Midnight Blue (#0B1020 bg), neon blue (#3B82F6 primary, #6BAAFF highlights), neon cyan (#3CDBD3 accents), with glow effects on interactive elements
+- **Typography**: Outfit (headings), IBM Plex Sans (body), JetBrains Mono (mono)
+
 ## Implemented Features
 
 ### Phase 1–23 (Previously Completed)
 Core platform, API integrations, LLM config, diagnostics, scraper improvements, conversations, knowledge gate, KB export/import, GitHub crawler, widget theming, embed.js, integration analytics, copy button fix, Telegram integration (rich replies, contextual buttons), Platform Stats Dashboard, Conversation Filters, Zendesk integration (auto-reply + agent-assist), Documentation, Onboarding Wizard, Changelog page, Docs search bar.
 
 ### Phase 24 — Homepage Redesign (Feb 2026)
-- 11-section marketing landing page at `/` (Hero, Channels, Knowledge, Live API, Zendesk, Widget, Dashboard, How It Works, FAQ, CTA, Footer)
-- Midnight Blue palette with restrained neon blue/cyan accents
-- All CTAs linked to existing routes (/register, /login, /chat, /docs)
+- 11-section marketing landing page at `/`
 
-### Phase 25 — Logo, Animations, Live Demo & Cleanup (Feb 2026)
-- **New BridgeBotLogo SVG** (`/app/frontend/src/components/BridgeBotLogo.js`):
-  - ViewBox `0 0 64 56` — two overlapping chat bubbles (blue gradient + solid cyan) with white eyes and dark pupils
-  - Designed for legibility from 16px to 64px+
-  - Replaced across 13+ files: LandingPage, Login, Register, AdminLayout, ChatPage, ChatWidget, Docs, DiscordInvited, InstanceSelect, ResetPassword, VerifyEmail, ForgotPassword, Instances
-- **Removed gradient-box wrappers** from all branding positions — logo SVG now renders directly without wrapping div+gradient+shadow
-- **Removed repetitive elements**:
-  - Login: removed robot-hero.png 50/50 split layout → centered form, removed Documentation link
-  - Register, ForgotPassword, ResetPassword, VerifyEmail: replaced heavy gradient-box logos with minimal SVG+text links to home
-  - Docs header: simplified from gradient-box to direct SVG link
-  - ChatPage header + message avatars: removed gradient boxes
-  - AdminLayout sidebar: removed gradient box wrapper
-- **Scroll fade-in animations**: IntersectionObserver-based `FadeIn` wrapper on all homepage sections below hero, cubic-bezier easing, prefers-reduced-motion support
-- **Live chat demo**: Replaced static hero mockup with embedded `/widget?mode=inline` iframe for interactive demo
-- **Testing**: 100% pass rate across iterations 55 + 56 (33/33 total tests)
-
-## DB Collections
-- `telegram_config`: {instance_id, bot_token, listen_mode, is_active}
-- `zendesk_config`: {instance_id, subdomain, email, api_token, auto_reply, agent_assist, is_active}
-- `changelog_entries`: {id, version, title, changes, date}
+### Phase 25–26 — Logo, Animations, Neon Treatment & Cleanup (Feb 2026)
+- **Interlinking BridgeBotLogo SVG**: clipPath-based weave effect, neon glow prop, replaces all old Bot icons across 13+ files
+- **Neon blue/cyan glow effects**: Primary buttons, card hovers, FAQ open state, section tags, hero background, CTA section, step icons
+- **Updated palette**: brand.light=#6BAAFF, brand.cyan=#3CDBD3, added neonBlue/neonCyan/neonGlow shadow tokens in theme.js
+- **Scroll fade-in animations**: IntersectionObserver-based FadeIn on all homepage sections
+- **Live chat demo**: Embedded `/widget?mode=inline` iframe in hero section
+- **Repetitive element cleanup**: Auth pages (Login, Register, ForgotPassword, ResetPassword, VerifyEmail) — removed gradient-box logos, robot-hero.png, redundant Documentation links
+- **Testing**: 100% pass rate across iterations 54–57 (47/47 total tests)
 
 ## Backlog
 - P1: WhatsApp Integration (MUST use integration_playbook_expert_v2)

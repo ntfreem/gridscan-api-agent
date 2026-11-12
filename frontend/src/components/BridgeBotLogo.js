@@ -1,57 +1,88 @@
 /**
- * BridgeBotLogo — SVG mark: two overlapping chat bubbles with robot eyes.
+ * BridgeBotLogo — Interlocking stroked speech bubbles with robot eyes.
  *
- * Designed to be legible at every size from 16px to 64px+.
- * The left bubble is blue, the right is cyan, with prominent white eyes
- * centred in the overlap zone.
+ * Matches the official logo: blue bubble (left, tail bottom-left) interlinks
+ * with cyan bubble (right, tail bottom-right). Blue goes OVER cyan at the top,
+ * cyan goes OVER blue at the bottom. Subtle white oval eyes in center.
  *
  * Props:
- *   size   — outer px dimension (default 24)
- *   style  — optional inline styles on the <svg>
+ *   size  — outer px dimension (default 24)
+ *   glow  — adds a neon drop-shadow when true
  */
-export default function BridgeBotLogo({ size = 24, style, className }) {
-  // Unique gradient id per instance (avoids SVG id collisions)
-  const id = `bb_${Math.random().toString(36).slice(2, 7)}`;
+export default function BridgeBotLogo({ size = 24, glow, style, className }) {
+  const uid = `bb_${Math.random().toString(36).slice(2, 7)}`;
+  const sw = 7.5; // stroke width
+
+  // The two bubble paths
+  const bluePath =
+    "M 16,62 L 9,74 L 19,64 C 11,62 5,52 5,41 C 5,26 17,15 33,15 L 61,15 C 75,15 83,24 83,36 C 83,46 77,54 67,57 L 31,61 Z";
+  const cyanPath =
+    "M 84,68 L 91,80 L 81,70 C 89,68 95,58 95,48 C 95,33 83,22 67,22 L 39,22 C 25,22 17,31 17,43 C 17,53 23,61 33,64 L 69,68 Z";
+
+  const filterStyle = glow
+    ? { filter: `drop-shadow(0 0 ${size * 0.15}px rgba(91,158,245,0.6)) drop-shadow(0 0 ${size * 0.08}px rgba(60,219,211,0.4))` }
+    : {};
 
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 64 56"
+      viewBox="0 0 100 90"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      style={style}
+      style={{ ...filterStyle, ...style }}
       className={className}
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0.9" y2="1">
-          <stop offset="0%" stopColor="#83ADFF" />
+        {/* Clip to reveal only the TOP of the blue path (for interlocking) */}
+        <clipPath id={`${uid}_top`}>
+          <rect x="0" y="0" width="100" height="40" />
+        </clipPath>
+        <linearGradient id={`${uid}_bg`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#6BAAFF" />
           <stop offset="100%" stopColor="#3B82F6" />
+        </linearGradient>
+        <linearGradient id={`${uid}_cg`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#5DE8DA" />
+          <stop offset="100%" stopColor="#3CDBD3" />
         </linearGradient>
       </defs>
 
-      {/* Left bubble — blue gradient */}
+      {/* Layer 1: Blue bubble — full, behind everything */}
       <path
-        d="M4,10 C4,4.5 8.5,0 14,0 H34 C39.5,0 44,4.5 44,10 V26 C44,31.5 39.5,36 34,36 H20 L10,46 L13,36 H14 C8.5,36 4,31.5 4,26 Z"
-        fill={`url(#${id})`}
+        d={bluePath}
+        stroke={`url(#${uid}_bg)`}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
       />
 
-      {/* Right bubble — solid cyan */}
+      {/* Layer 2: Cyan bubble — full, covers blue at the bottom (natural overlap) */}
       <path
-        d="M20,16 C20,10.5 24.5,6 30,6 H50 C55.5,6 60,10.5 60,16 V34 C60,39.5 55.5,44 50,44 H47 L54,54 L42,44 H30 C24.5,44 20,39.5 20,34 Z"
-        fill="#63E2EE"
+        d={cyanPath}
+        stroke={`url(#${uid}_cg)`}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
       />
 
-      {/* Left eye */}
-      <ellipse cx="31" cy="26" rx="3.5" ry="4.5" fill="white" />
+      {/* Layer 3: Blue bubble TOP portion re-drawn ON TOP of cyan (creates interlocking) */}
+      <path
+        d={bluePath}
+        stroke={`url(#${uid}_bg)`}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        clipPath={`url(#${uid}_top)`}
+      />
 
-      {/* Right eye */}
-      <ellipse cx="44" cy="26" rx="3.5" ry="4.5" fill="white" />
-
-      {/* Pupils (visible at ≥ 28px) */}
-      <ellipse cx="32" cy="27" rx="1.5" ry="2" fill="#1a2540" />
-      <ellipse cx="45" cy="27" rx="1.5" ry="2" fill="#1a2540" />
+      {/* Robot eyes — subtle white ovals */}
+      <ellipse cx="43" cy="44" rx="4" ry="5.5" fill="white" opacity="0.22" />
+      <ellipse cx="59" cy="44" rx="4" ry="5.5" fill="white" opacity="0.22" />
     </svg>
   );
 }
