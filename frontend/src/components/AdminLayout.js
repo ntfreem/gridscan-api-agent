@@ -147,9 +147,9 @@ export default function AdminLayout() {
             <div>
               <span style={{
                 fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700",
-                color: colors.text.primary, letterSpacing: "-0.3px",
+                color: colors.brand.light, letterSpacing: "-0.3px",
               }}>
-                BitBot <span style={{ color: colors.brand.light }}>Pro</span>
+                BitBot <span style={{ color: "#fff" }}>Pro</span>
               </span>
               <p style={{
                 fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted,
