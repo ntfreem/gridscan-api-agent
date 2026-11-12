@@ -161,31 +161,18 @@ export default function SetupGuide() {
   };
 
   return (
-    <div style={{
-      minHeight: "100vh", padding: "40px 48px",
-      fontFamily: fonts.body,
-    }} data-testid="setup-guide-page">
+    <div className="sg-root" data-testid="setup-guide-page">
       {/* Header */}
-      <div style={{ marginBottom: "40px" }}>
+      <div className="sg-header">
         <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "8px" }}>
-          <div style={{
-            width: "44px", height: "44px", borderRadius: "12px",
-            background: "linear-gradient(135deg, #60A5FA, #A78BFA)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
+          <div className="sg-header-icon">
             <Rocket size={22} color="#fff" />
           </div>
           <div>
-            <h1 style={{
-              fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700",
-              color: colors.text.primary, margin: 0, letterSpacing: "-0.5px",
-            }}>
+            <h1 className="sg-title">
               Setup Guide
             </h1>
-            <p style={{
-              fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary,
-              margin: "2px 0 0",
-            }}>
+            <p className="sg-subtitle">
               {allDone
                 ? "You're all set! Your bot is ready to go."
                 : `${completedCount} of ${STEPS.length} steps complete — let's get your bot live.`
@@ -195,11 +182,7 @@ export default function SetupGuide() {
         </div>
 
         {/* Overall progress bar */}
-        <div style={{
-          marginTop: "20px", height: "6px", borderRadius: "3px",
-          backgroundColor: "rgba(148,163,184,0.12)", overflow: "hidden",
-          maxWidth: "600px",
-        }}>
+        <div className="sg-progress-track">
           <div style={{
             width: `${(completedCount / STEPS.length) * 100}%`,
             height: "100%", borderRadius: "3px",
@@ -213,19 +196,8 @@ export default function SetupGuide() {
 
       {/* Celebration banner when all done */}
       {allDone && (
-        <div data-testid="celebration-banner" style={{
-          marginBottom: "24px", padding: "20px 28px", borderRadius: "14px",
-          background: "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(96,165,250,0.08), rgba(167,139,250,0.08))",
-          border: "1px solid rgba(52,211,153,0.2)",
-          display: "flex", alignItems: "center", gap: "16px",
-          maxWidth: "1100px",
-          animation: "celebFadeIn 0.6s ease",
-        }}>
-          <div style={{
-            width: "48px", height: "48px", borderRadius: "12px",
-            background: "linear-gradient(135deg, #34D399, #60A5FA)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
+        <div data-testid="celebration-banner" className="sg-celebration">
+          <div className="sg-celebration-icon">
             <PartyPopper size={24} color="#fff" />
           </div>
           <div style={{ flex: 1 }}>
@@ -235,21 +207,14 @@ export default function SetupGuide() {
             }}>
               All set! Your bot is fully configured.
             </h3>
-            <p style={{
-              fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0,
-            }}>
+            <p className="sg-celebration-text">
               Every step is complete. Your bot is trained, personalized, tested, and ready for conversations.
             </p>
           </div>
           <button
             onClick={() => navigate("/admin")}
             data-testid="celebration-dashboard-btn"
-            style={{
-              padding: "10px 20px", borderRadius: "10px", border: "none", cursor: "pointer",
-              background: "linear-gradient(135deg, #34D399, #60A5FA)", color: "#fff",
-              fontFamily: fonts.body, fontSize: "13px", fontWeight: "600", flexShrink: 0,
-              display: "flex", alignItems: "center", gap: "6px",
-            }}
+            className="sg-celebration-btn"
           >
             Go to Dashboard <ArrowRight size={14} />
           </button>
@@ -257,36 +222,60 @@ export default function SetupGuide() {
       )}
 
       <style>{`
-        @keyframes celebFadeIn {
-          from { opacity: 0; transform: translateY(-12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes badgePop {
-          0% { transform: scale(0); opacity: 0; }
-          50% { transform: scale(1.3); }
-          70% { transform: scale(0.9); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes checkDraw {
-          0% { opacity: 0; transform: scale(0) rotate(-45deg); }
-          60% { transform: scale(1.2) rotate(5deg); opacity: 1; }
-          100% { transform: scale(1) rotate(0deg); opacity: 1; }
-        }
-        @keyframes labelSlide {
-          0% { opacity: 0; transform: translateX(-6px); }
-          100% { opacity: 1; transform: translateX(0); }
-        }
-        .step-badge-pop {
-          animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-        .step-label-pop {
-          animation: labelSlide 0.4s ease 0.2s both;
+        /* ===== Base (Desktop) ===== */
+        .sg-root { min-height: 100vh; padding: 40px 48px; font-family: ${fonts.body}; }
+        .sg-header { margin-bottom: 40px; }
+        .sg-header-icon { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #60A5FA, #A78BFA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .sg-title { font-family: ${fonts.heading}; font-size: 28px; font-weight: 700; color: ${colors.text.primary}; margin: 0; letter-spacing: -0.5px; }
+        .sg-subtitle { font-family: ${fonts.body}; font-size: 14px; color: ${colors.text.secondary}; margin: 2px 0 0; }
+        .sg-progress-track { margin-top: 20px; height: 6px; border-radius: 3px; background: rgba(148,163,184,0.12); overflow: hidden; max-width: 600px; }
+        .sg-celebration { margin-bottom: 24px; padding: 20px 28px; border-radius: 14px; background: linear-gradient(135deg, rgba(52,211,153,0.08), rgba(96,165,250,0.08), rgba(167,139,250,0.08)); border: 1px solid rgba(52,211,153,0.2); display: flex; align-items: center; gap: 16px; max-width: 1100px; animation: celebFadeIn 0.6s ease; }
+        .sg-celebration-icon { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #34D399, #60A5FA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .sg-celebration-text { font-family: ${fonts.body}; font-size: 13px; color: ${colors.text.secondary}; margin: 0; }
+        .sg-celebration-btn { padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(135deg, #34D399, #60A5FA); color: #fff; font-family: ${fonts.body}; font-size: 13px; font-weight: 600; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+        .sg-body { display: flex; gap: 32px; max-width: 1100px; }
+        .sg-nav { width: 300px; flex-shrink: 0; }
+        .sg-detail { flex: 1; min-width: 0; }
+        .sg-detail-pad { padding: 32px; }
+        .sg-detail-icon { width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .sg-detail-title { font-family: ${fonts.heading}; font-size: 22px; font-weight: 700; color: ${colors.text.primary}; margin: 0; }
+        .sg-channels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .sg-nav-footer { padding: 16px 32px 24px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid ${colors.border.muted}; }
+
+        /* ===== Animations ===== */
+        @keyframes celebFadeIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes badgePop { 0% { transform: scale(0); opacity: 0; } 50% { transform: scale(1.3); } 70% { transform: scale(0.9); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes checkDraw { 0% { opacity: 0; transform: scale(0) rotate(-45deg); } 60% { transform: scale(1.2) rotate(5deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        @keyframes labelSlide { 0% { opacity: 0; transform: translateX(-6px); } 100% { opacity: 1; transform: translateX(0); } }
+        .step-badge-pop { animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        .step-label-pop { animation: labelSlide 0.4s ease 0.2s both; }
+
+        /* ===== Mobile (<768px) ===== */
+        @media (max-width: 768px) {
+          .sg-root { padding: 20px 16px; overflow-x: hidden; }
+          .sg-header { margin-bottom: 24px; }
+          .sg-header-icon { width: 36px; height: 36px; border-radius: 10px; }
+          .sg-title { font-size: 22px; }
+          .sg-subtitle { font-size: 13px; }
+          .sg-progress-track { margin-top: 14px; max-width: 100%; }
+          .sg-celebration { flex-direction: column; padding: 16px; gap: 12px; align-items: flex-start; }
+          .sg-celebration-btn { width: 100%; justify-content: center; }
+          .sg-body { flex-direction: column; gap: 16px; }
+          .sg-nav { width: 100%; display: flex; overflow-x: auto; gap: 6px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+          .sg-nav::-webkit-scrollbar { display: none; }
+          .sg-nav button { flex-shrink: 0; padding: 10px 14px !important; min-width: max-content; }
+          .sg-detail { flex: 1; min-width: 0; }
+          .sg-detail-pad { padding: 20px 16px; word-break: break-word; overflow-wrap: break-word; }
+          .sg-detail-icon { width: 44px; height: 44px; border-radius: 11px; }
+          .sg-detail-title { font-size: 18px; }
+          .sg-channels { grid-template-columns: 1fr; }
+          .sg-nav-footer { padding: 14px 16px 18px; }
         }
       `}</style>
 
-      <div style={{ display: "flex", gap: "32px", maxWidth: "1100px" }}>
-        {/* Left: Step list */}
-        <div style={{ width: "300px", flexShrink: 0 }}>
+      <div className="sg-body">
+        {/* Left: Step list (horizontal scroll on mobile) */}
+        <div className="sg-nav">
           {STEPS.map((s, i) => {
             const done = stepStatus[s.key];
             const active = i === step;
@@ -344,7 +333,7 @@ export default function SetupGuide() {
         </div>
 
         {/* Right: Step detail */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="sg-detail">
           <div style={{
             backgroundColor: colors.bg.surface,
             border: `1px solid ${colors.border.default}`,
@@ -356,24 +345,18 @@ export default function SetupGuide() {
               background: `linear-gradient(90deg, ${current.color}, ${current.color}88)`,
             }} />
 
-            <div style={{ padding: "32px" }}>
+            <div className="sg-detail-pad">
               {/* Icon + title */}
               <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", marginBottom: "20px" }}>
-                <div style={{
-                  width: "56px", height: "56px", borderRadius: "14px",
+                <div className="sg-detail-icon" style={{
                   background: `${current.color}12`,
                   border: `1px solid ${current.color}20`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
                 }}>
                   <current.icon size={26} color={current.color} />
                 </div>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                    <h2 style={{
-                      fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700",
-                      color: colors.text.primary, margin: 0,
-                    }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px", flexWrap: "wrap" }}>
+                    <h2 className="sg-detail-title">
                       {current.title}
                     </h2>
                     {isDone && (
@@ -418,7 +401,7 @@ export default function SetupGuide() {
 
               {/* Action area */}
               {current.channels ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <div className="sg-channels">
                   {current.channels.map(ch => (
                     <button
                       key={ch.path}
@@ -456,7 +439,8 @@ export default function SetupGuide() {
                   data-testid={`wizard-action-${current.key}`}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
-                    width: "100%", padding: "14px 20px", borderRadius: "12px",
+                    width: "100%", maxWidth: "100%", boxSizing: "border-box",
+                    padding: "14px 20px", borderRadius: "12px",
                     border: "none", cursor: "pointer",
                     background: isDone
                       ? `${current.color}12`
@@ -483,11 +467,7 @@ export default function SetupGuide() {
             </div>
 
             {/* Navigation footer */}
-            <div style={{
-              padding: "16px 32px 24px",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              borderTop: `1px solid ${colors.border.muted}`,
-            }}>
+            <div className="sg-nav-footer">
               <button
                 onClick={() => setStep(Math.max(0, step - 1))}
                 disabled={step === 0}

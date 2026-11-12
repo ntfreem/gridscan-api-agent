@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
-  BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket
+  BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle, SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket, Menu, X
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useEffect } from "react";
@@ -92,6 +92,7 @@ export default function AdminLayout() {
   const { user, instances, selectedInstance, selectInstance, logout } = useAuth();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = ALL_NAV_ITEMS.filter(
     (item) => !item.adminOnly || user?.role === "superadmin"
@@ -103,11 +104,41 @@ export default function AdminLayout() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: colors.bg.base, paddingTop: "26px" }}>
       <EnvironmentBanner />
-      <aside style={{
+
+      {/* Mobile hamburger button */}
+      <button
+        className="admin-mobile-toggle"
+        data-testid="mobile-menu-toggle"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        style={{
+          position: "fixed", top: "32px", left: "12px", zIndex: 25,
+          width: "40px", height: "40px", borderRadius: "10px",
+          backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
+          display: "none", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+        }}
+      >
+        {mobileMenuOpen ? <X size={18} color={colors.text.primary} /> : <Menu size={18} color={colors.text.primary} />}
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="admin-mobile-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            position: "fixed", inset: 0, top: "26px", zIndex: 9,
+            backgroundColor: "rgba(0,0,0,0.5)", display: "none",
+          }}
+        />
+      )}
+
+      <aside className={`admin-sidebar ${mobileMenuOpen ? "admin-sidebar-open" : ""}`} style={{
         width: "250px", backgroundColor: colors.bg.surface,
         borderRight: `1px solid ${colors.border.default}`,
         display: "flex", flexDirection: "column",
         position: "fixed", top: "26px", left: 0, height: "calc(100vh - 26px)", zIndex: 10,
+        transition: "transform 0.25s ease",
       }}>
         {/* Logo */}
         <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid ${colors.border.default}` }}>
@@ -227,6 +258,7 @@ export default function AdminLayout() {
                 <NavLink
                   to={path} end={exact}
                   data-testid={`nav-${label.toLowerCase().replace(/\s+/g, '-')}`}
+                  onClick={() => setMobileMenuOpen(false)}
                   style={({ isActive }) => ({
                     display: "flex", alignItems: "center", gap: "10px",
                     padding: "9px 14px", marginBottom: "2px", borderRadius: radius.md,
@@ -277,6 +309,7 @@ export default function AdminLayout() {
           <NavLink
             to="/admin/setup-guide"
             data-testid="setup-guide-btn"
+            onClick={() => setMobileMenuOpen(false)}
             style={({ isActive }) => ({
               display: "flex", alignItems: "center", gap: "7px",
               color: isActive ? colors.brand.light : colors.text.secondary, fontSize: "12px",
@@ -318,11 +351,21 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <main style={{ marginLeft: "250px", flex: 1, minHeight: "100vh", backgroundColor: colors.bg.base }}
-        onClick={() => dropdownOpen && setDropdownOpen(false)}
+      <main className="admin-main" style={{ marginLeft: "250px", flex: 1, minHeight: "100vh", backgroundColor: colors.bg.base }}
+        onClick={() => { dropdownOpen && setDropdownOpen(false); }}
       >
         <Outlet />
       </main>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .admin-mobile-toggle { display: flex !important; }
+          .admin-mobile-overlay { display: block !important; }
+          .admin-sidebar { transform: translateX(-100%); z-index: 20 !important; }
+          .admin-sidebar-open { transform: translateX(0) !important; }
+          .admin-main { margin-left: 0 !important; overflow-x: hidden; }
+        }
+      `}</style>
     </div>
   );
 }
