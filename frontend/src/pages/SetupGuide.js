@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import BridgeBotLogo from "../components/BridgeBotLogo";
+import confetti from "canvas-confetti";
 import {
   Shield, BookOpen, Settings, MessageSquare, Globe,
   Zap, Send, Headphones, Code2, ChevronRight, ChevronLeft,
   CheckCircle2, Circle, ExternalLink, Plus, Sparkles,
-  ArrowRight, Rocket,
+  ArrowRight, Rocket, PartyPopper,
 } from "lucide-react";
 import { colors, fonts, radius } from "../theme";
 
@@ -97,6 +98,33 @@ export default function SetupGuide() {
   const allDone = completedCount === STEPS.length;
   const current = STEPS[step];
   const isDone = stepStatus[current.key];
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (allDone && !firedRef.current) {
+      firedRef.current = true;
+      const duration = 2500;
+      const end = Date.now() + duration;
+      const frame = () => {
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 60,
+          origin: { x: 0, y: 0.7 },
+          colors: ["#60A5FA", "#A78BFA", "#34D399", "#F59E0B", "#EC4899"],
+        });
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 60,
+          origin: { x: 1, y: 0.7 },
+          colors: ["#60A5FA", "#A78BFA", "#34D399", "#F59E0B", "#EC4899"],
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+    }
+  }, [allDone]);
 
   const handleAction = (path, external) => {
     if (external) {
@@ -157,6 +185,58 @@ export default function SetupGuide() {
           }} />
         </div>
       </div>
+
+      {/* Celebration banner when all done */}
+      {allDone && (
+        <div data-testid="celebration-banner" style={{
+          marginBottom: "24px", padding: "20px 28px", borderRadius: "14px",
+          background: "linear-gradient(135deg, rgba(52,211,153,0.08), rgba(96,165,250,0.08), rgba(167,139,250,0.08))",
+          border: "1px solid rgba(52,211,153,0.2)",
+          display: "flex", alignItems: "center", gap: "16px",
+          maxWidth: "1100px",
+          animation: "celebFadeIn 0.6s ease",
+        }}>
+          <div style={{
+            width: "48px", height: "48px", borderRadius: "12px",
+            background: "linear-gradient(135deg, #34D399, #60A5FA)",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <PartyPopper size={24} color="#fff" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{
+              fontFamily: fonts.heading, fontSize: "17px", fontWeight: "700",
+              color: "#34D399", margin: "0 0 3px",
+            }}>
+              All set! Your bot is fully configured.
+            </h3>
+            <p style={{
+              fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0,
+            }}>
+              Every step is complete. Your bot is trained, personalized, tested, and ready for conversations.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/admin")}
+            data-testid="celebration-dashboard-btn"
+            style={{
+              padding: "10px 20px", borderRadius: "10px", border: "none", cursor: "pointer",
+              background: "linear-gradient(135deg, #34D399, #60A5FA)", color: "#fff",
+              fontFamily: fonts.body, fontSize: "13px", fontWeight: "600", flexShrink: 0,
+              display: "flex", alignItems: "center", gap: "6px",
+            }}
+          >
+            Go to Dashboard <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes celebFadeIn {
+          from { opacity: 0; transform: translateY(-12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
 
       <div style={{ display: "flex", gap: "32px", maxWidth: "1100px" }}>
         {/* Left: Step list */}

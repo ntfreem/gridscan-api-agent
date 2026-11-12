@@ -18,21 +18,12 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 - [x] Redesigned landing page with marketing copy, hero, neon cyan/blue theme
 - [x] Embedded live chat demo on homepage hero
 - [x] Scroll-based fade-in animations (IntersectionObserver)
-- [x] Auth pages cleaned (Login, Register, ForgotPassword) — no repetitive gradient boxes
+- [x] Auth pages cleaned (Login, Register, ForgotPassword)
 - [x] BridgeBotLogo component with animated drifting pupils on hover (PNG-based)
-- [x] Logo replaced globally across all pages
-- [x] Logo sizes increased to chunky/prominent (56px navbar, 52px admin, 48px footer)
-- [x] Full site rename: BridgeBot → BitBot Pro (all 20+ files, 100+ occurrences)
-- [x] **Onboarding Wizard (Setup Guide)** — Full-screen 5-step flow at /admin/setup-guide:
-  - Step 1: Create First Bot (links to /admin/instances)
-  - Step 2: Add Knowledge (links to /admin/knowledge)
-  - Step 3: Customize Persona (links to /admin/settings)
-  - Step 4: Test Bot (opens chat demo)
-  - Step 5: Deploy to Channel (4 channel cards: Web Widget, Discord, Telegram, Zendesk)
-  - Dynamic step completion from real DB data (no manual marking)
-  - Always accessible via sidebar NavLink
-  - Backend: GET /api/onboarding/step-status
-  - Tested: 100% pass (8/8 backend, all frontend)
+- [x] Logo replaced globally, sizes increased to chunky/prominent
+- [x] Full site rename: BridgeBot → BitBot Pro
+- [x] Onboarding Wizard (Setup Guide) — 5-step full-screen flow at /admin/setup-guide
+- [x] Progress Confetti — canvas-confetti celebration + banner when all 5 steps complete
 
 ## P0 — Current Sprint
 - [ ] WhatsApp channel integration (config page + webhook messaging)
@@ -46,17 +37,11 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 - [ ] APP_MODE env splitting (worker vs api)
 - [ ] Multi-server Discord feature
 
-## Key DB Schema
-- `telegram_config`: {instance_id, bot_token, listen_mode, is_active}
-- `zendesk_config`: {instance_id, subdomain, admin_email, api_token, auto_reply, agent_assist, is_active}
-- `changelog_entries`: {id, version, title, changes, date}
-
 ## Key API Endpoints
 - GET/PUT /api/admin/telegram-config
 - GET/PUT /api/admin/zendesk-config
 - GET /api/analytics/daily-by-platform
-- GET /api/admin/onboarding-status
-- GET /api/onboarding/step-status (dynamic step completion)
+- GET /api/onboarding/step-status
 
 ## Credentials
 - Admin: administrator / Admin@123
@@ -65,4 +50,3 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 - Product name: "BitBot Pro" (with "Pro" in accent color)
 - Logo: PNG at /assets/bridgebot-logo.png (file name kept for compatibility)
 - Component name: BridgeBotLogo (internal code identifier)
-- Production domain: bridgebot.tech
