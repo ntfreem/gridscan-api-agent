@@ -24,6 +24,7 @@ Multi-tenant bot SaaS platform (Discord, Web, Telegram, Zendesk) with a FastAPI 
 - [x] Full site rename: BridgeBot → BitBot Pro
 - [x] Onboarding Wizard (Setup Guide) — 5-step full-screen flow at /admin/setup-guide
 - [x] Progress Confetti — canvas-confetti celebration + banner when all 5 steps complete
+- [x] Step Badges — Animated checkmark badges with pop/draw/slide animations on real-time step transitions (8s polling + focus)
 
 ## P0 — Current Sprint
 - [ ] WhatsApp channel integration (config page + webhook messaging)

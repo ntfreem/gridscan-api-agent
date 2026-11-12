@@ -78,13 +78,30 @@ export default function SetupGuide() {
   const [step, setStep] = useState(0);
   const [stepStatus, setStepStatus] = useState({});
   const [loading, setLoading] = useState(true);
+  const [justCompleted, setJustCompleted] = useState(new Set());
+  const prevStatusRef = useRef({});
   const { selectedInstance } = useAuth();
   const navigate = useNavigate();
 
   const fetchStatus = useCallback(() => {
     api.get("/onboarding/step-status")
       .then(res => {
-        setStepStatus(res.data);
+        const next = res.data;
+        const prev = prevStatusRef.current;
+        // Detect false→true transitions
+        const newlyDone = new Set();
+        for (const s of STEPS) {
+          if (next[s.key] && !prev[s.key] && Object.keys(prev).length > 0) {
+            newlyDone.add(s.key);
+          }
+        }
+        if (newlyDone.size > 0) {
+          setJustCompleted(newlyDone);
+          // Clear the animation class after it plays
+          setTimeout(() => setJustCompleted(new Set()), 1800);
+        }
+        prevStatusRef.current = next;
+        setStepStatus(next);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -93,6 +110,14 @@ export default function SetupGuide() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus, selectedInstance]);
+
+  // Poll every 8s so returning from another tab picks up changes live
+  useEffect(() => {
+    const id = setInterval(fetchStatus, 8000);
+    const onFocus = () => fetchStatus();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(id); window.removeEventListener("focus", onFocus); };
+  }, [fetchStatus]);
 
   const completedCount = STEPS.filter(s => stepStatus[s.key]).length;
   const allDone = completedCount === STEPS.length;
@@ -236,6 +261,27 @@ export default function SetupGuide() {
           from { opacity: 0; transform: translateY(-12px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes badgePop {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.3); }
+          70% { transform: scale(0.9); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes checkDraw {
+          0% { opacity: 0; transform: scale(0) rotate(-45deg); }
+          60% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes labelSlide {
+          0% { opacity: 0; transform: translateX(-6px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        .step-badge-pop {
+          animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .step-label-pop {
+          animation: labelSlide 0.4s ease 0.2s both;
+        }
       `}</style>
 
       <div style={{ display: "flex", gap: "32px", maxWidth: "1100px" }}>
@@ -244,6 +290,7 @@ export default function SetupGuide() {
           {STEPS.map((s, i) => {
             const done = stepStatus[s.key];
             const active = i === step;
+            const justDone = justCompleted.has(s.key);
             return (
               <button
                 key={s.key}
@@ -258,15 +305,18 @@ export default function SetupGuide() {
                   transition: "all 0.2s",
                 }}
               >
-                <div style={{
-                  width: "32px", height: "32px", borderRadius: "8px", flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  backgroundColor: done ? `${s.color}18` : active ? `${s.color}12` : "rgba(148,163,184,0.06)",
-                  border: active ? `1.5px solid ${s.color}40` : "1.5px solid transparent",
-                  transition: "all 0.2s",
-                }}>
+                <div
+                  className={justDone ? "step-badge-pop" : ""}
+                  data-testid={done ? `step-check-${s.key}` : undefined}
+                  style={{
+                    width: "32px", height: "32px", borderRadius: "8px", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    backgroundColor: done ? `${s.color}18` : active ? `${s.color}12` : "rgba(148,163,184,0.06)",
+                    border: active ? `1.5px solid ${s.color}40` : "1.5px solid transparent",
+                    transition: "all 0.2s",
+                  }}>
                   {done
-                    ? <CheckCircle2 size={16} color={s.color} />
+                    ? <CheckCircle2 size={16} color={s.color} style={justDone ? { animation: "checkDraw 0.5s ease 0.15s both" } : undefined} />
                     : <s.icon size={15} color={active ? s.color : colors.text.muted} />
                   }
                 </div>
@@ -280,9 +330,10 @@ export default function SetupGuide() {
                   }}>
                     {s.title}
                   </p>
-                  <p style={{
+                  <p className={justDone ? "step-label-pop" : ""} style={{
                     fontFamily: fonts.body, fontSize: "11px",
-                    color: colors.text.muted, margin: "1px 0 0",
+                    color: justDone ? s.color : colors.text.muted, margin: "1px 0 0",
+                    transition: "color 0.3s",
                   }}>
                     {done ? "Complete" : s.subtitle}
                   </p>
@@ -326,13 +377,16 @@ export default function SetupGuide() {
                       {current.title}
                     </h2>
                     {isDone && (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px",
-                        padding: "3px 10px", borderRadius: "20px",
-                        backgroundColor: `${current.color}14`,
-                        color: current.color, fontSize: "11px", fontWeight: "600",
-                        fontFamily: fonts.mono, textTransform: "uppercase", letterSpacing: "0.04em",
-                      }}>
+                      <span
+                        className={justCompleted.has(current.key) ? "step-badge-pop" : ""}
+                        data-testid={`step-done-badge-${current.key}`}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "5px",
+                          padding: "3px 10px", borderRadius: "20px",
+                          backgroundColor: `${current.color}14`,
+                          color: current.color, fontSize: "11px", fontWeight: "600",
+                          fontFamily: fonts.mono, textTransform: "uppercase", letterSpacing: "0.04em",
+                        }}>
                         <CheckCircle2 size={12} /> Done
                       </span>
                     )}
