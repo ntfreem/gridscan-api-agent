@@ -7,7 +7,7 @@ import {
   Building2, Bot, Link2, Network, Layers, Play, Key,
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { colors, fonts, radius } from "@/theme";
 
 // ── Section label ──
@@ -113,6 +113,123 @@ function CompactSelector({ label, value, items, onSelect, open, setOpen, testId,
               )}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── User popover (replaces the fixed bottom bar) ──
+function UserPopover({ user, isSuperAdmin, selectedInstance, onLogout, onSetupGuide }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const initial = (user?.username || user?.email || "U")[0].toUpperCase();
+
+  return (
+    <div ref={ref} style={{ padding: "8px 12px", borderTop: `1px solid ${colors.border.default}`, position: "relative" }}>
+      {/* Trigger button */}
+      <button
+        data-testid="user-menu-btn"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "10px",
+          padding: "6px 8px", borderRadius: radius.md, border: "none",
+          backgroundColor: open ? colors.bg.hover : "transparent",
+          cursor: "pointer", transition: "background-color 0.15s",
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.backgroundColor = colors.bg.hover; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.backgroundColor = "transparent"; }}
+      >
+        <div style={{
+          width: "28px", height: "28px", borderRadius: radius.full,
+          backgroundColor: isSuperAdmin ? "rgba(96,165,250,0.15)" : "rgba(148,163,184,0.12)",
+          border: `1.5px solid ${isSuperAdmin ? "rgba(96,165,250,0.35)" : colors.border.default}`,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <span style={{
+            fontFamily: fonts.heading, fontSize: "11px", fontWeight: "700",
+            color: isSuperAdmin ? colors.brand.light : colors.text.secondary,
+          }}>{initial}</span>
+        </div>
+        <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+          <p style={{
+            fontFamily: fonts.body, fontSize: "12px", fontWeight: "500", color: colors.text.primary, margin: 0,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{user?.username || user?.email}</p>
+          <p style={{
+            fontFamily: fonts.mono, fontSize: "8px",
+            color: isSuperAdmin ? colors.brand.light : colors.text.muted,
+            margin: "1px 0 0", textTransform: "uppercase", letterSpacing: "0.12em",
+          }}>{isSuperAdmin ? "Admin" : "User"}</p>
+        </div>
+        <ChevronDown size={11} color={colors.text.muted} style={{
+          transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none", flexShrink: 0,
+        }} />
+      </button>
+
+      {/* Popover menu */}
+      {open && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: "10px", right: "10px",
+          backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
+          borderRadius: radius.lg, overflow: "hidden",
+          boxShadow: "0 -8px 32px rgba(0,0,0,0.5)", zIndex: 120,
+        }}>
+          <a
+            href={`/chat${selectedInstance ? `?instance=${selectedInstance.id}` : ""}`}
+            target="_blank" rel="noopener noreferrer"
+            data-testid="nav-open-chat"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "flex", alignItems: "center", gap: "9px",
+              padding: "10px 14px", textDecoration: "none",
+              fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+              color: colors.brand.light, borderBottom: `1px solid ${colors.border.muted}`,
+              transition: "background-color 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = colors.bg.hover}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            <ExternalLink size={13} /> Open Chat Demo
+          </a>
+
+          <button
+            data-testid="setup-guide-btn"
+            onClick={() => { setOpen(false); onSetupGuide(); }}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: "9px",
+              padding: "10px 14px", background: "none", border: "none", textAlign: "left",
+              fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+              color: colors.text.secondary, cursor: "pointer",
+              borderBottom: `1px solid ${colors.border.muted}`, transition: "background-color 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = colors.bg.hover}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            <Rocket size={13} /> Setup Guide
+          </button>
+
+          <button
+            data-testid="logout-btn"
+            onClick={() => { setOpen(false); onLogout(); }}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: "9px",
+              padding: "10px 14px", background: "none", border: "none", textAlign: "left",
+              fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+              color: "#F87171", cursor: "pointer", transition: "background-color 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.06)"}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            <LogOut size={13} /> Sign Out
+          </button>
         </div>
       )}
     </div>
@@ -286,47 +403,14 @@ export default function AdminLayout() {
           )}
         </nav>
 
-        {/* Bottom */}
-        <div style={{ padding: "10px 14px", borderTop: `1px solid ${colors.border.default}` }}>
-          <a
-            href={`/chat${selectedInstance ? `?instance=${selectedInstance.id}` : ""}`}
-            target="_blank" rel="noopener noreferrer"
-            data-testid="nav-open-chat"
-            style={{
-              display: "flex", alignItems: "center", gap: "8px",
-              color: colors.brand.light, fontSize: "12px", fontFamily: fonts.body, fontWeight: "500",
-              textDecoration: "none", marginBottom: "10px", transition: "color 0.2s",
-            }}
-          >
-            <ExternalLink size={12} /> Open Chat Demo
-          </a>
-          <NavLink to="/admin/setup-guide" data-testid="setup-guide-btn" onClick={closeMobile}
-            style={({ isActive }) => ({
-              display: "flex", alignItems: "center", gap: "7px",
-              color: isActive ? colors.brand.light : colors.text.secondary, fontSize: "12px",
-              fontFamily: fonts.body, fontWeight: "500", textDecoration: "none", marginBottom: "10px",
-            })}
-          >
-            <Rocket size={12} /> Setup Guide
-          </NavLink>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0" }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{
-                fontFamily: fonts.body, fontSize: "12px", fontWeight: "500", color: colors.text.primary, margin: 0,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>{user?.username || user?.email}</p>
-              <p style={{
-                fontFamily: fonts.mono, fontSize: "9px",
-                color: isSuperAdmin ? colors.brand.light : colors.text.muted,
-                margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "0.12em",
-              }}>{isSuperAdmin ? "Admin" : "User"}</p>
-            </div>
-            <button data-testid="logout-btn" onClick={() => { logout(); navigate("/login"); }} title="Sign out"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "6px", borderRadius: radius.sm, display: "flex", alignItems: "center" }}>
-              <LogOut size={15} color={colors.text.secondary} />
-            </button>
-          </div>
-        </div>
+        {/* Bottom — compact user button with popover */}
+        <UserPopover
+          user={user}
+          isSuperAdmin={isSuperAdmin}
+          selectedInstance={selectedInstance}
+          onLogout={() => { logout(); navigate("/login"); }}
+          onSetupGuide={() => { closeMobile(); navigate("/admin/setup-guide"); }}
+        />
       </aside>
 
       <main className="admin-main" style={{ marginLeft: "250px", flex: 1, minHeight: "100vh", backgroundColor: colors.bg.base }}
