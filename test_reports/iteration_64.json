@@ -1,0 +1,128 @@
+{
+  "summary": "Completed comprehensive testing of v2 API endpoints for BitBot Pro multi-bot architecture. All 21 backend tests passed (100%). Fixed a security issue where hashed_password was being exposed in the /api/v2/orgs/{org_id}/members endpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v2_api_endpoints.py",
+    "/app/test_reports/pytest/iter64_v2_api.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: Security issue in /api/v2/orgs/{org_id}/members - was exposing hashed_password field. Added exclusion for hashed_password and verification_code in MongoDB projection.",
+    "Credential masking works correctly - bot_token and other sensitive fields are properly masked with bullet characters (•)",
+    "Auth guards working correctly - 401 for missing auth, 404 for wrong org/bot IDs",
+    "Overlap detection for connections works - returns 409 when same account+destination combination exists",
+    "All v2 endpoints properly require X-Org-ID header for org-scoped operations",
+    "Backward compatibility maintained - v1 endpoints (/api/admin/instances, /api/admin/bot-config) still work"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v2_api_endpoints.py",
+    "/app/backend/org_routes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+  "seed_data_creation": "Test data created with TEST_ prefix: TEST_Org_v2_API, TEST_Bot_v2_API, TEST_Bot_Update, TEST_Bot_Updated, TEST_Discord_Account, TEST_Telegram_Account, TEST_Connection_Account, TEST_Connection_v2, TEST_Toggle_Connection, TEST_Overlap_First",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "v2 API endpoints fully tested. Key endpoints: GET/POST /api/v2/orgs (list/create orgs), GET /api/v2/orgs/{org_id} (org detail with X-Org-ID header), GET /api/v2/orgs/{org_id}/members (members with org_role and is_owner), GET/POST /api/v2/orgs/{org_id}/bots (list/create bots with connection_count), GET /api/v2/orgs/{org_id}/bots/{bot_id} (bot detail with knowledge_source_count), PUT /api/v2/orgs/{org_id}/bots/{bot_id} (update name/persona), GET /api/v2/orgs/{org_id}/bots/{bot_id}/settings (full behaviour settings), GET/POST /api/v2/orgs/{org_id}/accounts (list/create accounts with masked credentials), GET /api/v2/orgs/{org_id}/accounts/{account_id} (account detail with connections list), GET/POST /api/v2/orgs/{org_id}/bots/{bot_id}/connections (list/create connections with enriched account info and effective_settings), PATCH /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}/toggle (toggle enabled state). Migration data: org_id=cb91e73c-b74b-45a3-aecc-f7823ee07d2c, bot_id=f014cae7-788f-447c-b524-7d72709daa80.",
+  "features_tested": [
+    {
+      "feature": "GET /api/v2/orgs returns list of organisations with id, name, bot_count, member_count, account_count",
+      "status": "PASS"
+    },
+    {
+      "feature": "POST /api/v2/orgs creates new organisation, creator becomes owner",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id} returns org detail with X-Org-ID header",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/members lists members with org_role and is_owner fields",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/bots lists bots with connection_count and active_connection_count",
+      "status": "PASS"
+    },
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/bots creates new bot with default settings",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/bots/{bot_id} returns bot detail with knowledge_source_count",
+      "status": "PASS"
+    },
+    {
+      "feature": "PUT /api/v2/orgs/{org_id}/bots/{bot_id} updates bot name and persona",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/bots/{bot_id}/settings returns full behaviour settings",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/accounts lists accounts with masked credentials, connection_count, active_connection_count",
+      "status": "PASS"
+    },
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/accounts creates account with masked credentials in response",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/accounts/{account_id} returns account detail with connections list",
+      "status": "PASS"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/bots/{bot_id}/connections lists connections with account_name, account_provider, account_status, effective_settings",
+      "status": "PASS"
+    },
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/bots/{bot_id}/connections creates connection linking bot to account+destination",
+      "status": "PASS"
+    },
+    {
+      "feature": "PATCH /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}/toggle toggles enabled state",
+      "status": "PASS"
+    },
+    {
+      "feature": "Auth guard: requests without Authorization header return 401",
+      "status": "PASS"
+    },
+    {
+      "feature": "Auth guard: requests with wrong X-Org-ID return 404",
+      "status": "PASS"
+    },
+    {
+      "feature": "Auth guard: requests to bot not in org return 404",
+      "status": "PASS"
+    },
+    {
+      "feature": "Backward compatibility: GET /api/admin/instances still works",
+      "status": "PASS"
+    },
+    {
+      "feature": "Backward compatibility: GET /api/admin/bot-config still works",
+      "status": "PASS"
+    },
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/bots/{bot_id}/connections with overlapping destination+account returns 409",
+      "status": "PASS"
+    }
+  ],
+  "security_fix_applied": {
+    "file": "/app/backend/org_routes.py",
+    "issue": "GET /api/v2/orgs/{org_id}/members was exposing hashed_password field",
+    "fix": "Added hashed_password and verification_code to MongoDB projection exclusion list"
+  }
+}

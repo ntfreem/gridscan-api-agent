@@ -32,6 +32,11 @@ import api_integrations_routes
 import api_diagnostics_routes
 import telegram_routes
 import zendesk_routes
+import v2_helpers
+import org_routes
+import bot_routes
+import account_routes
+import connection_routes
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
 ROOT_DIR = Path(__file__).parent
@@ -413,6 +418,13 @@ def _init_zendesk():
         save_conversation, get_tone_examples_text, _try_api_query,
     )
 api_router.include_router(zendesk_routes.router)
+
+# ── v2 routes (Org → Bot → Account → Connection model) ──
+v2_helpers.init(db, _get_instance_from_request)
+api_router.include_router(org_routes.router)
+api_router.include_router(bot_routes.router)
+api_router.include_router(account_routes.router)
+api_router.include_router(connection_routes.router)
 
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
@@ -2129,6 +2141,19 @@ async def startup_event():
     await db.zendesk_events.create_index([("instance_id", 1), ("event_id", 1)], unique=True)
     await db.zendesk_oauth_states.create_index([("state", 1)], unique=True)
     await db.zendesk_oauth_states.create_index([("created_at", 1)], expireAfterSeconds=600)
+
+    # ── v2 model indexes ──
+    await db.organisations.create_index([("id", 1)], unique=True)
+    await db.bots.create_index([("id", 1)], unique=True)
+    await db.bots.create_index([("org_id", 1)])
+    await db.bots.create_index([("legacy_instance_id", 1)], sparse=True)
+    await db.connected_accounts.create_index([("id", 1)], unique=True)
+    await db.connected_accounts.create_index([("org_id", 1)])
+    await db.connections.create_index([("id", 1)], unique=True)
+    await db.connections.create_index([("bot_id", 1)])
+    await db.connections.create_index([("account_id", 1)])
+    await db.connections.create_index([("org_id", 1)])
+
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task

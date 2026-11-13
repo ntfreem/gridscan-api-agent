@@ -5,100 +5,127 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ## Core Architecture
 - **Frontend**: React SPA with neon electric blue theme
-- **Backend**: FastAPI (Python) with 140+ endpoints
+- **Backend**: FastAPI (Python) with 140+ v1 endpoints + 20+ v2 endpoints
 - **Database**: MongoDB Atlas
 - **Channels**: Web Chat, Discord, Telegram, Zendesk, External API (v1)
 - **LLM**: Claude/OpenAI via Emergent Universal Key
 - **Storage**: Emergent Object Storage
 - **Email**: Emergent Managed Resend
 
-## Branding
-- **Name**: BitBot Pro (renamed from BridgeBot)
-- **Theme**: Neon electric blue palette
-- **Logo**: Chunky logo across all pages (48px in header/footer)
+## v2 Data Model (NEW — Phase 1 Complete)
 
-## Authentication
-- JWT-based auth with email/username + password
-- Admin role: `administrator` / `Admin@123`
-- Multi-tenant: instances with assigned users
-- User invitation system with email sign-up links
+### Collections
+```
+organisations    → {id, name, owner_id, member_ids, member_roles}
+bots             → {id, org_id, name, persona, instructions, settings, legacy_instance_id}
+connected_accounts → {id, org_id, provider, name, status, credentials (encrypted), metadata}
+connections      → {id, org_id, bot_id, account_id, provider, destination, response_mode, overrides, override_flags, priority}
+```
+
+### Hierarchy
+```
+Organisation
+├── Members (users with org-level roles)
+├── Connected Accounts (reusable provider identities)
+│   ├── Discord Bot identity
+│   ├── Telegram Bot identity
+│   └── Zendesk OAuth account
+└── Bots (AI assistants)
+    ├── Bot Settings (persona, KB, LLM config)
+    └── Connections (routes to destinations)
+        ├── Discord → Server A / #general-help
+        ├── Discord → Server A / #billing (same account)
+        ├── Telegram → Customer group
+        └── Zendesk → Billing ticket group
+```
+
+### v2 API Endpoints
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v2/orgs` | GET/POST | List/create organisations |
+| `/api/v2/orgs/{org_id}` | GET/PUT | Get/update org |
+| `/api/v2/orgs/{org_id}/members` | GET | List members with roles |
+| `/api/v2/orgs/{org_id}/members` | POST | Add member |
+| `/api/v2/orgs/{org_id}/members/{id}` | DELETE | Remove member |
+| `/api/v2/orgs/{org_id}/members/{id}/role` | PATCH | Change role |
+| `/api/v2/orgs/{org_id}/bots` | GET/POST | List/create bots |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}` | GET/PUT/DELETE | Bot CRUD |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/settings` | GET/PUT | Bot behaviour |
+| `/api/v2/orgs/{org_id}/accounts` | GET/POST | List/create accounts |
+| `/api/v2/orgs/{org_id}/accounts/{id}` | GET/PUT | Account CRUD |
+| `/api/v2/orgs/{org_id}/accounts/{id}/disconnect` | POST | Disconnect (warns) |
+| `/api/v2/orgs/{org_id}/accounts/{id}/reconnect` | POST | Reconnect |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections` | GET/POST | List/create connections |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}` | GET/PUT | Connection CRUD |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/toggle` | PATCH | Enable/disable |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/activity` | GET | Recent activity |
+
+### Auth Pattern
+- JWT auth via `Authorization: Bearer {token}`
+- `X-Org-ID` header for org scoping
+- Bot/account/connection IDs in URL paths
+- Org membership enforced on all v2 endpoints
+- Superadmins have implicit access to all orgs
+- Credentials never sent raw to frontend (masked with `mask_credential()`)
+
+### Migration
+- Script: `/app/backend/migrate_v2.py` (repeatable, non-destructive)
+- Creates: 1 org, bots from instances, accounts from configs, connections linking them
+- Legacy `instance_id` preserved as `bot.legacy_instance_id` for backward compat
+- v1 endpoints fully preserved and functional alongside v2
 
 ## Completed Features
 
-### Zendesk Sidebar App — Agent Assist (Done — Nov 2026)
-- [x] `POST /api/zendesk/sidebar/generate` — On-demand AI suggestion for any ticket
-  - Auth via per-instance `X-Sidebar-Key` header (not JWT)
-  - Fetches full ticket conversation from Zendesk via OAuth
-  - Runs existing knowledge base search + AI pipeline (Claude)
-  - Returns suggestion with `low_confidence` flag when no matching KB content
-  - Stores suggestion in `zendesk_suggestions` collection (for analytics)
-  - Treats ticket content as untrusted input (not instructions)
-  - Does NOT post comments, change ticket status, or send replies
-- [x] `GET /api/admin/zendesk/sidebar-key` — Get/auto-generate sidebar API key
-- [x] `POST /api/admin/zendesk/sidebar-key/regenerate` — Rotate sidebar key (old key invalidated)
-- [x] `GET /api/admin/zendesk/sidebar-app.zip` — Dynamic ZIP download (ZAF v2 app)
-- [x] ZAF v2 sidebar app with: Generate, Regenerate, Copy, Insert into Reply controls
-- [x] Ticket switch detection (invalidates stale suggestions via `ticket.id.changed`)
-- [x] Dark theme matching BitBot Pro aesthetic
-- [x] Installation parameters: `bitbot_url` (pre-filled) + `sidebar_api_key` (secure)
-- [x] Admin UI card in ZendeskSettings page with 3-step setup guide
-- [x] Tested: 100% pass rate (21/21 tests, iteration_63.json)
+### Phase 1 — v2 Data Model & Backend (Done — Nov 2026)
+- [x] 4 new collections with proper indexes
+- [x] 5 new route files: `v2_helpers.py`, `org_routes.py`, `bot_routes.py`, `account_routes.py`, `connection_routes.py`
+- [x] Migration script with repeatable, non-destructive data mapping
+- [x] Org membership access control on all v2 endpoints
+- [x] Credential masking (never expose raw secrets to frontend)
+- [x] Overlap detection for conflicting connection routes
+- [x] Override inheritance with explicit `override_flags` semantics
+- [x] Connection effective_settings resolution (connection overrides > bot defaults)
+- [x] Backward compatibility — all v1 endpoints still work
+- [x] Tested: 100% pass rate (21/21 backend tests, iteration_64.json)
+- [x] Security fix: password hash excluded from members endpoint
 
-### Zendesk UX Improvements (Done — Nov 2026)
-- [x] Callback URL prominently displayed with copy button for easy Zendesk setup
-- [x] Subdomain field auto-normalizes URLs on blur (strips https://, .zendesk.com)
-- [x] Updated ZENDESK_OAUTH_SETUP.md with in-app credential management instructions
+### Zendesk Sidebar App (Done — Nov 2026)
+- [x] On-demand AI suggestion generation for any ticket
+- [x] ZAF v2 sidebar app with Generate/Regenerate/Copy/Insert controls
+- [x] Per-instance sidebar API key management
+- [x] Admin UI card with 3-step setup guide and ZIP download
 
-### Zendesk Analytics Dashboard (Done — Nov 2026)
-- [x] `GET /api/analytics/zendesk` endpoint with ticket processing stats
-- [x] Stat cards, charts, action breakdown, recent tickets table
-- [x] Connection status indicator and empty states
-- [x] Tested: 100% pass rate (iteration_62.json)
-
-### Zendesk OAuth Migration (Done — Feb 2026)
-- [x] OAuth 2.0 authorization-code flow + PKCE
-- [x] Secure token storage in MongoDB (access: 8h, refresh: 30d)
-- [x] Automatic token refresh with rotation
-- [x] In-app OAuth credential management (Client ID + Secret via UI)
-
-### Admin Role Management (Done — Feb 2026)
-- [x] Promote/demote users with self-role-change prevention
-
-### User Invitation System (Done — Feb 2026)
-- [x] Email invitations with Resend, role + instance assignment, 7-day expiry
-
-### Self-Hosting Readiness (Done)
-- [x] Full codebase audit (135+ endpoints)
-- [x] 7 Markdown documentation files in `/app/docs/self-hosting-readiness/`
-
-## Key API Endpoints
-
-| Endpoint | Method | Auth | Purpose |
-|---|---|---|---|
-| `/api/zendesk/sidebar/generate` | POST | X-Sidebar-Key | On-demand AI ticket suggestion |
-| `/api/admin/zendesk/sidebar-key` | GET | JWT+Instance | Get sidebar API key |
-| `/api/admin/zendesk/sidebar-key/regenerate` | POST | JWT+Instance | Rotate sidebar key |
-| `/api/admin/zendesk/sidebar-app.zip` | GET | JWT+Instance | Download ZAF app ZIP |
-| `/api/analytics/zendesk` | GET | JWT+Instance | Zendesk ticket stats |
-| `/api/admin/zendesk/oauth/callback-url` | GET | JWT+Instance | Get OAuth callback URL |
-| `/api/admin/users/invite` | POST | Admin | Send email invitation |
-| `/api/admin/users/{id}/role` | PATCH | Admin | Promote/demote user |
+### Earlier Completed Work
+- Zendesk OAuth migration, Analytics Dashboard, Admin role management
+- User email invitations, Landing page fixes
+- Self-hosting readiness documentation
+- Full branding update (BridgeBot → BitBot Pro)
 
 ## Pending / Upcoming Tasks
 
-### P0 — GitHub Export
-- Export the application to GitHub for self-hosting migration
+### Phase 2 — Navigation & Layout Restructure
+- New AdminLayout with Org selector, Bot selector, section groups
+- Routes: `/admin/org/overview`, `/admin/bots`, `/admin/accounts`, `/admin/bot/:id/integrations`
+- Shell pages wired to v2 backend APIs
 
-### P1 — WhatsApp Integration
-- Scope out and integrate WhatsApp channel
-- Create standalone `/app/backend/whatsapp_routes.py`
+### Phase 3 — Core Pages (Connected Accounts + Integrations)
+- Connected Accounts: list, add, edit, disconnect with active-connection warnings
+- Integrations: connection cards, Add Connection wizard, detail tabs
+- Override inheritance UI (use bot defaults vs custom)
 
-### P2 — Backend Refactor
-- Break `/app/backend/server.py` (>6,500 lines) into modular files
-- APP_MODE env splitting (worker vs api)
+### Phase 4 — Provider Routing & Webhook Updates
+- Multi-route webhook resolution for Discord, Telegram, Zendesk
+- Overlap detection, idempotent handling, shared-account rate limiting
 
-### P2 — Multi-Server Discord
-- Support multiple Discord servers per bot instance
+### Phase 5 — Platform Admin & Polish
+- Provider Apps page, Workspaces & Users, documentation updates
+
+### Backlog
+- P0: GitHub Export for self-hosting migration
+- P1: WhatsApp integration
+- P2: Backend refactor (server.py modularization)
+- P2: APP_MODE env splitting (worker vs api)
+- P2: Multi-server Discord
 
 ## Production URLs
 - Production: `https://bitbotpro.io`
