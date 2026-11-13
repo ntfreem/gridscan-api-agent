@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "../utils/api";
 import { toast } from "sonner";
-import { Users as UsersIcon, CheckCircle, XCircle, Shield, Clock, Trash2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { Users as UsersIcon, CheckCircle, XCircle, Shield, Clock, Trash2, ShieldCheck, ShieldOff } from "lucide-react";
 import { colors, fonts, T, rowEnter, rowLeave } from "../theme";
 
 const badge = (color) => ({
@@ -19,10 +20,12 @@ const instanceChip = {
 };
 
 export default function Users() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
   const [deleting, setDeleting] = useState(null);
+  const [togglingRole, setTogglingRole] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     try { const res = await api.get("/admin/users"); setUsers(res.data); }
@@ -41,6 +44,19 @@ export default function Users() {
       setUsers(prev => prev.filter(u => u.id !== user.id));
     } catch (e) { toast.error(e.response?.data?.detail || "Failed to delete user"); }
     finally { setDeleting(null); }
+  };
+
+  const toggleRole = async (user) => {
+    const newRole = user.role === "superadmin" ? "user" : "superadmin";
+    const action = newRole === "superadmin" ? "Promote" : "Demote";
+    if (!window.confirm(`${action} "${user.email}" to ${newRole === "superadmin" ? "Admin" : "User"}?`)) return;
+    setTogglingRole(user.id);
+    try {
+      const res = await api.patch(`/admin/users/${user.id}/role`, { role: newRole });
+      toast.success(res.data.message);
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to change role"); }
+    finally { setTogglingRole(null); }
   };
 
   const filtered = users.filter(u => {
@@ -129,21 +145,45 @@ export default function Users() {
                     {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "\u2014"}
                   </td>
                   <td style={T.td}>
-                    {user.role !== "superadmin" && (
-                      <button
-                        onClick={() => deleteUser(user)}
-                        disabled={deleting === user.id}
-                        data-testid={`delete-user-${user.id}`}
-                        style={{
-                          background: "none", border: "none", cursor: deleting === user.id ? "not-allowed" : "pointer",
-                          color: colors.text.secondary, padding: "4px", transition: "color 0.2s ease",
-                          opacity: deleting === user.id ? 0.4 : 1,
-                        }}
-                        onMouseEnter={e => { if (deleting !== user.id) e.currentTarget.style.color = colors.brand.error; }}
-                        onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                    {user.id === currentUser?.id ? (
+                      <span style={{ color: colors.text.muted, fontSize: "11px", fontStyle: "italic" }}>You</span>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <button
+                          onClick={() => toggleRole(user)}
+                          disabled={togglingRole === user.id}
+                          data-testid={`toggle-role-${user.id}`}
+                          title={user.role === "superadmin" ? "Demote to User" : "Promote to Admin"}
+                          style={{
+                            background: "none", border: "none",
+                            cursor: togglingRole === user.id ? "not-allowed" : "pointer",
+                            color: colors.text.secondary, padding: "4px", transition: "color 0.2s ease",
+                            opacity: togglingRole === user.id ? 0.4 : 1,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = user.role === "superadmin" ? colors.brand.warning : colors.brand.cyan}
+                          onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}
+                        >
+                          {user.role === "superadmin" ? <ShieldOff size={15} /> : <ShieldCheck size={15} />}
+                        </button>
+                        {user.role !== "superadmin" && (
+                          <button
+                            onClick={() => deleteUser(user)}
+                            disabled={deleting === user.id}
+                            data-testid={`delete-user-${user.id}`}
+                            title="Delete User"
+                            style={{
+                              background: "none", border: "none",
+                              cursor: deleting === user.id ? "not-allowed" : "pointer",
+                              color: colors.text.secondary, padding: "4px", transition: "color 0.2s ease",
+                              opacity: deleting === user.id ? 0.4 : 1,
+                            }}
+                            onMouseEnter={e => { if (deleting !== user.id) e.currentTarget.style.color = colors.brand.error; }}
+                            onMouseLeave={e => e.currentTarget.style.color = colors.text.secondary}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>

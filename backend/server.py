@@ -2329,6 +2329,26 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin))
     # Delete user
     await db.users.delete_one({"id": user_id})
     return {"success": True, "message": f"User {user.get('email', '')} deleted"}
+
+class UserRoleUpdate(BaseModel):
+    role: str  # "superadmin" or "user"
+
+@api_router.patch("/admin/users/{user_id}/role")
+async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dict = Depends(require_admin)):
+    """Promote or demote a user (admin only). Cannot change your own role."""
+    if body.role not in ("superadmin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'superadmin' or 'user'")
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == body.role:
+        return {"success": True, "message": f"User already has role '{body.role}'"}
+    await db.users.update_one({"id": user_id}, {"$set": {"role": body.role}})
+    action = "promoted to Admin" if body.role == "superadmin" else "demoted to User"
+    return {"success": True, "message": f"{user.get('email', '')} {action}"}
+
 @api_router.get("/admin/instances")
 async def list_instances(current_user: dict = Depends(require_admin)):
     instances = await db.bot_instances.find({}, {"_id": 0}).to_list(100)
