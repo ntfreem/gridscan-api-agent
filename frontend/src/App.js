@@ -38,6 +38,9 @@ import BotList from "@/pages/BotList";
 import BotOverview from "@/pages/BotOverview";
 import ConnectedAccounts from "@/pages/ConnectedAccounts";
 import IntegrationsPage from "@/pages/IntegrationsPage";
+import ProviderApps from "@/pages/ProviderApps";
+import Workspaces from "@/pages/Workspaces";
+import SuggestionsInbox from "@/pages/SuggestionsInbox";
 
 import "@/App.css";
 
@@ -92,10 +95,11 @@ function AppRoutes() {
         <Route path="bots/:botId/integrations" element={<IntegrationsPage />} />
         <Route path="bots/:botId/conversations" element={<Conversations />} />
         <Route path="bots/:botId/playground" element={<EmbedCode />} />
+        <Route path="bots/:botId/suggestions" element={<SuggestionsInbox />} />
 
         {/* Platform Admin */}
-        <Route path="platform/provider-apps" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
-        <Route path="platform/workspaces" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
+        <Route path="platform/provider-apps" element={<AdminOnlyRoute><ProviderApps /></AdminOnlyRoute>} />
+        <Route path="platform/workspaces" element={<AdminOnlyRoute><Workspaces /></AdminOnlyRoute>} />
         <Route path="platform/analytics" element={<AdminOnlyRoute><Analytics /></AdminOnlyRoute>} />
         <Route path="platform/api-keys" element={<AdminOnlyRoute><ApiKeyAnalytics /></AdminOnlyRoute>} />
 

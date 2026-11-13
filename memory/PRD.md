@@ -5,7 +5,7 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ## Core Architecture
 - **Frontend**: React SPA with neon electric blue theme
-- **Backend**: FastAPI (Python) with 140+ v1 endpoints + 20+ v2 endpoints
+- **Backend**: FastAPI (Python) with 140+ v1 endpoints + 30+ v2 endpoints
 - **Database**: MongoDB Atlas
 - **Channels**: Web Chat, Discord, Telegram, Zendesk, External API (v1)
 - **LLM**: Claude/OpenAI via Emergent Universal Key
@@ -16,11 +16,11 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ### Collections
 ```
-organisations    → {id, name, owner_id, member_ids, member_roles}
-bots             → {id, org_id, name, persona, instructions, settings, legacy_instance_id}
+organisations      → {id, name, owner_id, member_ids, member_roles}
+bots               → {id, org_id, name, persona, instructions, settings, legacy_instance_id}
 connected_accounts → {id, org_id, provider, name, status, credentials (encrypted), metadata}
-connections      → {id, org_id, bot_id, account_id, provider, destination, response_mode, overrides, override_flags, priority}
-v2_suggestions   → {connection_id, bot_id, instance_id, platform, user_message, ai_suggestion, status, metadata}
+connections        → {id, org_id, bot_id, account_id, provider, destination, response_mode, overrides, priority}
+v2_suggestions     → {_id, connection_id, bot_id, instance_id, platform, user_message, ai_suggestion, status}
 ```
 
 ### Hierarchy
@@ -35,7 +35,7 @@ Organisation
     ├── Bot Settings (persona, KB, LLM config)
     └── Connections (routes to destinations)
         ├── Discord → Server A / #general-help (auto_reply)
-        ├── Discord → Server A / #billing (agent_assist, same account)
+        ├── Discord → Server A / #billing (agent_assist → suggestions inbox)
         ├── Telegram → Customer group (auto_reply)
         └── Zendesk → Billing ticket group (internal_note)
 ```
@@ -49,76 +49,55 @@ Organisation
 | `/api/v2/orgs/{org_id}/bots` | GET/POST | List/create bots |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}` | GET/PUT/DELETE | Bot CRUD |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/settings` | GET/PUT | Bot behaviour |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions` | GET | List AI suggestions |
+| `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions/{id}` | PATCH | Accept/dismiss suggestion |
 | `/api/v2/orgs/{org_id}/accounts` | GET/POST | List/create accounts |
 | `/api/v2/orgs/{org_id}/accounts/{id}` | GET/PUT | Account CRUD |
-| `/api/v2/orgs/{org_id}/accounts/{id}/disconnect` | POST | Disconnect (warns) |
-| `/api/v2/orgs/{org_id}/accounts/{id}/reconnect` | POST | Reconnect |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections` | GET/POST | List/create connections |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}` | GET/PUT | Connection CRUD |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/toggle` | PATCH | Enable/disable |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/activity` | GET | Activity + suggestions |
+| `/api/v2/platform/stats` | GET | Platform-wide statistics |
+| `/api/v2/platform/workspaces` | GET | All orgs with stats |
+| `/api/v2/platform/workspaces/{org_id}/detail` | GET | Org detail (members, bots, accounts) |
+| `/api/v2/platform/provider-apps` | GET | Provider account/connection breakdown |
 
-### Auth Pattern
-- JWT auth via `Authorization: Bearer {token}`
-- `X-Org-ID` header for org scoping
-- Superadmins have implicit access to all orgs
-- Credentials never sent raw to frontend (masked with `mask_credential()`)
-
-### Migration
-- Script: `/app/backend/migrate_v2.py` (repeatable, non-destructive)
-- Legacy `instance_id` preserved as `bot.legacy_instance_id` for backward compat
-- v1 endpoints fully preserved and functional alongside v2
-
-## Completed Features
+## Completed Features — V2 Architecture (All 5 Phases)
 
 ### Phase 1 — v2 Data Model & Backend (Done — Nov 2026)
 - [x] 4 new collections with proper indexes
-- [x] 5 new route files: `v2_helpers.py`, `org_routes.py`, `bot_routes.py`, `account_routes.py`, `connection_routes.py`
-- [x] Migration script with repeatable, non-destructive data mapping
-- [x] Overlap detection, override inheritance, effective_settings resolution
-- [x] Tested: 100% pass (21/21 backend tests, iteration_64.json)
+- [x] 5 new route files + migration script
+- [x] Tested: 100% pass (iteration_64.json)
 
 ### Phase 2 — Navigation & Layout Restructure (Done — Nov 2026)
-- [x] New AdminLayout with Org selector, Bot selector, section groups
-- [x] Routes: `/admin/org/overview`, `/admin/bots`, `/admin/accounts`, `/admin/bot/:id/integrations`
-- [x] Tested: 100% pass (8/8 frontend tests, iteration_65.json)
+- [x] AdminLayout with Org/Bot selectors, section groups
+- [x] Tested: 100% pass (iteration_65.json)
 
 ### Phase 3 — Core Pages: Connected Accounts + Integrations (Done — Nov 2026)
-- [x] Connected Accounts: list, add, edit, disconnect with provider badges
-- [x] Integrations: connection cards, Add Connection wizard, detail tabs
-- [x] Override inheritance UI (use bot defaults vs custom)
+- [x] Connected Accounts: list, add, edit, disconnect
+- [x] Integrations: connection cards, Add Connection wizard
 - [x] Tested: included in iteration_65.json
 
 ### Phase 4 — Provider Routing & Webhook Updates (Done — Nov 2026)
-- [x] New `webhook_router.py` module for V2 multi-route resolution
-- [x] Discord handler updated: V2 route resolution → multi-route processing (auto_reply + agent_assist)
-- [x] Telegram handler updated: V2 resolution with V1 fallback
-- [x] Zendesk handler updated: V2 resolution with ticket group/tag filtering
-- [x] Per-account rate limiting via asyncio.Semaphore (MAX_CONCURRENT_PER_ACCOUNT=3)
-- [x] V2 suggestion storage for agent_assist/internal_note connections
-- [x] Connection activity endpoint enhanced (returns activity + suggestions)
-- [x] Connection_id and v2_bot_id tracked in conversation metadata
-- [x] 13 unit tests for webhook router (all pass)
-- [x] Tested: 100% pass (23/23 backend + 10/10 frontend, iteration_66.json)
+- [x] `webhook_router.py` — V2 multi-route resolution engine
+- [x] Discord/Telegram/Zendesk handlers updated with V2 routing + V1 fallback
+- [x] Per-account rate limiting, V2 suggestion storage, connection_id tracking
+- [x] Tested: 100% pass (iteration_66.json)
 
-### Zendesk Sidebar App (Done — Nov 2026)
-- [x] On-demand AI suggestion generation for any ticket
-- [x] ZAF v2 sidebar app with Generate/Regenerate/Copy/Insert controls
-- [x] Per-instance sidebar API key management
+### Phase 5 — Platform Admin & Polish (Done — Nov 2026)
+- [x] **Provider Apps page** (`/admin/platform/provider-apps`) — platform-wide provider stats
+- [x] **Workspaces & Users page** (`/admin/platform/workspaces`) — cross-org admin dashboard with expandable detail
+- [x] **Suggestions Inbox** (`/admin/bots/:botId/suggestions`) — agent review panel with accept/dismiss/copy
+- [x] `platform_routes.py` — 4 new admin endpoints
+- [x] Suggestions list + update endpoints in `connection_routes.py`
+- [x] Tested: 100% pass (iteration_67.json)
 
 ### Earlier Completed Work
-- Zendesk OAuth migration, Analytics Dashboard, Admin role management
-- User email invitations, Landing page fixes
-- Self-hosting readiness documentation
-- Full branding update (BridgeBot → BitBot Pro)
+- Zendesk OAuth, ZAF sidebar app, Analytics, Admin roles
+- User email invitations, Landing page, Self-hosting docs
+- Full branding (BridgeBot → BitBot Pro)
 
 ## Pending / Upcoming Tasks
-
-### Phase 5 — Platform Admin & Polish (P0)
-- Provider Apps management page
-- Workspaces & Users page (multi-org admin)
-- Documentation updates
-- V2 suggestions UI (display agent_assist suggestions in frontend)
 
 ### Backlog
 - P0: GitHub Export for self-hosting migration

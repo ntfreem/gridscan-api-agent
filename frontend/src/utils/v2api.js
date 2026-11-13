@@ -40,6 +40,24 @@ const v2 = {
   updateConnection: (orgId, botId, connId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, data, { headers: headers() }),
   toggleConnection: (orgId, botId, connId) => axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/toggle`, {}, { headers: headers() }),
   connectionActivity: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/activity`, { headers: headers() }),
+
+  // Suggestions
+  listSuggestions: (orgId, botId, params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.connection_id) qs.set("connection_id", params.connection_id);
+    if (params.limit) qs.set("limit", params.limit);
+    if (params.skip) qs.set("skip", params.skip);
+    return axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions?${qs}`, { headers: headers() });
+  },
+  updateSuggestion: (orgId, botId, suggestionId, data) =>
+    axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions/${suggestionId}`, data, { headers: headers() }),
+
+  // Platform Admin
+  platformStats: () => axios.get(`${BASE}/v2/platform/stats`, { headers: headers() }),
+  listWorkspaces: () => axios.get(`${BASE}/v2/platform/workspaces`, { headers: headers() }),
+  workspaceDetail: (orgId) => axios.get(`${BASE}/v2/platform/workspaces/${orgId}/detail`, { headers: headers() }),
+  listProviderApps: () => axios.get(`${BASE}/v2/platform/provider-apps`, { headers: headers() }),
 };
 
 export default v2;

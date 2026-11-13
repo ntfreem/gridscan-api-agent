@@ -295,3 +295,78 @@ async def connection_activity(org_id: str, bot_id: str, conn_id: str, request: R
         "connection_id": conn_id,
         "response_mode": conn.get("response_mode", "auto_reply"),
     }
+
+
+# ── Suggestions endpoints ──
+
+@router.get("/{org_id}/bots/{bot_id}/suggestions")
+async def list_bot_suggestions(org_id: str, bot_id: str, request: Request,
+                                status: str = None, connection_id: str = None,
+                                limit: int = 50, skip: int = 0):
+    """List AI suggestions for a bot's connections (agent_assist/internal_note).
+
+    Query params:
+      status: pending | accepted | dismissed (filter)
+      connection_id: filter by specific connection
+      limit/skip: pagination
+    """
+    user, org, bot = await h.require_bot_access(request, bot_id)
+
+    query = {"bot_id": bot_id}
+    if status:
+        query["status"] = status
+    if connection_id:
+        query["connection_id"] = connection_id
+
+    total = await h._db.v2_suggestions.count_documents(query)
+    raw_suggestions = await h._db.v2_suggestions.find(
+        query
+    ).sort("created_at", -1).skip(skip).limit(min(limit, 100)).to_list(min(limit, 100))
+    
+    # Convert _id to string for JSON serialization
+    suggestions = []
+    for s in raw_suggestions:
+        s["_id"] = str(s["_id"])
+        suggestions.append(s)
+
+    # Enrich with connection names
+    conn_ids = list({s["connection_id"] for s in suggestions})
+    conns_map = {}
+    if conn_ids:
+        conns = await h._db.connections.find(
+            {"id": {"$in": conn_ids}}, {"_id": 0, "id": 1, "name": 1, "provider": 1, "response_mode": 1}
+        ).to_list(100)
+        conns_map = {c["id"]: c for c in conns}
+
+    for s in suggestions:
+        conn = conns_map.get(s.get("connection_id"), {})
+        s["connection_name"] = conn.get("name", "Unknown")
+        s["provider"] = conn.get("provider", s.get("platform", "unknown"))
+        s["response_mode"] = conn.get("response_mode", "agent_assist")
+
+    return {
+        "suggestions": suggestions,
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+    }
+
+
+@router.patch("/{org_id}/bots/{bot_id}/suggestions/{suggestion_id}")
+async def update_suggestion(org_id: str, bot_id: str, suggestion_id: str, request: Request):
+    """Update a suggestion's status (accept / dismiss)."""
+    user, org, bot = await h.require_bot_access(request, bot_id)
+    body = await request.json()
+    new_status = body.get("status")
+    if new_status not in ("accepted", "dismissed", "pending"):
+        raise HTTPException(400, "Status must be accepted, dismissed, or pending")
+
+    from bson import ObjectId
+    result = await h._db.v2_suggestions.update_one(
+        {"_id": ObjectId(suggestion_id), "bot_id": bot_id},
+        {"$set": {"status": new_status, "reviewed_by": user["id"], "reviewed_at": h._now()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Suggestion not found")
+
+    return {"ok": True, "status": new_status}

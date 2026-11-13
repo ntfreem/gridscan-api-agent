@@ -37,6 +37,7 @@ import org_routes
 import bot_routes
 import account_routes
 import connection_routes
+import platform_routes
 import webhook_router
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
@@ -429,6 +430,7 @@ api_router.include_router(org_routes.router)
 api_router.include_router(bot_routes.router)
 api_router.include_router(account_routes.router)
 api_router.include_router(connection_routes.router)
+api_router.include_router(platform_routes.router)
 
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
