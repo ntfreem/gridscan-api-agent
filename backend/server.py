@@ -2124,6 +2124,7 @@ async def startup_event():
     # Initialise Zendesk routes
     _init_zendesk()
     await db.zendesk_config.create_index([("instance_id", 1)], unique=True)
+    await db.zendesk_config.create_index([("sidebar_api_key", 1)], sparse=True)
     await db.zendesk_suggestions.create_index([("instance_id", 1), ("ticket_id", 1)], unique=True)
     await db.zendesk_events.create_index([("instance_id", 1), ("event_id", 1)], unique=True)
     await db.zendesk_oauth_states.create_index([("state", 1)], unique=True)

@@ -25,64 +25,64 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ## Completed Features
 
-### UI/UX (Done)
-- [x] Renamed entire platform from "BridgeBot" to "BitBot Pro"
-- [x] Chunkier logo across all pages (Navbar, Footer, Auth, Admin Sidebar, Widgets)
-- [x] Full-screen responsive Onboarding Setup Guide with confetti and step animations
-- [x] Mobile hamburger menu in Admin Layout
-- [x] Header logo matches footer exactly (size 48, no glow)
-- [x] Original neon blue palette preserved
-- [x] Landing page scroll-jump fix (iframe focus guard)
+### Zendesk Sidebar App — Agent Assist (Done — Nov 2026)
+- [x] `POST /api/zendesk/sidebar/generate` — On-demand AI suggestion for any ticket
+  - Auth via per-instance `X-Sidebar-Key` header (not JWT)
+  - Fetches full ticket conversation from Zendesk via OAuth
+  - Runs existing knowledge base search + AI pipeline (Claude)
+  - Returns suggestion with `low_confidence` flag when no matching KB content
+  - Stores suggestion in `zendesk_suggestions` collection (for analytics)
+  - Treats ticket content as untrusted input (not instructions)
+  - Does NOT post comments, change ticket status, or send replies
+- [x] `GET /api/admin/zendesk/sidebar-key` — Get/auto-generate sidebar API key
+- [x] `POST /api/admin/zendesk/sidebar-key/regenerate` — Rotate sidebar key (old key invalidated)
+- [x] `GET /api/admin/zendesk/sidebar-app.zip` — Dynamic ZIP download (ZAF v2 app)
+- [x] ZAF v2 sidebar app with: Generate, Regenerate, Copy, Insert into Reply controls
+- [x] Ticket switch detection (invalidates stale suggestions via `ticket.id.changed`)
+- [x] Dark theme matching BitBot Pro aesthetic
+- [x] Installation parameters: `bitbot_url` (pre-filled) + `sidebar_api_key` (secure)
+- [x] Admin UI card in ZendeskSettings page with 3-step setup guide
+- [x] Tested: 100% pass rate (21/21 tests, iteration_63.json)
 
-### Zendesk OAuth Migration (Done — Feb 2026)
-- [x] Replaced API-token auth with OAuth 2.0 authorization-code flow + PKCE
-- [x] Confidential client with server-side token exchange
-- [x] Secure token storage in MongoDB (access: 8h, refresh: 30d)
-- [x] Automatic token refresh with rotation
-- [x] Bearer auth for all Zendesk API calls
-- [x] Connection status, reconnect, disconnect controls
-- [x] Admin setup guide: `/app/docs/ZENDESK_OAUTH_SETUP.md`
-- [x] In-app OAuth credential management (Client ID + Secret stored in DB via UI)
+### Zendesk UX Improvements (Done — Nov 2026)
 - [x] Callback URL prominently displayed with copy button for easy Zendesk setup
 - [x] Subdomain field auto-normalizes URLs on blur (strips https://, .zendesk.com)
-- **BLOCKED**: Live connection requires Zendesk Admin to create OAuth client
-
-### Admin Role Management (Done — Feb 2026)
-- [x] `PATCH /api/admin/users/{user_id}/role` endpoint
-- [x] Promote users to Admin or demote admins to User
-- [x] Self-role-change prevention
-- [x] UI buttons: ShieldCheck (promote) / ShieldOff (demote) per user
-- [x] Current user shows "You" label (no action buttons)
-
-### User Invitation System (Done — Feb 2026)
-- [x] `POST /api/admin/users/invite` — send email invitation with role + optional instance
-- [x] `GET /api/invite/{token}` — public validate endpoint
-- [x] `POST /api/invite/{token}/accept` — create pre-verified user account
-- [x] `GET /api/admin/users/invitations` — list all invitations
-- [x] `DELETE /api/admin/users/invitations/{token}` — revoke pending invite
-- [x] Email sent via Resend with branded HTML template
-- [x] Invite accept page (`/invite/:token`) with username/password form
-- [x] Pre-verified on accept (skips email verification)
-- [x] Optional instance pre-assignment during invite
-- [x] 7-day token expiry, single-use, duplicate prevention
-- [x] Role selection (Team Member / Admin) in invite modal
-- [x] Instance selection dropdown in invite modal
+- [x] Updated ZENDESK_OAUTH_SETUP.md with in-app credential management instructions
 
 ### Zendesk Analytics Dashboard (Done — Nov 2026)
 - [x] `GET /api/analytics/zendesk` endpoint with ticket processing stats
-- [x] Stat cards: Tickets Processed, Auto-Replies, Agent Assists, Success Rate
-- [x] Stacked bar chart: Tickets Last 7 Days (Auto-Replies vs Agent Assists)
-- [x] Action Breakdown panel with progress bars
-- [x] Recent Tickets table with action status badges
-- [x] Connection status indicator (LIVE / PAUSED / NOT CONNECTED)
-- [x] Auto-Reply enabled/disabled badge
-- [x] Graceful empty states when no Zendesk data available
-- [x] Tested: 100% backend + frontend pass (iteration_62.json)
+- [x] Stat cards, charts, action breakdown, recent tickets table
+- [x] Connection status indicator and empty states
+- [x] Tested: 100% pass rate (iteration_62.json)
+
+### Zendesk OAuth Migration (Done — Feb 2026)
+- [x] OAuth 2.0 authorization-code flow + PKCE
+- [x] Secure token storage in MongoDB (access: 8h, refresh: 30d)
+- [x] Automatic token refresh with rotation
+- [x] In-app OAuth credential management (Client ID + Secret via UI)
+
+### Admin Role Management (Done — Feb 2026)
+- [x] Promote/demote users with self-role-change prevention
+
+### User Invitation System (Done — Feb 2026)
+- [x] Email invitations with Resend, role + instance assignment, 7-day expiry
 
 ### Self-Hosting Readiness (Done)
 - [x] Full codebase audit (135+ endpoints)
 - [x] 7 Markdown documentation files in `/app/docs/self-hosting-readiness/`
-- [x] OpenAPI JSON export
+
+## Key API Endpoints
+
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/zendesk/sidebar/generate` | POST | X-Sidebar-Key | On-demand AI ticket suggestion |
+| `/api/admin/zendesk/sidebar-key` | GET | JWT+Instance | Get sidebar API key |
+| `/api/admin/zendesk/sidebar-key/regenerate` | POST | JWT+Instance | Rotate sidebar key |
+| `/api/admin/zendesk/sidebar-app.zip` | GET | JWT+Instance | Download ZAF app ZIP |
+| `/api/analytics/zendesk` | GET | JWT+Instance | Zendesk ticket stats |
+| `/api/admin/zendesk/oauth/callback-url` | GET | JWT+Instance | Get OAuth callback URL |
+| `/api/admin/users/invite` | POST | Admin | Send email invitation |
+| `/api/admin/users/{id}/role` | PATCH | Admin | Promote/demote user |
 
 ## Pending / Upcoming Tasks
 
@@ -99,19 +99,6 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ### P2 — Multi-Server Discord
 - Support multiple Discord servers per bot instance
-
-## Key API Endpoints (User Management)
-
-| Endpoint | Method | Auth | Purpose |
-|---|---|---|---|
-| `/api/admin/users/invite` | POST | Admin | Send email invitation |
-| `/api/admin/users/invitations` | GET | Admin | List all invitations |
-| `/api/admin/users/invitations/{token}` | DELETE | Admin | Revoke invitation |
-| `/api/invite/{token}` | GET | Public | Validate invite token |
-| `/api/invite/{token}/accept` | POST | Public | Accept invite, create account |
-| `/api/admin/users/{id}/role` | PATCH | Admin | Promote/demote user |
-| `/api/analytics/zendesk` | GET | Admin | Zendesk ticket processing stats |
-| `/api/admin/zendesk/oauth/callback-url` | GET | Admin | Get OAuth callback URL for setup |
 
 ## Production URLs
 - Production: `https://bitbotpro.io`

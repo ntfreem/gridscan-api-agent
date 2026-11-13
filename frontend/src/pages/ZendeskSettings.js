@@ -6,6 +6,7 @@ import {
   Headphones, CheckCircle, AlertCircle, RefreshCw, Trash2,
   Save, Power, Loader2, Copy, Check, MessageSquare, Users,
   ExternalLink, Clock, Shield, Link2, LogIn, Settings, Eye, EyeOff,
+  Download, Zap, Key,
 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
@@ -75,6 +76,12 @@ export default function ZendeskSettings() {
   const [showOAuthSetup, setShowOAuthSetup] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState("");
 
+  // Sidebar app
+  const [sidebarKey, setSidebarKey] = useState("");
+  const [sidebarKeyCopied, setSidebarKeyCopied] = useState(false);
+  const [regeneratingKey, setRegeneratingKey] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+
   /* ── Handle OAuth callback result from URL params ── */
   useEffect(() => {
     const oauthResult = searchParams.get("oauth");
@@ -110,6 +117,10 @@ export default function ZendeskSettings() {
         try {
           const tk = await api.get("/admin/zendesk-tickets");
           setTickets(tk.data.tickets || []);
+        } catch { /* ignore */ }
+        try {
+          const sk = await api.get("/admin/zendesk/sidebar-key");
+          setSidebarKey(sk.data.sidebar_api_key || "");
         } catch { /* ignore */ }
       }
     } catch {
@@ -741,6 +752,154 @@ export default function ZendeskSettings() {
               </div>
             </div>
           )}
+
+          {/* Sidebar App */}
+          <div style={{ ...card, borderColor: "rgba(96,165,250,0.2)" }} data-testid="zendesk-sidebar-card">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+              <Zap size={16} color="#60A5FA" />
+              <h3 style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                Sidebar App — Agent Assist
+              </h3>
+            </div>
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 14px", lineHeight: 1.5 }}>
+              Install the BitBot Pro sidebar in Zendesk so agents can generate AI reply suggestions on any ticket — without auto-replying.
+            </p>
+
+            {/* Step 1: Download */}
+            <div style={{
+              padding: "12px 14px", borderRadius: "10px", marginBottom: "12px",
+              backgroundColor: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.12)",
+            }}>
+              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: "600", color: colors.text.primary, fontFamily: fonts.body }}>
+                Step 1: Download the app
+              </p>
+              <button
+                onClick={async () => {
+                  setDownloadingZip(true);
+                  try {
+                    const res = await api.get("/admin/zendesk/sidebar-app.zip", { responseType: "blob" });
+                    const url = URL.createObjectURL(res.data);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "bitbot-pro-zendesk-sidebar.zip";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    toast.success("Sidebar app ZIP downloaded");
+                  } catch {
+                    toast.error("Failed to download sidebar app");
+                  } finally {
+                    setDownloadingZip(false);
+                  }
+                }}
+                disabled={downloadingZip}
+                data-testid="zendesk-download-sidebar-btn"
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "8px 16px", borderRadius: "8px", border: "none",
+                  background: "linear-gradient(135deg, #2563EB, #3B82F6)",
+                  color: "#fff", fontSize: "12px", fontWeight: "600",
+                  fontFamily: fonts.body, cursor: downloadingZip ? "not-allowed" : "pointer",
+                  opacity: downloadingZip ? 0.5 : 1,
+                }}
+              >
+                {downloadingZip ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+                {downloadingZip ? "Downloading..." : "Download Sidebar App (.zip)"}
+              </button>
+            </div>
+
+            {/* Step 2: Install instructions */}
+            <div style={{
+              padding: "12px 14px", borderRadius: "10px", marginBottom: "12px",
+              backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+            }}>
+              <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: "600", color: colors.text.primary, fontFamily: fonts.body }}>
+                Step 2: Install in Zendesk
+              </p>
+              <ol style={{ margin: 0, paddingLeft: "18px", fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: 1.8 }}>
+                <li>Go to <strong>Zendesk Admin Center → Apps and integrations → Apps → Zendesk Support apps</strong></li>
+                <li>Click <strong>Upload private app</strong>, select the downloaded ZIP</li>
+                <li>When prompted, paste the <strong>Sidebar API Key</strong> below into the settings</li>
+                <li>The BitBot Pro URL will be pre-filled — verify it matches your deployment</li>
+                <li>Click <strong>Install</strong></li>
+              </ol>
+            </div>
+
+            {/* Step 3: API Key */}
+            <div style={{
+              padding: "12px 14px", borderRadius: "10px",
+              backgroundColor: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.12)",
+            }}>
+              <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "600", color: colors.text.primary, fontFamily: fonts.body }}>
+                <Key size={12} style={{ display: "inline", verticalAlign: "-1px", marginRight: "6px" }} />
+                Step 3: Sidebar API Key
+              </p>
+              <p style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.body }}>
+                Paste this key into the app settings when installing. It authenticates sidebar requests to BitBot Pro.
+              </p>
+              {sidebarKey ? (
+                <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+                  <input
+                    readOnly
+                    value={sidebarKey}
+                    data-testid="zendesk-sidebar-key-input"
+                    style={{ ...T.input, flex: 1, fontSize: "11px", fontFamily: fonts.mono, color: colors.text.secondary }}
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(sidebarKey).then(() => {
+                        setSidebarKeyCopied(true);
+                        setTimeout(() => setSidebarKeyCopied(false), 1500);
+                      });
+                    }}
+                    data-testid="zendesk-sidebar-key-copy-btn"
+                    style={{
+                      padding: "6px 12px", borderRadius: "8px",
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: sidebarKeyCopied ? "rgba(52,211,153,0.08)" : colors.bg.base,
+                      color: sidebarKeyCopied ? "#34D399" : colors.text.muted,
+                      cursor: "pointer", display: "flex", alignItems: "center", gap: "4px",
+                      fontSize: "11px", fontFamily: fonts.body,
+                    }}
+                  >
+                    {sidebarKeyCopied ? <Check size={12} /> : <Copy size={12} />}
+                    {sidebarKeyCopied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              ) : (
+                <p style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                  Loading...
+                </p>
+              )}
+              <button
+                onClick={async () => {
+                  if (!window.confirm("Regenerate the sidebar API key? The current key will stop working. You'll need to update the key in your Zendesk app settings.")) return;
+                  setRegeneratingKey(true);
+                  try {
+                    const res = await api.post("/admin/zendesk/sidebar-key/regenerate");
+                    setSidebarKey(res.data.sidebar_api_key);
+                    toast.success("Sidebar API key regenerated");
+                  } catch {
+                    toast.error("Failed to regenerate key");
+                  } finally {
+                    setRegeneratingKey(false);
+                  }
+                }}
+                disabled={regeneratingKey}
+                data-testid="zendesk-sidebar-key-regen-btn"
+                style={{
+                  display: "flex", alignItems: "center", gap: "5px",
+                  padding: "6px 12px", borderRadius: "8px",
+                  border: `1px solid ${colors.border.default}`,
+                  backgroundColor: colors.bg.base, color: colors.text.muted,
+                  fontSize: "11px", fontFamily: fonts.body, cursor: "pointer",
+                }}
+              >
+                <RefreshCw size={11} /> {regeneratingKey ? "Regenerating..." : "Regenerate Key"}
+              </button>
+            </div>
+          </div>
 
           {/* Processed Tickets */}
           {tickets.length > 0 && (

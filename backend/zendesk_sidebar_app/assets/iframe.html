@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BitBot Pro</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">B</div>
+        <span class="header-title">BitBot Pro</span>
+      </div>
+      <div id="status-dot" class="status-dot status-ready" title="Ready"></div>
+    </div>
+
+    <!-- Initial state -->
+    <div id="state-initial" class="state-panel">
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <p class="empty-title">AI Agent Assist</p>
+        <p class="empty-desc">Generate a knowledge-based reply suggestion for this ticket.</p>
+      </div>
+      <button id="btn-generate" class="btn btn-primary btn-full" data-testid="sidebar-generate-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Generate Suggestion
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    <div id="state-loading" class="state-panel hidden">
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <p class="loading-text">Analyzing ticket & knowledge base...</p>
+        <p class="loading-sub">This may take a few seconds</p>
+      </div>
+    </div>
+
+    <!-- Result state -->
+    <div id="state-result" class="state-panel hidden">
+      <div id="low-confidence-banner" class="banner banner-warning hidden">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Low confidence — no matching knowledge found. Review carefully before using.</span>
+      </div>
+
+      <div class="result-header">
+        <span class="result-label">Suggested Reply</span>
+        <span id="ticket-badge" class="ticket-badge">#</span>
+      </div>
+
+      <div id="suggestion-text" class="suggestion-text" data-testid="sidebar-suggestion-text"></div>
+
+      <div class="action-bar">
+        <button id="btn-insert" class="btn btn-primary" data-testid="sidebar-insert-btn" title="Insert into reply editor">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          Insert into Reply
+        </button>
+        <button id="btn-copy" class="btn btn-secondary" data-testid="sidebar-copy-btn" title="Copy to clipboard">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          Copy
+        </button>
+        <button id="btn-regenerate" class="btn btn-secondary" data-testid="sidebar-regenerate-btn" title="Generate a new suggestion">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3"/><path d="M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+          Regenerate
+        </button>
+      </div>
+
+      <div id="insert-feedback" class="feedback hidden" data-testid="sidebar-insert-feedback"></div>
+    </div>
+
+    <!-- Error state -->
+    <div id="state-error" class="state-panel hidden">
+      <div class="error-container">
+        <div class="error-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <p id="error-message" class="error-text">Something went wrong.</p>
+        <button id="btn-retry" class="btn btn-secondary btn-full" data-testid="sidebar-retry-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3"/><path d="M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+          Try Again
+        </button>
+      </div>
+    </div>
+
+    <!-- Not configured state -->
+    <div id="state-not-configured" class="state-panel hidden">
+      <div class="error-container">
+        <div class="error-icon" style="color: #FBBF24;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <p class="error-text">BitBot Pro URL or API key is not configured. Update the app settings in Zendesk Admin Center.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
