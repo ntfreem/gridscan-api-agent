@@ -73,6 +73,7 @@ export default function ZendeskSettings() {
   const [showSecret, setShowSecret] = useState(false);
   const [savingOAuth, setSavingOAuth] = useState(false);
   const [showOAuthSetup, setShowOAuthSetup] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState("");
 
   /* ── Handle OAuth callback result from URL params ── */
   useEffect(() => {
@@ -89,10 +90,12 @@ export default function ZendeskSettings() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const [cfgRes, oauthClientRes] = await Promise.all([
+      const [cfgRes, oauthClientRes, cbRes] = await Promise.all([
         api.get("/admin/zendesk-config"),
         api.get("/admin/zendesk/oauth/client-config").catch(() => ({ data: { configured: false } })),
+        api.get("/admin/zendesk/oauth/callback-url").catch(() => ({ data: { callback_url: "" } })),
       ]);
+      setCallbackUrl(cbRes.data.callback_url || "");
       setConfig(cfgRes.data);
       setAutoReply(cfgRes.data.auto_reply_enabled || false);
       setAgentAssist(cfgRes.data.agent_assist_enabled ?? true);
@@ -435,7 +438,27 @@ export default function ZendeskSettings() {
                   </div>
                 </div>
 
+                {/* Callback URL — show first so user can configure Zendesk */}
+                {callbackUrl && (
+                  <div style={{
+                    padding: "12px 14px", borderRadius: "10px", marginBottom: "14px",
+                    backgroundColor: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.15)",
+                  }}>
+                    <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "600", color: colors.text.primary, fontFamily: fonts.body }}>
+                      <Link2 size={12} style={{ display: "inline", verticalAlign: "-1px", marginRight: "6px" }} />
+                      Step 1: Add this Redirect URL to your Zendesk OAuth client
+                    </p>
+                    <p style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.body, lineHeight: 1.5 }}>
+                      In Zendesk Admin Center → Apps &amp; integrations → APIs → OAuth clients → your app, paste this exact URL under <strong>Redirect URLs</strong>:
+                    </p>
+                    <CopyField value={callbackUrl} />
+                  </div>
+                )}
+
                 <form onSubmit={handleSaveOAuthClient}>
+                  <p style={{ margin: "0 0 12px", fontSize: "12px", fontWeight: "600", color: colors.text.primary, fontFamily: fonts.body }}>
+                    Step 2: Enter your OAuth credentials
+                  </p>
                   <label style={T.label}>Client ID (Identifier)</label>
                   <input value={oauthClientId} onChange={e => setOauthClientId(e.target.value)}
                     placeholder="e.g. bitbotpro" data-testid="zendesk-oauth-client-id-input"
@@ -498,15 +521,34 @@ export default function ZendeskSettings() {
                   </button>
                 </div>
 
+                {callbackUrl && (
+                  <div style={{
+                    padding: "10px 14px", borderRadius: "10px", marginBottom: "14px",
+                    backgroundColor: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.12)",
+                  }}>
+                    <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: colors.text.secondary, fontFamily: fonts.body }}>
+                      Redirect URL for Zendesk OAuth client:
+                    </p>
+                    <CopyField value={callbackUrl} />
+                  </div>
+                )}
+
                 <label style={T.label}>Zendesk Subdomain</label>
+                <p style={{ margin: "0 0 6px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.body }}>
+                  Enter just the subdomain — e.g. <strong>your-company</strong>. If you paste a full URL like https://your-company.zendesk.com, we'll extract it for you.
+                </p>
                 <div style={{ display: "flex", alignItems: "center", gap: "0", marginBottom: "14px" }}>
                   <input
                     value={subdomain}
                     onChange={e => setSubdomain(e.target.value)}
-                    placeholder="your-company or https://your-company.zendesk.com"
+                    onBlur={e => {
+                      const normalized = normalizeSubdomain(e.target.value);
+                      if (normalized && normalized !== e.target.value) setSubdomain(normalized);
+                    }}
+                    placeholder="your-company"
                     data-testid="zendesk-subdomain-input"
                     style={{ ...T.input, borderTopRightRadius: 0, borderBottomRightRadius: 0, flex: 1 }}
-                    onFocus={onFocus} onBlur={onBlur}
+                    onFocus={onFocus}
                     onKeyDown={e => { if (e.key === "Enter") handleConnect(); }}
                   />
                   <span style={{

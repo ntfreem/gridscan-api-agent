@@ -52,30 +52,28 @@ It **must** match exactly what you register in Zendesk.
 
 ---
 
-## Step 3 — Set the Environment Variables
+## Step 3 — Enter OAuth Credentials in BitBot Pro
 
-Two secrets must be added to BitBot Pro's backend environment:
+1. Navigate to **Admin → Zendesk** in BitBot Pro.
+2. You'll see the **Redirect URL** displayed at the top — copy it and paste it into
+   your Zendesk OAuth client's **Redirect URLs** field (from Step 2).
+3. Enter your **Client ID** (the Identifier from Step 2) and **Client Secret** (the
+   secret you copied) into the form.
+4. Click **Save Credentials**.
 
-| Variable | Value | Source |
-|---|---|---|
-| `ZENDESK_OAUTH_CLIENT_ID` | The **Identifier** from Step 2 (e.g. `bitbotpro`) | Zendesk OAuth client page |
-| `ZENDESK_OAUTH_CLIENT_SECRET` | The **Secret** you copied in Step 2 | Shown once at creation |
-
-### How to set them
-
-Use BitBot Pro's **Secrets** management (the secure card in the chat interface)
-to add these values. Never paste secrets directly into chat or `.env` files
-committed to version control.
+> **Note**: Credentials are stored securely in the database, not in environment
+> variables. The Client Secret is never exposed in the UI after saving.
 
 ---
 
 ## Step 4 — Connect from the BitBot Pro Dashboard
 
-1. Navigate to **Admin → Zendesk** in BitBot Pro.
-2. Enter your Zendesk subdomain (e.g. `midnight-gd`).
-3. Click **"Connect with Zendesk"**.
-4. You'll be redirected to Zendesk to authorize.
-5. After approving, you'll return to BitBot Pro with the connection confirmed.
+1. After saving credentials, enter your Zendesk **subdomain** — just the name part
+   (e.g. `midnight-gd`). If you paste a full URL like `https://midnight-gd.zendesk.com`,
+   BitBot Pro will automatically extract the subdomain.
+2. Click **"Connect with Zendesk"**.
+3. You'll be redirected to Zendesk to authorize.
+4. After approving, you'll return to BitBot Pro with the connection confirmed.
 
 ---
 
@@ -151,11 +149,11 @@ receive new-ticket events:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| "OAuth Not Configured" in UI | Env vars not set | Complete Step 3 |
+| "OAuth Not Configured" in UI | Credentials not entered | Complete Step 3 — enter Client ID and Secret in BitBot Pro |
 | "Scope rejected" during auth | OAuth client scope mismatch | Ensure `tickets:read tickets:write users:read` are in the client's allowed scopes |
 | "Authorization Expired" warning | Refresh token expired or revoked | Click Reconnect |
+| "redirect_uri mismatch" error | Callback URL not registered | Copy the Redirect URL shown in BitBot Pro and add it to your Zendesk OAuth client's Redirect URLs (match exactly, including https) |
 | 403 on ticket operations | User role insufficient | Re-auth with an Admin or Agent account |
-| Callback URL mismatch error | URL doesn't match registration | Verify the redirect URL in Step 2 matches exactly |
 
 ---
 
@@ -164,12 +162,12 @@ receive new-ticket events:
 The following items **require Zendesk Admin Center access** and cannot be
 completed by the BitBot Pro application itself:
 
-1. **Creating the OAuth client** (Step 2) — requires Admin role
-2. **Setting environment variables** (Step 3) — requires access to BitBot Pro's deployment configuration
-3. **Creating the webhook + trigger** (Webhook Setup) — requires Admin role
+1. **Creating the OAuth client** (Step 2) — requires Zendesk Admin role
+2. **Adding the Redirect URL** to the OAuth client (Step 2/3) — the exact URL is shown inside BitBot Pro, but you must paste it into Zendesk
+3. **Creating the webhook + trigger** (Webhook Setup) — requires Zendesk Admin role
 
 Until Steps 2 and 3 are completed, the "Connect with Zendesk" button will
-be disabled and the UI will show an "OAuth Not Configured" notice.
+be disabled and the UI will show an "OAuth Setup Required" notice.
 
 ---
 

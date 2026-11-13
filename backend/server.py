@@ -5587,6 +5587,86 @@ async def analytics_passive_skips(instance_id: str = Depends(get_instance_access
     week = await db.passive_skips.count_documents({**q, "timestamp": {"$gte": week_start.isoformat()}})
     recent = await db.passive_skips.find(q, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(length=10)
     return {"total": total, "today": today, "last_7_days": week, "recent": recent}
+
+@api_router.get("/analytics/zendesk")
+async def analytics_zendesk(instance_id: str = Depends(get_instance_access)):
+    """Zendesk ticket processing stats and AI suggestion accuracy."""
+    q = {"instance_id": instance_id}
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=6)
+
+    total = await db.zendesk_suggestions.count_documents(q)
+    today_count = await db.zendesk_suggestions.count_documents({
+        **q, "created_at": {"$gte": today_start.isoformat()}
+    })
+    week_count = await db.zendesk_suggestions.count_documents({
+        **q, "created_at": {"$gte": week_start.isoformat()}
+    })
+
+    # Action breakdown
+    pipeline = [
+        {"$match": q},
+        {"$group": {"_id": "$action_taken", "count": {"$sum": 1}}},
+    ]
+    action_breakdown = {}
+    async for doc in db.zendesk_suggestions.aggregate(pipeline):
+        action_breakdown[doc["_id"] or "pending"] = doc["count"]
+
+    auto_replies = action_breakdown.get("auto_reply", 0)
+    agent_assists = action_breakdown.get("agent_assist", 0)
+    auto_reply_failed = action_breakdown.get("auto_reply_failed", 0)
+    pending = action_breakdown.get("pending", 0) + action_breakdown.get("", 0)
+
+    # Daily breakdown (last 7 days)
+    daily = []
+    for i in range(6, -1, -1):
+        day = today_start - timedelta(days=i)
+        next_day = day + timedelta(days=1)
+        day_q = {**q, "created_at": {"$gte": day.isoformat(), "$lt": next_day.isoformat()}}
+        count = await db.zendesk_suggestions.count_documents(day_q)
+
+        day_replied = 0
+        if count > 0:
+            day_replied = await db.zendesk_suggestions.count_documents({
+                **day_q, "action_taken": "auto_reply"
+            })
+
+        daily.append({
+            "date": day.strftime("%b %d"),
+            "tickets": count,
+            "auto_replies": day_replied,
+            "suggestions": count - day_replied,
+        })
+
+    # Recent tickets
+    recent = await db.zendesk_suggestions.find(q, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+
+    # Success rate: auto_reply + agent_assist out of total (excluding pending)
+    resolved = auto_replies + agent_assists
+    success_rate = round((resolved / total) * 100, 1) if total > 0 else 100.0
+
+    # Zendesk connection status
+    cfg = await db.zendesk_config.find_one(q, {"_id": 0})
+    connected = bool(cfg and cfg.get("subdomain"))
+    is_active = bool(cfg and cfg.get("is_active"))
+
+    return {
+        "total": total,
+        "today": today_count,
+        "last_7_days": week_count,
+        "auto_replies": auto_replies,
+        "agent_assists": agent_assists,
+        "auto_reply_failed": auto_reply_failed,
+        "pending": pending,
+        "success_rate": success_rate,
+        "daily": daily,
+        "recent": recent,
+        "connected": connected,
+        "is_active": is_active,
+        "auto_reply_enabled": bool(cfg and cfg.get("auto_reply_enabled")),
+    }
+
 # ==================== DISCORD (PROTECTED) ====================
 @api_router.get("/discord/app-config")
 async def get_discord_app_config(current_user: dict = Depends(require_admin)):

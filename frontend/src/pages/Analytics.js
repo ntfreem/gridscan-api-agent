@@ -6,7 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar
 } from "recharts";
-import { MessageSquare, BookOpen, CheckCircle, Zap, Activity, AlertTriangle, RefreshCw, ExternalLink, EyeOff, Plus, X } from "lucide-react";
+import { MessageSquare, BookOpen, CheckCircle, Zap, Activity, AlertTriangle, RefreshCw, ExternalLink, EyeOff, Plus, X, Headphones, Send, Users as UsersIcon, Clock } from "lucide-react";
 import { colors, fonts, T, rowEnter, rowLeave, onFocus, onBlur } from "../theme";
 
 const tooltipStyle = {
@@ -50,6 +50,7 @@ export default function Analytics() {
   const [daily, setDaily] = useState([]);
   const [llmUsage, setLlmUsage] = useState(null);
   const [passiveSkips, setPassiveSkips] = useState(null);
+  const [zendesk, setZendesk] = useState(null);
   const [loading, setLoading] = useState(true);
   const [trainOpen, setTrainOpen] = useState(false);
   const [trainTitle, setTrainTitle] = useState("");
@@ -97,11 +98,13 @@ export default function Analytics() {
       api.get(`/analytics/daily`),
       api.get(`/analytics/llm-usage`),
       api.get(`/analytics/passive-skips`).catch(() => ({ data: null })),
-    ]).then(([ov, dl, llm, ps]) => {
+      api.get(`/analytics/zendesk`).catch(() => ({ data: null })),
+    ]).then(([ov, dl, llm, ps, zd]) => {
       setOverview(ov.data);
       setDaily(dl.data);
       setLlmUsage(llm.data);
       setPassiveSkips(ps.data);
+      setZendesk(zd.data);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [instanceId]);
 
@@ -195,6 +198,140 @@ export default function Analytics() {
           </tbody>
         </table>
       </div>
+
+      {/* Zendesk Ticket Dashboard */}
+      {zendesk && (
+        <div style={{ marginBottom: "32px" }} data-testid="zendesk-analytics-section">
+          <div style={{ marginBottom: "12px" }}>
+            <p style={{ ...T.overline, marginBottom: "4px" }}>Zendesk</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <h2 style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Ticket Dashboard</h2>
+              <span style={{
+                fontSize: "10px", fontFamily: fonts.mono, padding: "3px 10px",
+                borderRadius: "20px", letterSpacing: "0.05em",
+                backgroundColor: zendesk.connected && zendesk.is_active ? "rgba(52,211,153,0.1)" : "rgba(251,191,36,0.1)",
+                color: zendesk.connected && zendesk.is_active ? "#34D399" : "#FBBF24",
+                border: `1px solid ${zendesk.connected && zendesk.is_active ? "rgba(52,211,153,0.2)" : "rgba(251,191,36,0.2)"}`,
+              }} data-testid="zendesk-status-indicator">
+                {zendesk.connected ? (zendesk.is_active ? "LIVE" : "PAUSED") : "NOT CONNECTED"}
+              </span>
+            </div>
+          </div>
+
+          {/* Stat cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "24px" }}>
+            <StatCard title="Tickets Processed" value={zendesk.total} icon={Headphones} color="#17A589" />
+            <StatCard title="Auto-Replies" value={zendesk.auto_replies} icon={Send} color={colors.brand.success} />
+            <StatCard title="Agent Assists" value={zendesk.agent_assists} icon={UsersIcon} color={colors.brand.blue} />
+            <StatCard title="Success Rate" value={`${zendesk.success_rate}%`} icon={CheckCircle}
+              color={zendesk.success_rate >= 95 ? colors.brand.success : zendesk.success_rate >= 80 ? colors.brand.warning : colors.brand.error} />
+          </div>
+
+          {/* Charts */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", marginBottom: "24px" }}>
+            <div style={T.card}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 24px" }}>Tickets — Last 7 Days</p>
+              {zendesk.daily?.some(d => d.tickets > 0) ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={zendesk.daily} margin={CHART_MARGIN}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(23,165,137,0.1)" vertical={false} />
+                    <XAxis dataKey="date" stroke={colors.text.muted} tick={AXIS_TICK} axisLine={false} tickLine={false} />
+                    <YAxis stroke={colors.text.muted} tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip {...tooltipStyle} />
+                    <Legend wrapperStyle={LEGEND_STYLE} />
+                    <Bar dataKey="auto_replies" name="Auto-Replies" fill="#17A589" radius={[2, 2, 0, 0]} stackId="stack" />
+                    <Bar dataKey="suggestions" name="Agent Assists" fill={colors.brand.blue} radius={[2, 2, 0, 0]} stackId="stack" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "180px", gap: "8px" }}>
+                  <Headphones size={28} color={colors.text.muted} style={{ opacity: 0.3 }} />
+                  <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted, margin: 0 }}>No tickets processed yet</p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0 }}>
+                    {zendesk.connected ? "Waiting for incoming Zendesk tickets" : "Connect Zendesk to start processing tickets"}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div style={T.card}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 20px" }}>Action Breakdown</p>
+              {zendesk.total > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {[
+                    { label: "Auto-Reply", count: zendesk.auto_replies, color: "#17A589" },
+                    { label: "Agent Assist", count: zendesk.agent_assists, color: colors.brand.blue },
+                    { label: "Failed", count: zendesk.auto_reply_failed, color: colors.brand.error },
+                    { label: "Pending", count: zendesk.pending, color: colors.brand.warning },
+                  ].filter(r => r.count > 0).map(row => (
+                    <div key={row.label}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary }}>{row.label}</span>
+                        <span style={{ fontFamily: fonts.heading, fontWeight: "700", fontSize: "16px", color: row.color }}>{row.count}</span>
+                      </div>
+                      <div style={{ height: "4px", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: "2px" }}>
+                        <div style={{
+                          height: "4px", borderRadius: "2px", backgroundColor: row.color,
+                          width: `${Math.max(2, (row.count / zendesk.total) * 100)}%`, transition: "width 0.5s",
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "140px", gap: "6px" }}>
+                  <CheckCircle size={24} color={colors.text.muted} style={{ opacity: 0.3 }} />
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: 0 }}>No data yet</p>
+                </div>
+              )}
+
+              <div style={{ marginTop: "16px", padding: "10px 12px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.subtle}` }}>
+                <p style={{ margin: 0, fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, lineHeight: 1.5 }}>
+                  Auto-Reply: {zendesk.auto_reply_enabled ? <span style={{ color: "#17A589", fontWeight: 600 }}>Enabled</span> : <span style={{ color: colors.brand.warning, fontWeight: 600 }}>Disabled</span>}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent tickets */}
+          {zendesk.recent?.length > 0 && (
+            <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden", marginBottom: "24px" }}>
+              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${colors.border.default}` }}>
+                <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Recent Tickets</p>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${colors.border.subtle}` }}>
+                    {["Ticket", "Subject", "Action", "Time"].map(h => (<th key={h} style={T.th}>{h}</th>))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {zendesk.recent.map((t, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${colors.border.faint}` }}
+                      onMouseEnter={rowEnter} onMouseLeave={rowLeave} data-testid="zendesk-ticket-row">
+                      <td style={{ padding: "10px 20px", fontFamily: fonts.mono, fontSize: "12px", color: colors.text.secondary }}>#{t.ticket_id}</td>
+                      <td style={{ padding: "10px 20px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.primary, maxWidth: "280px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject || "—"}</td>
+                      <td style={{ padding: "10px 20px" }}>
+                        <span style={{
+                          fontSize: "10px", fontFamily: fonts.mono, padding: "2px 8px", borderRadius: "10px",
+                          textTransform: "uppercase", letterSpacing: "0.05em",
+                          backgroundColor: t.action_taken === "auto_reply" ? "rgba(23,165,137,0.1)" : t.action_taken === "agent_assist" ? "rgba(96,165,250,0.1)" : t.action_taken === "auto_reply_failed" ? "rgba(244,63,94,0.1)" : "rgba(251,191,36,0.1)",
+                          color: t.action_taken === "auto_reply" ? "#17A589" : t.action_taken === "agent_assist" ? "#60A5FA" : t.action_taken === "auto_reply_failed" ? "#F43F5E" : "#FBBF24",
+                        }}>
+                          {(t.action_taken || "pending").replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 20px", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <Clock size={10} /> {t.created_at ? new Date(t.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI Usage Section */}
       <div style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

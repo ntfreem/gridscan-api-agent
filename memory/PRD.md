@@ -42,6 +42,9 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 - [x] Bearer auth for all Zendesk API calls
 - [x] Connection status, reconnect, disconnect controls
 - [x] Admin setup guide: `/app/docs/ZENDESK_OAUTH_SETUP.md`
+- [x] In-app OAuth credential management (Client ID + Secret stored in DB via UI)
+- [x] Callback URL prominently displayed with copy button for easy Zendesk setup
+- [x] Subdomain field auto-normalizes URLs on blur (strips https://, .zendesk.com)
 - **BLOCKED**: Live connection requires Zendesk Admin to create OAuth client
 
 ### Admin Role Management (Done — Feb 2026)
@@ -64,6 +67,17 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 - [x] 7-day token expiry, single-use, duplicate prevention
 - [x] Role selection (Team Member / Admin) in invite modal
 - [x] Instance selection dropdown in invite modal
+
+### Zendesk Analytics Dashboard (Done — Nov 2026)
+- [x] `GET /api/analytics/zendesk` endpoint with ticket processing stats
+- [x] Stat cards: Tickets Processed, Auto-Replies, Agent Assists, Success Rate
+- [x] Stacked bar chart: Tickets Last 7 Days (Auto-Replies vs Agent Assists)
+- [x] Action Breakdown panel with progress bars
+- [x] Recent Tickets table with action status badges
+- [x] Connection status indicator (LIVE / PAUSED / NOT CONNECTED)
+- [x] Auto-Reply enabled/disabled badge
+- [x] Graceful empty states when no Zendesk data available
+- [x] Tested: 100% backend + frontend pass (iteration_62.json)
 
 ### Self-Hosting Readiness (Done)
 - [x] Full codebase audit (135+ endpoints)
@@ -96,6 +110,8 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 | `/api/invite/{token}` | GET | Public | Validate invite token |
 | `/api/invite/{token}/accept` | POST | Public | Accept invite, create account |
 | `/api/admin/users/{id}/role` | PATCH | Admin | Promote/demote user |
+| `/api/analytics/zendesk` | GET | Admin | Zendesk ticket processing stats |
+| `/api/admin/zendesk/oauth/callback-url` | GET | Admin | Get OAuth callback URL for setup |
 
 ## Production URLs
 - Production: `https://bitbotpro.io`
