@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 import { toast } from "sonner";
 import {
-  Headphones, CheckCircle, AlertCircle, RefreshCw, Eye, EyeOff,
-  Trash2, Save, Power, Loader2, Copy, Check, MessageSquare, Users,
-  ExternalLink, Clock,
+  Headphones, CheckCircle, AlertCircle, RefreshCw, Trash2,
+  Save, Power, Loader2, Copy, Check, MessageSquare, Users,
+  ExternalLink, Clock, Shield, Link2, LogIn,
 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
@@ -15,13 +16,18 @@ const card = {
 
 function CopyField({ label, value }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => { navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); };
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   return (
     <div style={{ marginBottom: "10px" }}>
       {label && <label style={{ ...T.label, marginBottom: "4px", display: "block" }}>{label}</label>}
       <div style={{ display: "flex", gap: "6px" }}>
         <input readOnly value={value} style={{ ...T.input, flex: 1, fontSize: "11px", fontFamily: fonts.mono, color: colors.text.secondary }} />
-        <button onClick={copy} data-testid="copy-webhook-url" style={{
+        <button onClick={copy} data-testid="copy-field-btn" style={{
           padding: "6px 12px", borderRadius: "8px", border: `1px solid ${colors.border.default}`,
           backgroundColor: copied ? "rgba(52,211,153,0.08)" : colors.bg.base,
           color: copied ? "#34D399" : colors.text.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px",
@@ -34,24 +40,44 @@ function CopyField({ label, value }) {
   );
 }
 
+/* ── Subdomain normalizer ── */
+function normalizeSubdomain(raw) {
+  let s = raw.trim().replace(/\/+$/, "");
+  if (s.includes("://")) s = s.split("://")[1];
+  if (s.includes(".zendesk.com")) s = s.split(".zendesk.com")[0];
+  s = s.split("/")[0].toLowerCase();
+  return s;
+}
+
 export default function ZendeskSettings() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [tickets, setTickets] = useState([]);
 
   // Form
   const [subdomain, setSubdomain] = useState("");
-  const [email, setEmail] = useState("");
-  const [apiToken, setApiToken] = useState("");
-  const [showToken, setShowToken] = useState(false);
-  const [credentialsChanged, setCredentialsChanged] = useState(false);
   const [autoReply, setAutoReply] = useState(false);
   const [agentAssist, setAgentAssist] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
+
+  /* ── Handle OAuth callback result from URL params ── */
+  useEffect(() => {
+    const oauthResult = searchParams.get("oauth");
+    if (oauthResult === "success") {
+      toast.success("Zendesk connected via OAuth!");
+      setSearchParams({}, { replace: true });
+    } else if (oauthResult === "error") {
+      const msg = searchParams.get("message") || "OAuth authorization failed.";
+      toast.error(msg, { duration: 8000 });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -60,19 +86,16 @@ export default function ZendeskSettings() {
       setAutoReply(res.data.auto_reply_enabled || false);
       setAgentAssist(res.data.agent_assist_enabled ?? true);
       setIsActive(res.data.is_active || false);
-      setSubdomain(""); setEmail(""); setApiToken("");
-      setCredentialsChanged(false);
-      // Fetch webhook URL if connected
+      setSubdomain("");
       if (res.data.connected) {
         try {
           const wh = await api.get("/admin/zendesk-config/webhook-url");
           setWebhookUrl(wh.data.webhook_url || "");
-        } catch {}
-        // Fetch recent tickets
+        } catch { /* ignore */ }
         try {
           const tk = await api.get("/admin/zendesk-tickets");
           setTickets(tk.data.tickets || []);
-        } catch {}
+        } catch { /* ignore */ }
       }
     } catch {
       toast.error("Failed to load Zendesk config");
@@ -83,24 +106,35 @@ export default function ZendeskSettings() {
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
+  /* ── OAuth Connect ── */
   const handleConnect = async () => {
-    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) {
-      toast.error("All fields are required");
+    const sub = normalizeSubdomain(subdomain);
+    if (!sub) {
+      toast.error("Enter your Zendesk subdomain (e.g. your-company)");
       return;
     }
-    setSaving(true);
+    setConnecting(true);
     try {
-      const res = await api.put("/admin/zendesk-config", {
-        subdomain: subdomain.trim(), email: email.trim(), api_token: apiToken.trim(),
-      });
-      toast.success("Zendesk connected!");
-      if (res.data.webhook_url) setWebhookUrl(res.data.webhook_url);
-      setCredentialsChanged(false);
-      await fetchConfig();
+      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub });
+      window.location.href = res.data.redirect_url;
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to connect");
-    } finally {
-      setSaving(false);
+      const detail = e.response?.data?.detail || "Failed to start Zendesk authorization.";
+      toast.error(detail, { duration: 8000 });
+      setConnecting(false);
+    }
+  };
+
+  /* ── Reconnect (re-initiate OAuth for existing subdomain) ── */
+  const handleReconnect = async () => {
+    const sub = config?.subdomain;
+    if (!sub) return;
+    setConnecting(true);
+    try {
+      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub });
+      window.location.href = res.data.redirect_url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to start reconnection.");
+      setConnecting(false);
     }
   };
 
@@ -125,7 +159,7 @@ export default function ZendeskSettings() {
     setTesting(true);
     try {
       const res = await api.post("/admin/zendesk-config/test");
-      toast.success(`Connected! ${res.data.user_name} (${res.data.user_email}) on ${res.data.subdomain}.zendesk.com`);
+      toast.success(`Connected! ${res.data.user_name} (${res.data.user_email}) on ${res.data.subdomain}.zendesk.com — Auth: ${res.data.auth_type === "oauth" ? "OAuth" : "API Token"}`);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Test failed");
     } finally {
@@ -172,6 +206,9 @@ export default function ZendeskSettings() {
   }
 
   const connected = config?.connected;
+  const authType = config?.auth_type;
+  const oauthConfigured = config?.oauth_configured;
+  const needsReauth = config?.oauth_needs_reauth;
 
   return (
     <div style={{ maxWidth: "680px", margin: "0 auto", padding: "0 16px" }} data-testid="zendesk-settings-page">
@@ -189,7 +226,7 @@ export default function ZendeskSettings() {
             Zendesk
           </h1>
           {connected && (
-            <span style={{
+            <span data-testid="zendesk-status-badge" style={{
               fontSize: "11px", fontFamily: fonts.mono, padding: "3px 10px",
               borderRadius: "20px", letterSpacing: "0.05em",
               backgroundColor: isActive ? "rgba(52,211,153,0.1)" : "rgba(251,191,36,0.1)",
@@ -205,13 +242,14 @@ export default function ZendeskSettings() {
         </p>
       </div>
 
-      {/* Connection Card */}
+      {/* ── Connection Card ── */}
       <div style={card} data-testid="zendesk-connection-card">
         <h3 style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 14px" }}>
           Connection
         </h3>
 
-        {connected && !credentialsChanged ? (
+        {connected && !needsReauth ? (
+          /* ── Connected state ── */
           <div>
             <div style={{
               display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px",
@@ -224,7 +262,15 @@ export default function ZendeskSettings() {
                   Connected to {config.subdomain}.zendesk.com
                 </p>
                 <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
-                  {config.zendesk_user_name || config.email} &middot; Token: {config.api_token_masked}
+                  {authType === "oauth" ? (
+                    <>
+                      <Shield size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: "4px" }} />
+                      OAuth &middot; {config.zendesk_user_name || config.zendesk_user_email}
+                      {config.zendesk_user_role ? ` (${config.zendesk_user_role})` : ""}
+                    </>
+                  ) : (
+                    <>{config.zendesk_user_name || config.email} &middot; Token: {config.api_token_masked}</>
+                  )}
                 </p>
               </div>
               <button onClick={handleTest} disabled={testing} data-testid="zendesk-test-btn"
@@ -237,17 +283,73 @@ export default function ZendeskSettings() {
                 <RefreshCw size={12} className={testing ? "spin" : ""} /> Test
               </button>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setCredentialsChanged(true)} data-testid="zendesk-change-creds-btn"
+
+            {authType === "oauth" && config.oauth_scopes && (
+              <div style={{ marginBottom: "12px", padding: "8px 12px", borderRadius: "8px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}` }}>
+                <p style={{ margin: 0, fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                  Scopes: {config.oauth_scopes}
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button onClick={handleReconnect} disabled={connecting} data-testid="zendesk-reconnect-btn"
                 style={{
+                  display: "flex", alignItems: "center", gap: "5px",
                   padding: "8px 14px", borderRadius: "8px",
                   border: `1px solid ${colors.border.default}`,
                   backgroundColor: colors.bg.base, color: colors.text.secondary,
-                  fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                  fontSize: "12px", fontFamily: fonts.body, cursor: connecting ? "not-allowed" : "pointer",
+                  opacity: connecting ? 0.5 : 1,
                 }}>
-                Change Credentials
+                {connecting ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={12} />}
+                Reconnect
               </button>
               <button onClick={handleDisconnect} disabled={disconnecting} data-testid="zendesk-disconnect-btn"
+                style={{
+                  display: "flex", alignItems: "center", gap: "5px",
+                  padding: "8px 14px", borderRadius: "8px",
+                  border: "1px solid rgba(244,63,94,0.2)",
+                  backgroundColor: "rgba(244,63,94,0.06)", color: "#F43F5E",
+                  fontSize: "12px", fontFamily: fonts.body, cursor: disconnecting ? "not-allowed" : "pointer",
+                }}>
+                <Trash2 size={12} /> Disconnect
+              </button>
+            </div>
+          </div>
+        ) : needsReauth ? (
+          /* ── Needs re-authorization ── */
+          <div>
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 14px",
+              borderRadius: "10px", backgroundColor: "rgba(251,191,36,0.06)",
+              border: "1px solid rgba(251,191,36,0.2)", marginBottom: "14px",
+            }}>
+              <AlertCircle size={16} color="#FBBF24" style={{ marginTop: "1px", flexShrink: 0 }} />
+              <div>
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#FBBF24", fontFamily: fonts.body }}>
+                  Authorization Expired
+                </p>
+                <p style={{ margin: "4px 0 0", fontSize: "12px", color: colors.text.secondary, fontFamily: fonts.body, lineHeight: 1.5 }}>
+                  The OAuth token for <strong>{config.subdomain}.zendesk.com</strong> has expired or was revoked.
+                  Click "Reconnect" to re-authorize and restore the connection.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={handleReconnect} disabled={connecting} data-testid="zendesk-reauth-btn"
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "9px 20px", borderRadius: "10px", border: "none",
+                  background: "linear-gradient(135deg, #03363D, #17A589)",
+                  color: "#fff", fontSize: "13px", fontWeight: "600",
+                  fontFamily: fonts.body, cursor: connecting ? "not-allowed" : "pointer",
+                  opacity: connecting ? 0.5 : 1,
+                }}>
+                {connecting ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <LogIn size={14} />}
+                Reconnect with Zendesk
+              </button>
+              <button onClick={handleDisconnect} disabled={disconnecting}
                 style={{
                   display: "flex", alignItems: "center", gap: "5px",
                   padding: "8px 14px", borderRadius: "8px",
@@ -260,89 +362,99 @@ export default function ZendeskSettings() {
             </div>
           </div>
         ) : (
+          /* ── Not connected — OAuth setup form ── */
           <div>
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px",
-              borderRadius: "10px", backgroundColor: "rgba(23,165,137,0.04)",
-              border: "1px solid rgba(23,165,137,0.1)", marginBottom: "14px",
-            }}>
-              <AlertCircle size={16} color="#17A589" style={{ marginTop: "1px", flexShrink: 0 }} />
-              <p style={{ margin: 0, fontSize: "12px", color: colors.text.secondary, fontFamily: fonts.body, lineHeight: 1.5 }}>
-                Go to <strong>Zendesk Admin Center &rarr; Apps &rarr; APIs &rarr; API tokens</strong> and create a token.
-                Use the email of the admin account and the generated token below.{" "}
-                <a href="https://support.zendesk.com/hc/en-us/articles/4408889192858" target="_blank" rel="noopener noreferrer"
-                  style={{ color: "#17A589", textDecoration: "none", fontWeight: 600 }}>Zendesk docs</a>
-              </p>
-            </div>
+            {!oauthConfigured ? (
+              /* OAuth not configured by admin */
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 14px",
+                borderRadius: "10px", backgroundColor: "rgba(244,63,94,0.04)",
+                border: "1px solid rgba(244,63,94,0.15)", marginBottom: "14px",
+              }}>
+                <AlertCircle size={16} color="#F43F5E" style={{ marginTop: "1px", flexShrink: 0 }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#F43F5E", fontFamily: fonts.body }}>
+                    OAuth Not Configured
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: colors.text.secondary, fontFamily: fonts.body, lineHeight: 1.5 }}>
+                    A Zendesk administrator must create an OAuth client and set the{" "}
+                    <code style={{ fontSize: "11px", padding: "1px 4px", backgroundColor: "rgba(244,63,94,0.08)", borderRadius: "3px" }}>ZENDESK_OAUTH_CLIENT_ID</code> and{" "}
+                    <code style={{ fontSize: "11px", padding: "1px 4px", backgroundColor: "rgba(244,63,94,0.08)", borderRadius: "3px" }}>ZENDESK_OAUTH_CLIENT_SECRET</code>{" "}
+                    environment variables. See the{" "}
+                    <a href="https://support.zendesk.com/hc/en-us/articles/4408845965210" target="_blank" rel="noopener noreferrer"
+                      style={{ color: "#17A589", textDecoration: "none", fontWeight: 600 }}>Zendesk OAuth setup guide</a>.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px",
+                borderRadius: "10px", backgroundColor: "rgba(23,165,137,0.04)",
+                border: "1px solid rgba(23,165,137,0.1)", marginBottom: "14px",
+              }}>
+                <Shield size={16} color="#17A589" style={{ marginTop: "1px", flexShrink: 0 }} />
+                <p style={{ margin: 0, fontSize: "12px", color: colors.text.secondary, fontFamily: fonts.body, lineHeight: 1.5 }}>
+                  Connect securely via OAuth. You&apos;ll be redirected to Zendesk to authorize access.
+                  No passwords are collected. BitBot Pro requests{" "}
+                  <code style={{ fontSize: "10px", padding: "1px 4px", backgroundColor: "rgba(23,165,137,0.08)", borderRadius: "3px" }}>tickets:read tickets:write users:read</code>{" "}
+                  scopes only.
+                </p>
+              </div>
+            )}
 
-            <label style={T.label}>Subdomain</label>
-            <div style={{ display: "flex", alignItems: "center", gap: "0", marginBottom: "10px" }}>
-              <input value={subdomain} onChange={e => setSubdomain(e.target.value)}
-                placeholder="your-company"
+            <label style={T.label}>Zendesk Subdomain</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "0", marginBottom: "14px" }}>
+              <input
+                value={subdomain}
+                onChange={e => setSubdomain(e.target.value)}
+                placeholder="your-company or https://your-company.zendesk.com"
                 data-testid="zendesk-subdomain-input"
                 style={{ ...T.input, borderTopRightRadius: 0, borderBottomRightRadius: 0, flex: 1 }}
                 onFocus={onFocus} onBlur={onBlur}
+                onKeyDown={e => { if (e.key === "Enter" && oauthConfigured) handleConnect(); }}
               />
               <span style={{
                 padding: "8px 12px", backgroundColor: colors.bg.surface,
                 border: `1px solid ${colors.border.default}`, borderLeft: "none",
                 borderTopRightRadius: "10px", borderBottomRightRadius: "10px",
                 fontFamily: fonts.mono, fontSize: "12px", color: colors.text.muted,
+                whiteSpace: "nowrap",
               }}>.zendesk.com</span>
             </div>
 
-            <label style={T.label}>Admin Email</label>
-            <input value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="admin@company.com" type="email"
-              data-testid="zendesk-email-input"
-              style={{ ...T.input, marginBottom: "10px" }}
-              onFocus={onFocus} onBlur={onBlur}
-            />
+            {subdomain.trim() && (
+              <p style={{ margin: "-8px 0 12px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                Will connect to: <strong>{normalizeSubdomain(subdomain) || "..."}.zendesk.com</strong>
+              </p>
+            )}
 
-            <label style={T.label}>API Token</label>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-              <div style={{ position: "relative", flex: 1 }}>
-                <input type={showToken ? "text" : "password"} value={apiToken}
-                  onChange={e => setApiToken(e.target.value)}
-                  placeholder="Zendesk API token"
-                  data-testid="zendesk-token-input"
-                  style={{ ...T.input, paddingRight: "40px" }}
-                  onFocus={onFocus} onBlur={onBlur}
-                />
-                <button onClick={() => setShowToken(!showToken)} type="button"
-                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px" }}>
-                  {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={handleConnect} disabled={saving || !subdomain.trim() || !email.trim() || !apiToken.trim()}
-                data-testid="zendesk-connect-btn"
-                style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  padding: "9px 20px", borderRadius: "10px", border: "none",
-                  background: "linear-gradient(135deg, #03363D, #17A589)",
-                  color: "#fff", fontSize: "13px", fontWeight: "600",
-                  fontFamily: fonts.body,
-                  cursor: saving || !subdomain.trim() || !email.trim() || !apiToken.trim() ? "not-allowed" : "pointer",
-                  opacity: saving || !subdomain.trim() || !email.trim() || !apiToken.trim() ? 0.5 : 1,
-                }}>
-                {saving ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Save size={14} />}
-                {saving ? "Connecting..." : "Connect"}
-              </button>
-              {credentialsChanged && connected && (
-                <button onClick={() => { setCredentialsChanged(false); setSubdomain(""); setEmail(""); setApiToken(""); }}
-                  style={{ fontSize: "12px", color: colors.text.muted, background: "none", border: `1px solid ${colors.border.default}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: fonts.body }}>
-                  Cancel
-                </button>
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !subdomain.trim() || !oauthConfigured}
+              data-testid="zendesk-oauth-connect-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "10px 24px", borderRadius: "10px", border: "none",
+                background: oauthConfigured ? "linear-gradient(135deg, #03363D, #17A589)" : colors.bg.surface,
+                color: oauthConfigured ? "#fff" : colors.text.muted,
+                fontSize: "14px", fontWeight: "600", fontFamily: fonts.body,
+                cursor: connecting || !subdomain.trim() || !oauthConfigured ? "not-allowed" : "pointer",
+                opacity: connecting || !subdomain.trim() || !oauthConfigured ? 0.5 : 1,
+                transition: "opacity 0.2s",
+              }}
+            >
+              {connecting ? (
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+              ) : (
+                <Link2 size={16} />
               )}
-            </div>
+              {connecting ? "Redirecting to Zendesk..." : "Connect with Zendesk"}
+            </button>
           </div>
         )}
       </div>
 
-      {/* Settings — only when connected */}
+      {/* ── Settings — only when connected ── */}
       {connected && (
         <>
           {/* Active Toggle */}
@@ -475,7 +587,7 @@ export default function ZendeskSettings() {
                 Webhook Setup
               </h3>
               <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 12px" }}>
-                Add this URL as a webhook in Zendesk Admin Center, then create a trigger for "Ticket is Created".
+                Add this URL as a webhook in Zendesk Admin Center, then create a trigger for &quot;Ticket is Created&quot;.
               </p>
               <CopyField label="Webhook URL" value={webhookUrl} />
               <div style={{ marginTop: "10px" }}>

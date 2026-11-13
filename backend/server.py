@@ -2124,6 +2124,8 @@ async def startup_event():
     await db.zendesk_config.create_index([("instance_id", 1)], unique=True)
     await db.zendesk_suggestions.create_index([("instance_id", 1), ("ticket_id", 1)], unique=True)
     await db.zendesk_events.create_index([("instance_id", 1), ("event_id", 1)], unique=True)
+    await db.zendesk_oauth_states.create_index([("state", 1)], unique=True)
+    await db.zendesk_oauth_states.create_index([("created_at", 1)], expireAfterSeconds=600)
 @app.on_event("shutdown")
 async def shutdown_event():
     global _shared_discord_client, _shared_discord_task

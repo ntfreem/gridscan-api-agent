@@ -728,6 +728,30 @@
 - **Auth**: Bearer JWT + X-Instance-ID
 - **Frontend**: `ZendeskSettings.js`
 
+### POST /api/admin/zendesk/oauth/start
+- **Purpose**: Generate Zendesk OAuth authorization URL with PKCE and state
+- **Auth**: Bearer JWT + X-Instance-ID
+- **Body**: `{ "subdomain": "your-company" }`
+- **Response**: `{ "redirect_url": "https://...", "subdomain": "your-company" }`
+- **Frontend**: `ZendeskSettings.js` (Connect with Zendesk button)
+
+### GET /api/zendesk/oauth/callback
+- **Purpose**: OAuth callback — exchanges authorization code for tokens, validates state, stores connection
+- **Auth**: None (uses state param for CSRF validation)
+- **Query**: `?code=...&state=...` or `?error=...&error_description=...&state=...`
+- **Response**: RedirectResponse to `/admin/zendesk?oauth=success` or `?oauth=error&message=...`
+- **Frontend**: Browser redirect from Zendesk
+
+### GET /api/admin/zendesk/oauth/callback-url
+- **Purpose**: Return the OAuth callback URL for Zendesk admin setup
+- **Auth**: Bearer JWT + X-Instance-ID
+- **Response**: `{ "callback_url": "https://.../api/zendesk/oauth/callback" }`
+
+### GET /api/zendesk/suggestion/{instance_id}/{ticket_id}
+- **Purpose**: Public endpoint for Zendesk sidebar app to fetch AI suggestion
+- **Auth**: None (public, scoped by instance_id + ticket_id)
+- **Response**: `{ "suggestion": "...", "ticket_id": "..." }`
+
 ---
 
 ## 14. Conversations

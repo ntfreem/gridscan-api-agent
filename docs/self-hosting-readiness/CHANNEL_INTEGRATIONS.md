@@ -131,15 +131,35 @@ User message
 
 **Architecture**: Webhook-based. Zendesk sends ticket events to `POST /api/zendesk/webhook/{instance_id}/{secret}`
 
+**Authentication**: OAuth 2.0 authorization-code flow with PKCE (preferred) or legacy API token.
+
 **Key Files**:
-- `zendesk_routes.py` — Standalone router module (449 lines)
+- `zendesk_routes.py` — Standalone router module with OAuth flow, token management, webhook handler
 - Config stored in `zendesk_config` collection
+- OAuth pending states in `zendesk_oauth_states` collection (TTL-indexed, auto-expires)
 - Events logged in `zendesk_events` collection
 - AI suggestions stored in `zendesk_suggestions` collection
+- Admin setup guide: `/app/docs/ZENDESK_OAUTH_SETUP.md`
+
+**OAuth Flow**:
+- `POST /api/admin/zendesk/oauth/start` → generates authorization URL with PKCE + state
+- `GET /api/zendesk/oauth/callback` → handles redirect, exchanges code, stores tokens
+- Automatic token refresh (access: 8h, refresh: 30d) with transparent rotation
+- Bearer auth for all Zendesk API calls; falls back to Basic auth for legacy connections
+- Token revocation on disconnect
+
+**Required Environment Variables** (for OAuth):
+- `ZENDESK_OAUTH_CLIENT_ID` — from Zendesk Admin Center OAuth client
+- `ZENDESK_OAUTH_CLIENT_SECRET` — shown once at client creation
+
+**OAuth Scopes**: `tickets:read tickets:write users:read`
+
+**Callback URL**: `{APP_BASE_URL}/api/zendesk/oauth/callback`
 
 **Isolation**:
 - Instance ID embedded in webhook URL
-- Session ID: `zendesk_{ticket_id}_{instance_id}`
+- OAuth state validated per-instance (single-use, 10-min TTL)
+- Session ID: `zd_{ticket_id}_{instance_id}`
 - Knowledge: scoped to instance
 - Config: scoped to instance
 
@@ -147,16 +167,17 @@ User message
 - Two modes: Auto-reply (posts AI response as ticket comment) and Agent Assist (saves suggestion without posting)
 - Ticket tagging (`ai_processed`, `bitbotpro`)
 - Internal note vs. public reply option
-- Ticket status filtering (only processes new/open tickets)
 - Signature verification for webhook security
 - Deduplication via processed ticket tracking
+- Connection status, reconnect, and disconnect controls in the admin UI
+- Auto-reply disabled by default; requires explicit opt-in
 
 **Discrepancies**:
 - Same as Telegram — calls `_call_emergent` directly, no streaming
 - Additional system prompt instructions specific to Zendesk (ticket context, formatting)
 - Zendesk has its own usage tracking in `zendesk_events` alongside the shared tracking
 
-**Status**: Fully functional
+**Status**: Fully functional (OAuth flow requires admin setup of OAuth client in Zendesk)
 
 ---
 

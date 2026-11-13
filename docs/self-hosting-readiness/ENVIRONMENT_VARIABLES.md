@@ -51,6 +51,12 @@
 |---|---|---|---|
 | `WEBHOOK_BASE_URL` | No | Base URL for generating webhook URLs | Set to your public backend URL |
 
+### Zendesk OAuth
+| Variable | Required | Description | Self-Hosting Notes |
+|---|---|---|---|
+| `ZENDESK_OAUTH_CLIENT_ID` | Conditional | OAuth client identifier from Zendesk Admin Center | Create an OAuth client in Zendesk; see `/docs/ZENDESK_OAUTH_SETUP.md` |
+| `ZENDESK_OAUTH_CLIENT_SECRET` | Conditional | OAuth client secret (shown once at creation) | Store securely; never commit to VCS |
+
 ---
 
 ## Frontend Environment Variables (`/app/frontend/.env`)
@@ -67,7 +73,7 @@
 
 ### MongoDB (Required)
 - **Usage**: Primary data store for all collections
-- **Collections**: users, bot_instances, bot_config, knowledge_sources, conversations, messages, api_integrations, api_endpoints, api_diagnostics_history, discord_config, telegram_config, zendesk_config, zendesk_events, zendesk_suggestions, embed_config, api_keys, api_key_usage, usage_tracking, llm_usage, onboarding, changelog_entries, scripted_scenarios, scripted_counters
+- **Collections**: users, bot_instances, bot_config, knowledge_sources, conversations, messages, api_integrations, api_endpoints, api_diagnostics_history, discord_config, telegram_config, zendesk_config, zendesk_events, zendesk_suggestions, zendesk_oauth_states, embed_config, api_keys, api_key_usage, usage_tracking, llm_usage, onboarding, changelog_entries, scripted_scenarios, scripted_counters
 - **Self-hosting**: MongoDB Atlas (managed) or self-hosted MongoDB 6+
 - **Vector search**: Uses MongoDB Atlas text search for knowledge retrieval (NOT Atlas Vector Search)
 
