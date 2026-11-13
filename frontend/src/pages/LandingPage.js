@@ -380,6 +380,7 @@ function HeroSection() {
                 src="/widget?mode=inline"
                 title="BitBot Pro Live Demo"
                 data-testid="hero-live-demo"
+                tabIndex={-1}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -1311,6 +1312,21 @@ function Footer() {
 
 /* ──────────────────── MAIN PAGE ──────────────────── */
 export default function LandingPage() {
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    // Lock scroll at top while the iframe loads to prevent its
+    // internal scrollIntoView / focus from jumping the parent page.
+    const lockScroll = () => window.scrollTo(0, 0);
+    window.addEventListener("scroll", lockScroll);
+    window.scrollTo(0, 0);
+    const t = setTimeout(() => {
+      window.removeEventListener("scroll", lockScroll);
+    }, 3000);
+    return () => { clearTimeout(t); window.removeEventListener("scroll", lockScroll); };
+  }, []);
+
   return (
     <div style={{ background: C.bg, minHeight: "100vh" }} data-testid="landing-page">
       <Navbar />

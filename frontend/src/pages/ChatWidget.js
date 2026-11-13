@@ -130,7 +130,7 @@ export default function ChatWidget() {
   }, [instanceId]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, isStreaming]);
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
+  useEffect(() => { if (mode !== "inline") setTimeout(() => inputRef.current?.focus(), 100); }, [mode]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || isStreaming) return;
