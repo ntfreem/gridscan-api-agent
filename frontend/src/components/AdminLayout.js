@@ -205,7 +205,7 @@ export default function AdminLayout() {
       }}>
         {/* Logo */}
         <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${colors.border.default}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <BridgeBotLogo size={44} />
             <div>
               <span style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary, letterSpacing: "-0.3px" }}>
@@ -216,40 +216,26 @@ export default function AdminLayout() {
               </p>
             </div>
           </div>
-
-          {/* Org selector */}
-          {orgs.length > 0 && (
-            <CompactSelector
-              label="Organisation"
-              value={selectedOrg?.name}
-              items={orgs}
-              onSelect={(org) => { selectOrg(org); navigate("/admin"); }}
-              open={orgDropOpen}
-              setOpen={(v) => { setOrgDropOpen(v); setBotDropOpen(false); }}
-              testId="org-switcher"
-              icon={Building2}
-            />
-          )}
-
-          {/* Bot selector */}
-          {bots.length > 0 && (
-            <CompactSelector
-              label="AI Bot"
-              value={selectedBot?.name}
-              items={bots}
-              onSelect={(bot) => { selectBot(bot); navigate(`/admin/bots/${bot.id}`); }}
-              open={botDropOpen}
-              setOpen={(v) => { setBotDropOpen(v); setOrgDropOpen(false); }}
-              testId="bot-switcher"
-              icon={Bot}
-            />
-          )}
         </div>
 
         {/* Nav sections */}
         <nav style={{ flex: 1, padding: "6px 12px", overflowY: "auto" }}>
           {/* Organisation */}
           <SectionLabel icon={Building2} label="Organisation" />
+          {orgs.length > 0 && (
+            <div style={{ padding: "0 4px 6px" }}>
+              <CompactSelector
+                label="Organisation"
+                value={selectedOrg?.name}
+                items={orgs}
+                onSelect={(org) => { selectOrg(org); navigate("/admin"); }}
+                open={orgDropOpen}
+                setOpen={(v) => { setOrgDropOpen(v); setBotDropOpen(false); }}
+                testId="org-switcher"
+                icon={Building2}
+              />
+            </div>
+          )}
           <SideNavLink to="/admin" icon={LayoutDashboard} label="Overview" end onClick={closeMobile} />
           <SideNavLink to="/admin/bots" icon={Bot} label="Bots" onClick={closeMobile} />
           <SideNavLink to="/admin/accounts" icon={Link2} label="Connected Accounts" onClick={closeMobile} />
@@ -262,6 +248,20 @@ export default function AdminLayout() {
           {selectedBot && (
             <>
               <SectionLabel icon={Bot} label={selectedBot.name} />
+              {bots.length > 0 && (
+                <div style={{ padding: "0 4px 6px" }}>
+                  <CompactSelector
+                    label="AI Bot"
+                    value={selectedBot?.name}
+                    items={bots}
+                    onSelect={(bot) => { selectBot(bot); navigate(`/admin/bots/${bot.id}`); }}
+                    open={botDropOpen}
+                    setOpen={(v) => { setBotDropOpen(v); setOrgDropOpen(false); }}
+                    testId="bot-switcher"
+                    icon={Bot}
+                  />
+                </div>
+              )}
               <SideNavLink to={`/admin/bots/${botId}`} icon={LayoutDashboard} label="Bot Overview" end onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/behaviour`} icon={Settings} label="Behaviour" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/knowledge`} icon={BookOpen} label="Knowledge Base" onClick={closeMobile} />
