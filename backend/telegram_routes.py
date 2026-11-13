@@ -25,17 +25,20 @@ _call_claude = None
 _save_conversation = None
 _get_tone_examples_text = None
 _try_api_query = None
+_webhook_router = None
 
 
 def init_telegram_routes(
     db, require_admin_dep, get_instance_access_dep,
     search_knowledge_fn, build_system_prompt_fn, call_claude_fn,
     save_conversation_fn, get_tone_examples_text_fn, try_api_query_fn,
+    webhook_router_mod=None,
 ):
     """Inject shared dependencies from server.py."""
     global _db, _require_admin, _get_instance_access
     global _search_knowledge, _build_system_prompt, _call_claude
     global _save_conversation, _get_tone_examples_text, _try_api_query
+    global _webhook_router
     _db = db
     _require_admin = require_admin_dep
     _get_instance_access = get_instance_access_dep
@@ -45,6 +48,7 @@ def init_telegram_routes(
     _save_conversation = save_conversation_fn
     _get_tone_examples_text = get_tone_examples_text_fn
     _try_api_query = try_api_query_fn
+    _webhook_router = webhook_router_mod
 
 
 # ────────────────── Pydantic models ──────────────────
@@ -375,7 +379,55 @@ async def _process_telegram_message(
     instance_id: str, chat_id: int, user_text: str,
     username: str, user_id: str, bot_token: str, message_id: int = None,
 ):
-    """Process a Telegram message through the BitBot Pro AI pipeline."""
+    """Process a Telegram message through the BitBot Pro AI pipeline.
+
+    V2 path: If V2 connections exist for this instance, resolve and process
+    through each connection's bot. Auto_reply connection sends the response;
+    agent_assist connections store suggestions only.
+    V1 fallback: If no V2 connections, uses the legacy single-instance pipeline.
+    """
+    # ── Try V2 multi-route resolution ──
+    v2_connections = []
+    if _webhook_router:
+        try:
+            v2_connections = await _webhook_router.resolve_telegram_routes_by_instance(
+                instance_id, str(chat_id)
+            )
+        except Exception as e:
+            logger.warning(f"[V2 TELEGRAM] route resolution error: {e}")
+
+    if v2_connections:
+        logger.info(f"[V2 TELEGRAM] {len(v2_connections)} connections for instance={instance_id[:12]} chat={chat_id}")
+        auto_conn = _webhook_router.select_auto_reply_connection(v2_connections)
+        suggestion_conns = _webhook_router.get_suggestion_connections(v2_connections)
+
+        # Process auto_reply connection (sends response to chat)
+        if auto_conn:
+            try:
+                await _process_telegram_v2_connection(
+                    auto_conn, chat_id, user_text, username, user_id,
+                    bot_token, message_id, send_reply=True,
+                )
+            except Exception as e:
+                logger.error(f"[V2 TELEGRAM] auto_reply error: {e}", exc_info=True)
+                try:
+                    await _send_telegram_reply(bot_token, chat_id,
+                        "Sorry, I encountered an error processing your message.", reply_to=message_id)
+                except Exception:
+                    pass
+
+        # Process suggestion connections (store only)
+        for sugg_conn in suggestion_conns:
+            try:
+                await _process_telegram_v2_connection(
+                    sugg_conn, chat_id, user_text, username, user_id,
+                    bot_token, message_id, send_reply=False,
+                )
+            except Exception as e:
+                logger.warning(f"[V2 TELEGRAM] suggestion error (conn={sugg_conn['id'][:12]}): {e}")
+        return
+
+    # ── V1 Fallback ──
     session_id = f"tg_{chat_id}_{instance_id}"
 
     try:
@@ -436,6 +488,69 @@ async def _process_telegram_message(
             )
         except Exception:
             pass
+
+
+async def _process_telegram_v2_connection(
+    connection: dict, chat_id: int, user_text: str,
+    username: str, user_id: str, bot_token: str,
+    message_id: int = None, send_reply: bool = True,
+):
+    """Process a Telegram message through one V2 connection's bot pipeline."""
+    ctx = await _webhook_router.load_connection_context(connection)
+    if not ctx:
+        return
+
+    instance_id = ctx["instance_id"]
+    bot_config = ctx["bot_config"]
+    conn_id = connection["id"]
+    bot_id = connection["bot_id"]
+    session_id = f"tg_{chat_id}_{conn_id[:8]}"
+
+    if send_reply:
+        await _tg_request(bot_token, "sendChatAction", {"chat_id": chat_id, "action": "typing"})
+
+    knowledge = await _search_knowledge(user_text, instance_id)
+    has_api_integrations = await _db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
+        response = "I don't have any knowledge base configured yet. Please check back later."
+    else:
+        api_result = await _try_api_query(user_text, bot_config, knowledge, instance_id, session_id)
+        api_context, api_sources = ("", [])
+        if api_result:
+            api_context, api_sources = api_result
+        tone = await _get_tone_examples_text(instance_id, bot_config)
+        system_prompt = _build_system_prompt(
+            bot_config, knowledge, tone,
+            knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+            api_context=api_context, api_sources=api_sources,
+            has_api_integrations=has_api_integrations,
+        )
+        system_prompt += TELEGRAM_FOLLOWUP_INSTRUCTION
+        response = await _call_claude(session_id, user_text, system_prompt,
+                                      instance_id=instance_id, platform="telegram")
+
+    clean_response, suggestions = _parse_suggestions(response)
+    conv_metadata = {
+        "username": username, "user_id": user_id, "chat_id": str(chat_id),
+        "connection_id": conn_id, "v2_bot_id": bot_id,
+    }
+
+    if send_reply:
+        await _save_conversation(
+            session_id=session_id, user_message=user_text, bot_response=clean_response,
+            platform="telegram", instance_id=instance_id, metadata=conv_metadata,
+        )
+        await _send_telegram_reply(bot_token, chat_id, clean_response,
+                                   reply_to=message_id, suggestions=suggestions)
+    else:
+        await _webhook_router.save_v2_suggestion(
+            connection_id=conn_id, bot_id=bot_id, instance_id=instance_id,
+            platform="telegram", user_message=user_text, ai_response=clean_response,
+            metadata=conv_metadata,
+        )
 
 
 async def _send_telegram_reply(token: str, chat_id: int, text: str,

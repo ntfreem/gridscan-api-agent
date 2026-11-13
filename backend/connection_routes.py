@@ -276,11 +276,22 @@ async def connection_activity(org_id: str, bot_id: str, conn_id: str, request: R
     if not conn:
         raise HTTPException(404, "Connection not found")
 
-    # Get recent conversations for this connection
+    # Get recent conversations tagged with this connection_id
     legacy_instance_id = bot.get("legacy_instance_id", bot["id"])
     conversations = await h._db.conversations.find(
         {"instance_id": legacy_instance_id, "metadata.connection_id": conn_id},
         {"_id": 0}
-    ).sort("timestamp", -1).limit(20).to_list(20)
+    ).sort("updated_at", -1).limit(20).to_list(20)
 
-    return {"activity": conversations, "connection_id": conn_id}
+    # Also get V2 suggestions for agent_assist/internal_note connections
+    suggestions = await h._db.v2_suggestions.find(
+        {"connection_id": conn_id},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(20).to_list(20)
+
+    return {
+        "activity": conversations,
+        "suggestions": suggestions,
+        "connection_id": conn_id,
+        "response_mode": conn.get("response_mode", "auto_reply"),
+    }

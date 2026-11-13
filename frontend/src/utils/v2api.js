@@ -1,0 +1,45 @@
+import axios from "axios";
+
+const BASE = "/api";
+
+function headers() {
+  const token = localStorage.getItem("bf_token");
+  const orgId = localStorage.getItem("bf_org_id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(orgId && { "X-Org-ID": orgId }),
+  };
+}
+
+const v2 = {
+  // Orgs
+  listOrgs: () => axios.get(`${BASE}/v2/orgs`, { headers: headers() }),
+  getOrg: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
+  getOrgMembers: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/members`, { headers: headers() }),
+
+  // Bots
+  listBots: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots`, { headers: headers() }),
+  createBot: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots`, data, { headers: headers() }),
+  getBot: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, { headers: headers() }),
+  updateBot: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, data, { headers: headers() }),
+  getBotSettings: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, { headers: headers() }),
+  updateBotSettings: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, data, { headers: headers() }),
+
+  // Accounts
+  listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers() }),
+  createAccount: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts`, data, { headers: headers() }),
+  getAccount: (orgId, accId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, { headers: headers() }),
+  updateAccount: (orgId, accId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, data, { headers: headers() }),
+  disconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/disconnect`, {}, { headers: headers() }),
+  reconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/reconnect`, {}, { headers: headers() }),
+
+  // Connections
+  listConnections: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, { headers: headers() }),
+  createConnection: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, data, { headers: headers() }),
+  getConnection: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, { headers: headers() }),
+  updateConnection: (orgId, botId, connId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, data, { headers: headers() }),
+  toggleConnection: (orgId, botId, connId) => axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/toggle`, {}, { headers: headers() }),
+  connectionActivity: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/activity`, { headers: headers() }),
+};
+
+export default v2;

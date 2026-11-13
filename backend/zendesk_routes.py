@@ -30,16 +30,19 @@ _call_claude = None
 _save_conversation = None
 _get_tone_examples_text = None
 _try_api_query = None
+_webhook_router = None
 
 
 def init_zendesk_routes(
     db, get_instance_access_dep,
     search_knowledge_fn, build_system_prompt_fn, call_claude_fn,
     save_conversation_fn, get_tone_examples_text_fn, try_api_query_fn,
+    webhook_router_mod=None,
 ):
     global _db, _get_instance_access
     global _search_knowledge, _build_system_prompt, _call_claude
     global _save_conversation, _get_tone_examples_text, _try_api_query
+    global _webhook_router
     _db = db
     _get_instance_access = get_instance_access_dep
     _search_knowledge = search_knowledge_fn
@@ -48,6 +51,7 @@ def init_zendesk_routes(
     _save_conversation = save_conversation_fn
     _get_tone_examples_text = get_tone_examples_text_fn
     _try_api_query = try_api_query_fn
+    _webhook_router = webhook_router_mod
 
 
 # ────────────────── Constants ──────────────────
@@ -970,7 +974,12 @@ async def zendesk_webhook(
 
 
 async def _process_zendesk_ticket(instance_id: str, ticket_id: str, event: dict):
-    """Fetch ticket, run AI pipeline, post reply or store suggestion."""
+    """Fetch ticket, run AI pipeline, post reply or store suggestion.
+
+    V2 path: If V2 connections exist, resolve and process through each
+    connection's bot pipeline. Response mode drives auto-reply vs suggestion.
+    V1 fallback: Uses legacy single-instance pipeline.
+    """
     try:
         # Reload config from DB to get the freshest tokens
         cfg = await _db.zendesk_config.find_one({"instance_id": instance_id})
@@ -991,6 +1000,40 @@ async def _process_zendesk_ticket(instance_id: str, ticket_id: str, event: dict)
             latest = comments[-1].get("plain_body", comments[-1].get("body", ""))
             user_query = f"Subject: {subject}\n\nLatest message: {latest}"
 
+        # ── Try V2 multi-route resolution ──
+        v2_connections = []
+        if _webhook_router:
+            try:
+                v2_connections = await _webhook_router.resolve_zendesk_routes_by_instance(
+                    instance_id, ticket
+                )
+            except Exception as e:
+                logger.warning(f"[V2 ZENDESK] route resolution error: {e}")
+
+        if v2_connections:
+            logger.info(f"[V2 ZENDESK] {len(v2_connections)} connections for instance={instance_id[:12]} ticket={ticket_id}")
+            auto_conn = _webhook_router.select_auto_reply_connection(v2_connections)
+            suggestion_conns = _webhook_router.get_suggestion_connections(v2_connections)
+
+            # Process auto_reply connection
+            if auto_conn:
+                await _process_zendesk_v2_connection(
+                    auto_conn, cfg, ticket_id, subject, user_query,
+                    requester_id, send_reply=True,
+                )
+
+            # Process suggestion connections
+            for sugg_conn in suggestion_conns:
+                try:
+                    await _process_zendesk_v2_connection(
+                        sugg_conn, cfg, ticket_id, subject, user_query,
+                        requester_id, send_reply=False,
+                    )
+                except Exception as e:
+                    logger.warning(f"[V2 ZENDESK] suggestion error (conn={sugg_conn['id'][:12]}): {e}")
+            return
+
+        # ── V1 Fallback ──
         session_id = f"zd_{ticket_id}_{instance_id}"
         bot_config = await _db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
         knowledge = await _search_knowledge(user_query, instance_id)
@@ -1063,3 +1106,104 @@ async def _process_zendesk_ticket(instance_id: str, ticket_id: str, event: dict)
 
     except Exception as exc:
         logger.error("Zendesk ticket processing error (instance=%s, ticket=%s): %s", instance_id, ticket_id, exc, exc_info=True)
+
+
+async def _process_zendesk_v2_connection(
+    connection: dict, cfg: dict, ticket_id: str, subject: str,
+    user_query: str, requester_id, send_reply: bool = True,
+):
+    """Process a Zendesk ticket through one V2 connection's bot pipeline."""
+    ctx = await _webhook_router.load_connection_context(connection)
+    if not ctx:
+        return
+
+    instance_id = ctx["instance_id"]
+    bot_config = ctx["bot_config"]
+    conn_id = connection["id"]
+    bot_id = connection["bot_id"]
+    response_mode = connection.get("response_mode", "agent_assist")
+    session_id = f"zd_{ticket_id}_{conn_id[:8]}"
+
+    knowledge = await _search_knowledge(user_query, instance_id)
+    has_api_integrations = await _db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
+        ai_response = "Thank you for reaching out. Our team will review your request and get back to you shortly."
+    else:
+        api_result = await _try_api_query(user_query, bot_config, knowledge, instance_id, session_id)
+        api_context, api_sources = ("", [])
+        if api_result:
+            api_context, api_sources = api_result
+        tone = await _get_tone_examples_text(instance_id, bot_config)
+        system_prompt = _build_system_prompt(
+            bot_config, knowledge, tone,
+            knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+            api_context=api_context, api_sources=api_sources,
+            has_api_integrations=has_api_integrations,
+        )
+        system_prompt += "\nYou are responding to a Zendesk support ticket. Write a helpful, professional support response."
+        ai_response = await _call_claude(session_id, user_query, system_prompt,
+                                          instance_id=instance_id, platform="zendesk")
+
+    conv_metadata = {
+        "ticket_id": ticket_id, "subject": subject,
+        "requester_id": str(requester_id or ""),
+        "connection_id": conn_id, "v2_bot_id": bot_id,
+    }
+    await _save_conversation(
+        session_id=session_id, user_message=user_query, bot_response=ai_response,
+        platform="zendesk", instance_id=instance_id, metadata=conv_metadata,
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    suggestion_doc = {
+        "instance_id": instance_id, "ticket_id": ticket_id,
+        "connection_id": conn_id, "bot_id": bot_id,
+        "subject": subject, "suggestion": ai_response,
+        "response_mode": response_mode, "created_at": now,
+    }
+
+    if send_reply and response_mode == "auto_reply":
+        # Post public reply
+        try:
+            sem = _webhook_router.get_account_semaphore(connection["account_id"])
+            async with sem:
+                await _zendesk_request(
+                    cfg, "PUT", f"/tickets/{ticket_id}.json",
+                    {"ticket": {"comment": {"body": ai_response, "public": True}, "tags": ["ai_processed", "bitbotpro"]}},
+                )
+                await _zendesk_request(
+                    cfg, "PUT", f"/tickets/{ticket_id}.json",
+                    {"ticket": {"comment": {"body": f"[BitBot Pro] V2 auto-reply via connection {conn_id[:8]}.", "public": False}}},
+                )
+            suggestion_doc["action_taken"] = "auto_reply"
+            logger.info("[V2 ZENDESK] auto-reply posted for ticket %s (conn=%s)", ticket_id, conn_id[:12])
+        except Exception as exc:
+            logger.error("[V2 ZENDESK] auto-reply failed for ticket %s: %s", ticket_id, exc)
+            suggestion_doc["action_taken"] = "auto_reply_failed"
+            suggestion_doc["error"] = str(exc)
+    elif response_mode == "internal_note":
+        # Post internal note
+        try:
+            sem = _webhook_router.get_account_semaphore(connection["account_id"])
+            async with sem:
+                await _zendesk_request(
+                    cfg, "PUT", f"/tickets/{ticket_id}.json",
+                    {"ticket": {"comment": {"body": f"[BitBot Pro AI Suggestion]\n\n{ai_response}", "public": False}}},
+                )
+            suggestion_doc["action_taken"] = "internal_note"
+            logger.info("[V2 ZENDESK] internal note posted for ticket %s (conn=%s)", ticket_id, conn_id[:12])
+        except Exception as exc:
+            logger.error("[V2 ZENDESK] internal note failed: %s", exc)
+            suggestion_doc["action_taken"] = "internal_note_failed"
+    else:
+        # agent_assist / sidebar_only — store only
+        suggestion_doc["action_taken"] = response_mode
+
+    await _db.zendesk_suggestions.update_one(
+        {"instance_id": instance_id, "ticket_id": ticket_id, "connection_id": conn_id},
+        {"$set": suggestion_doc},
+        upsert=True,
+    )

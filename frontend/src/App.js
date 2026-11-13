@@ -32,6 +32,13 @@ import ChangelogPage from "@/pages/ChangelogPage";
 import SetupGuide from "@/pages/SetupGuide";
 import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
 import LandingPage from "@/pages/LandingPage";
+
+// v2 pages
+import BotList from "@/pages/BotList";
+import BotOverview from "@/pages/BotOverview";
+import ConnectedAccounts from "@/pages/ConnectedAccounts";
+import IntegrationsPage from "@/pages/IntegrationsPage";
+
 import "@/App.css";
 
 function ProtectedRoute({ children }) {
@@ -67,16 +74,32 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicOnlyRoute><ForgotPassword /></PublicOnlyRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/select-instance" element={<ProtectedRoute><InstanceSelect /></ProtectedRoute>} />
-
-      {/* Public landing after a shared Discord invite link is used */}
       <Route path="/discord/invited" element={<DiscordInvited />} />
-
-      {/* Public invitation accept page */}
       <Route path="/invite/:token" element={<InviteAccept />} />
 
       {/* Admin area */}
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+        {/* Organisation-level */}
         <Route index element={<Dashboard />} />
+        <Route path="bots" element={<BotList />} />
+        <Route path="accounts" element={<ConnectedAccounts />} />
+        <Route path="team" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
+
+        {/* Bot-scoped routes */}
+        <Route path="bots/:botId" element={<BotOverview />} />
+        <Route path="bots/:botId/behaviour" element={<BotSettings />} />
+        <Route path="bots/:botId/knowledge" element={<KnowledgeBase />} />
+        <Route path="bots/:botId/integrations" element={<IntegrationsPage />} />
+        <Route path="bots/:botId/conversations" element={<Conversations />} />
+        <Route path="bots/:botId/playground" element={<EmbedCode />} />
+
+        {/* Platform Admin */}
+        <Route path="platform/provider-apps" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
+        <Route path="platform/workspaces" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
+        <Route path="platform/analytics" element={<AdminOnlyRoute><Analytics /></AdminOnlyRoute>} />
+        <Route path="platform/api-keys" element={<AdminOnlyRoute><ApiKeyAnalytics /></AdminOnlyRoute>} />
+
+        {/* Legacy routes — redirect to new paths */}
         <Route path="knowledge" element={<KnowledgeBase />} />
         <Route path="knowledge/view" element={<KnowledgeContentViewer />} />
         <Route path="conversations" element={<Conversations />} />
@@ -95,12 +118,10 @@ function AppRoutes() {
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>
 
-      {/* Public chat pages */}
+      {/* Public pages */}
       <Route path="/chat" element={<ChatPage />} />
       <Route path="/widget" element={<ChatWidget />} />
       <Route path="/docs" element={<Docs />} />
-
-      {/* Public landing page */}
       <Route path="/" element={<LandingPage />} />
     </Routes>
   );

@@ -37,6 +37,7 @@ import org_routes
 import bot_routes
 import account_routes
 import connection_routes
+import webhook_router
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
 ROOT_DIR = Path(__file__).parent
@@ -407,6 +408,7 @@ def _init_telegram():
         db, require_admin, _get_instance_from_request,
         search_knowledge, build_system_prompt, call_claude,
         save_conversation, get_tone_examples_text, _try_api_query,
+        webhook_router_mod=webhook_router,
     )
 api_router.include_router(telegram_routes.router)
 
@@ -416,11 +418,13 @@ def _init_zendesk():
         db, _get_instance_from_request,
         search_knowledge, build_system_prompt, call_claude,
         save_conversation, get_tone_examples_text, _try_api_query,
+        webhook_router_mod=webhook_router,
     )
 api_router.include_router(zendesk_routes.router)
 
 # ── v2 routes (Org → Bot → Account → Connection model) ──
 v2_helpers.init(db, _get_instance_from_request)
+webhook_router.init(db)
 api_router.include_router(org_routes.router)
 api_router.include_router(bot_routes.router)
 api_router.include_router(account_routes.router)
@@ -1746,6 +1750,279 @@ async def _sync_guild_nickname(token: str, guild_id: str, name: str):
                     logger.warning(f"Nickname sync failed in guild {guild_id} ({resp.status}): {body}")
     except Exception as e:
         logger.warning(f"Nickname sync exception for guild {guild_id}: {e}")
+
+
+async def _handle_discord_v2(message, v2_connections: list, token: str,
+                              is_dm: bool, guild_id: str, channel_id: str):
+    """Process a Discord message through the V2 multi-route pipeline.
+
+    - Only the highest-priority auto_reply connection sends a response.
+    - All agent_assist/internal_note connections generate stored suggestions.
+    - Each connection uses its own bot's config (KB, persona, LLM).
+    """
+    import discord as _disc
+
+    auto_conn = webhook_router.select_auto_reply_connection(v2_connections)
+    suggestion_conns = webhook_router.get_suggestion_connections(v2_connections)
+
+    # Determine respond/skip using the primary connection's settings
+    primary_conn = auto_conn or (v2_connections[0] if v2_connections else None)
+    if not primary_conn:
+        return
+
+    ctx = await webhook_router.load_connection_context(primary_conn)
+    if not ctx:
+        return
+
+    # Load account metadata for listen_mode, staff role, handoff settings
+    account_meta = ctx["account"].get("metadata", {})
+    listen_mode = primary_conn.get("destination", {}).get("listen_mode", account_meta.get("listen_mode", "all_channels"))
+    staff_role_name = (account_meta.get("staff_role_name") or "").strip().lower()
+    staff_role_normalized = "".join(staff_role_name.split()).replace("-", "").replace("_", "")
+    cooldown_minutes = account_meta.get("handoff_cooldown_minutes", 15) or 15
+    followup_msg = account_meta.get("handoff_followup_message") or "Is there anything else I can help with?"
+    reply_style = account_meta.get("reply_style", "natural")
+    passive_mode = bool(account_meta.get("passive_mode", False))
+
+    # Bot commands (status/resume)
+    user_text_raw = message.content.strip()
+    if user_text_raw.lower() == "!bot resume":
+        if channel_id in _handoff_channels:
+            del _handoff_channels[channel_id]
+            await message.channel.send("I'm back! How can I help?")
+        return
+    if user_text_raw.lower() == "!bot status":
+        in_handoff = channel_id in _handoff_channels
+        if in_handoff:
+            elapsed = (datetime.now(timezone.utc) - _handoff_channels[channel_id]).total_seconds() / 60.0
+            remaining = max(0, cooldown_minutes - elapsed)
+            msg = (
+                f"**Bot Status — silent (handoff active)**\n"
+                f"Cooldown remaining: ~{remaining:.1f} min\n"
+                f"Listen mode: `{listen_mode}` · Passive mode: `{passive_mode}`\n"
+                f"Type `!bot resume` to clear handoff immediately."
+            )
+        else:
+            msg = (
+                f"**Bot Status — active**\n"
+                f"Listen mode: `{listen_mode}` · Passive mode: `{passive_mode}`\n"
+                f"Staff role: `{staff_role_name or 'not configured'}`"
+            )
+        await message.channel.send(msg)
+        return
+
+    # Staff role detection and handoff
+    is_staff = False
+    if staff_role_name and not is_dm and message.guild:
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as http_session:
+                member_url = f"https://discord.com/api/v10/guilds/{message.guild.id}/members/{message.author.id}"
+                async with http_session.get(member_url, headers={"Authorization": f"Bot {token}"}) as member_resp:
+                    if member_resp.status == 200:
+                        member_data = await member_resp.json()
+                        member_role_ids = set(member_data.get("roles", []))
+                        async with http_session.get(
+                            f"https://discord.com/api/v10/guilds/{message.guild.id}/roles",
+                            headers={"Authorization": f"Bot {token}"}
+                        ) as roles_resp:
+                            if roles_resp.status == 200:
+                                guild_roles = await roles_resp.json()
+                                for role in guild_roles:
+                                    rn = role["name"].lower()
+                                    rn_norm = "".join(rn.split()).replace("-", "").replace("_", "")
+                                    if role["id"] in member_role_ids and (rn == staff_role_name or rn_norm == staff_role_normalized):
+                                        is_staff = True
+                                        break
+        except Exception as e:
+            logger.warning(f"[V2 DISCORD] Role check error: {e}")
+
+    if is_staff and not is_dm:
+        _handoff_channels[channel_id] = datetime.now(timezone.utc)
+        logger.info(f"[V2 DISCORD] Human takeover: '{message.author.name}' in channel {channel_id}")
+        return
+
+    if channel_id in _handoff_channels:
+        elapsed = (datetime.now(timezone.utc) - _handoff_channels[channel_id]).total_seconds() / 60.0
+        if elapsed < cooldown_minutes:
+            if is_staff:
+                _handoff_channels[channel_id] = datetime.now(timezone.utc)
+                return
+            del _handoff_channels[channel_id]
+            logger.info(f"[V2 DISCORD] Handoff cleared in channel {channel_id}")
+        else:
+            del _handoff_channels[channel_id]
+            try:
+                await message.channel.send(followup_msg)
+            except Exception:
+                pass
+
+    # Listen mode check
+    is_mentioned = (_shared_discord_client.user in message.mentions if _shared_discord_client.user else False)
+    if is_dm:
+        should_respond = True
+    elif listen_mode == "mention_only":
+        should_respond = is_mentioned
+    elif listen_mode == "all_channels":
+        should_respond = True
+    elif listen_mode == "specific_channels":
+        should_respond = True  # Already filtered by V2 resolver
+    else:
+        should_respond = is_mentioned
+
+    if not should_respond:
+        return
+
+    user_text = user_text_raw
+    if _shared_discord_client.user:
+        user_text = user_text.replace(f"<@{_shared_discord_client.user.id}>", "").strip()
+        user_text = user_text.replace(f"<@!{_shared_discord_client.user.id}>", "").strip()
+    if not user_text:
+        return
+
+    # ── Process auto_reply connection ──
+    if auto_conn:
+        try:
+            await _process_discord_v2_connection(
+                message, auto_conn, ctx, user_text, is_mentioned, is_dm,
+                guild_id, channel_id, reply_style, passive_mode, token,
+                send_reply=True,
+            )
+        except Exception as e:
+            logger.error(f"[V2 DISCORD] auto_reply error (conn={auto_conn['id'][:12]}): {e}", exc_info=True)
+            await message.channel.send(
+                f"Sorry, I hit an error while generating a reply.\n"
+                f"Diagnostic: `{type(e).__name__}: {str(e)[:120]}`"
+            )
+
+    # ── Process agent_assist / internal_note connections (generate suggestions) ──
+    for sugg_conn in suggestion_conns:
+        try:
+            sugg_ctx = await webhook_router.load_connection_context(sugg_conn)
+            if not sugg_ctx:
+                continue
+            sem = webhook_router.get_account_semaphore(sugg_conn["account_id"])
+            async with sem:
+                await _process_discord_v2_connection(
+                    message, sugg_conn, sugg_ctx, user_text, is_mentioned, is_dm,
+                    guild_id, channel_id, reply_style, passive_mode, token,
+                    send_reply=False,
+                )
+        except Exception as e:
+            logger.warning(f"[V2 DISCORD] suggestion error (conn={sugg_conn['id'][:12]}): {e}")
+
+
+async def _process_discord_v2_connection(
+    message, connection: dict, ctx: dict, user_text: str,
+    is_mentioned: bool, is_dm: bool, guild_id: str, channel_id: str,
+    reply_style: str, passive_mode: bool, token: str,
+    send_reply: bool = True,
+):
+    """Process a single Discord message through one V2 connection's bot pipeline.
+
+    If send_reply=True, sends the response to Discord (auto_reply mode).
+    If send_reply=False, stores as a suggestion (agent_assist mode).
+    """
+    instance_id = ctx["instance_id"]
+    bot_config = ctx["bot_config"]
+    conn_id = connection["id"]
+    bot_id = connection["bot_id"]
+    session_id = f"discord_{message.author.id}_{conn_id[:8]}"
+
+    # Scripted mode check (from account metadata)
+    account_meta = ctx["account"].get("metadata", {})
+    scripted_cfg = account_meta.get("scripted_mode", {})
+    if isinstance(scripted_cfg, dict) and scripted_cfg.get("enabled") and scripted_cfg.get("primary_message") and send_reply:
+        if passive_mode and not is_mentioned and not is_dm:
+            skip_prompt = (
+                "Look at the user message below. If it is a real question or request for help, output exactly: KEEP\n"
+                "If it is small talk, greeting, statement, joke, or off-topic chatter, output exactly: SKIP\n"
+                "Do not output anything else."
+            )
+            try:
+                verdict = await call_claude(f"{session_id}_skipcheck", user_text, skip_prompt, instance_id=instance_id, platform="discord")
+                if verdict and verdict.strip().upper().startswith("SKIP"):
+                    return
+            except Exception:
+                pass
+
+        response = await build_scripted_response(
+            instance_id=instance_id, channel_id=channel_id,
+            user_id=str(message.author.id), scripted_cfg=scripted_cfg,
+            session_id=session_id, user_text=user_text,
+        )
+        if not response:
+            return
+        if reply_style == "with_mention" and not is_dm:
+            response = f"{message.author.mention} {response}"
+        if len(response) > 1990:
+            for i in range(0, len(response), 1990):
+                await message.channel.send(response[i:i + 1990])
+        else:
+            await message.channel.send(response)
+        await save_conversation(
+            session_id=session_id, user_message=user_text, bot_response=response,
+            platform="discord", instance_id=instance_id,
+            metadata={"username": str(message.author.name), "user_id": str(message.author.id),
+                       "scripted": True, "connection_id": conn_id, "v2_bot_id": bot_id},
+        )
+        return
+
+    # ── Full LLM pipeline ──
+    knowledge = await search_knowledge(user_text, instance_id)
+    has_api_integrations = await db.api_integrations.count_documents(
+        {"instance_id": instance_id, "enabled": True}
+    ) > 0
+
+    if knowledge == "__NO_KB__" and not has_api_integrations:
+        response = "I don't have any knowledge base configured yet. Please check back later or contact the administrator."
+    else:
+        tone = await get_tone_examples_text(instance_id, bot_config)
+        allow_skip = passive_mode and not is_mentioned and not is_dm
+        api_result = await _try_api_query(user_text, bot_config, knowledge, instance_id, session_id)
+        api_context, api_sources = ("", [])
+        if api_result:
+            api_context, api_sources = api_result
+        system_prompt = build_system_prompt(
+            bot_config, knowledge, tone, passive_mode=passive_mode,
+            allow_skip=allow_skip,
+            knowledge_gate=bot_config.get("knowledge_gate", "strict"),
+            api_context=api_context, api_sources=api_sources,
+            has_api_integrations=has_api_integrations,
+        )
+        async with message.channel.typing():
+            response = await call_claude(session_id, user_text, system_prompt, instance_id=instance_id, platform="discord")
+
+        if allow_skip and response and response.strip().upper().startswith("[SKIP]"):
+            logger.info(f"[V2 DISCORD] passive skip conn={conn_id[:12]}")
+            return
+
+    conv_metadata = {
+        "username": str(message.author.name), "user_id": str(message.author.id),
+        "connection_id": conn_id, "v2_bot_id": bot_id,
+    }
+
+    if send_reply:
+        await save_conversation(
+            session_id=session_id, user_message=user_text, bot_response=response,
+            platform="discord", instance_id=instance_id, metadata=conv_metadata,
+        )
+        if reply_style == "with_mention" and not is_dm:
+            response = f"{message.author.mention} {response}"
+        if len(response) > 1990:
+            for i in range(0, len(response), 1990):
+                await message.channel.send(response[i:i + 1990])
+        else:
+            await message.channel.send(response)
+    else:
+        # Store as suggestion (agent_assist/internal_note)
+        await webhook_router.save_v2_suggestion(
+            connection_id=conn_id, bot_id=bot_id, instance_id=instance_id,
+            platform="discord", user_message=user_text, ai_response=response,
+            metadata=conv_metadata,
+        )
+
+
 async def start_shared_discord_bot(token: str):
     """Start a single shared Discord client that routes messages to the correct instance."""
     global _shared_discord_client
@@ -1804,6 +2081,19 @@ async def start_shared_discord_bot(token: str):
                 # Don't fail open silently; if Mongo is sick, log but continue (better to risk a dup than miss replies)
                 logger.warning(f"[DEDUP] mongo dedup error (will process anyway): {_e}")
             is_dm = isinstance(message.channel, discord.DMChannel)
+            guild_id = str(message.guild.id) if (not is_dm and message.guild) else None
+            channel_id = str(message.channel.id)
+
+            # ── V2 Multi-Route Resolution ──
+            # Try V2 connections first. If matched, process through V2 pipeline
+            # and return. Otherwise, fall through to legacy V1 routing.
+            if guild_id:
+                v2_connections = await webhook_router.resolve_discord_routes(guild_id, channel_id)
+                if v2_connections:
+                    logger.info(f"[V2 DISCORD] {len(v2_connections)} connections matched for guild={guild_id} channel={channel_id}")
+                    await _handle_discord_v2(message, v2_connections, token, is_dm, guild_id, channel_id)
+                    return
+
             if is_dm:
                 first_cfg = await db.discord_config.find_one({"is_active": True}, {"_id": 0})
                 instance_id = (first_cfg or {}).get("instance_id", "default")
@@ -2153,6 +2443,11 @@ async def startup_event():
     await db.connections.create_index([("bot_id", 1)])
     await db.connections.create_index([("account_id", 1)])
     await db.connections.create_index([("org_id", 1)])
+    # V2 webhook routing indexes
+    await db.connections.create_index([("provider", 1), ("enabled", 1), ("destination.guild_id", 1)])
+    await db.connections.create_index([("provider", 1), ("enabled", 1), ("legacy_instance_id", 1)])
+    await db.v2_suggestions.create_index([("connection_id", 1), ("created_at", -1)])
+    await db.v2_suggestions.create_index([("bot_id", 1), ("created_at", -1)])
 
 @app.on_event("shutdown")
 async def shutdown_event():
