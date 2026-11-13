@@ -383,6 +383,7 @@ export default function AdminLayout() {
               <SideNavLink to={`/admin/bots/${botId}/behaviour`} icon={Settings} label="Behaviour" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/knowledge`} icon={BookOpen} label="Knowledge Base" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/integrations`} icon={Network} label="Integrations" onClick={closeMobile} />
+              <SideNavLink to="/admin/api-integrations" icon={Globe} label="API Scraper" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/conversations`} icon={MessageSquare} label="Conversations" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/suggestions`} icon={Sparkles} label="Suggestions" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/playground`} icon={Play} label="Playground" onClick={closeMobile} />
