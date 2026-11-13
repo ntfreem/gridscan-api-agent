@@ -70,6 +70,11 @@ class ZendeskOAuthStartRequest(BaseModel):
     subdomain: str
 
 
+class ZendeskOAuthClientConfig(BaseModel):
+    client_id: str
+    client_secret: str
+
+
 # ────────────────── Helpers ──────────────────
 
 def _normalize_subdomain(raw: str) -> str:
@@ -115,6 +120,15 @@ def _get_oauth_credentials() -> tuple:
     )
 
 
+async def _get_oauth_credentials_async() -> tuple:
+    """Return (client_id, client_secret) — checks DB first, then env vars."""
+    if _db is not None:
+        doc = await _db.zendesk_oauth_client.find_one({"_id": "credentials"})
+        if doc and doc.get("client_id") and doc.get("client_secret"):
+            return doc["client_id"], doc["client_secret"]
+    return _get_oauth_credentials()
+
+
 def _zendesk_basic_auth_header(email: str, api_token: str) -> dict:
     """Legacy Basic auth header: {email}/token:{token}."""
     creds = f"{email}/token:{api_token}"
@@ -149,9 +163,9 @@ async def _ensure_valid_token(cfg: dict) -> str:
         )
         raise HTTPException(401, "Zendesk authorization expired. Please reconnect.")
 
-    client_id, client_secret = _get_oauth_credentials()
+    client_id, client_secret = await _get_oauth_credentials_async()
     if not client_id or not client_secret:
-        raise HTTPException(500, "Zendesk OAuth is not configured. An administrator must set ZENDESK_OAUTH_CLIENT_ID and ZENDESK_OAUTH_CLIENT_SECRET.")
+        raise HTTPException(500, "Zendesk OAuth is not configured. Set the Client ID and Secret in the Zendesk settings page.")
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -254,11 +268,11 @@ async def zendesk_oauth_start(body: ZendeskOAuthStartRequest, request: Request):
     if not subdomain:
         raise HTTPException(400, "A valid Zendesk subdomain is required.")
 
-    client_id, client_secret = _get_oauth_credentials()
+    client_id, client_secret = await _get_oauth_credentials_async()
     if not client_id or not client_secret:
         raise HTTPException(
             400,
-            "Zendesk OAuth is not configured yet. An administrator must create an OAuth client in Zendesk Admin Center and set ZENDESK_OAUTH_CLIENT_ID / ZENDESK_OAUTH_CLIENT_SECRET. See the setup guide.",
+            "Zendesk OAuth is not configured yet. Enter the Client ID and Secret on this page first.",
         )
 
     base_url = _get_base_url()
@@ -339,7 +353,7 @@ async def zendesk_oauth_callback(request: Request):
     await _db.zendesk_oauth_states.delete_one({"state": state})
 
     # ── Exchange code for tokens ──
-    client_id, client_secret = _get_oauth_credentials()
+    client_id, client_secret = await _get_oauth_credentials_async()
     token_payload = {
         "grant_type": "authorization_code",
         "code": code,
@@ -446,12 +460,45 @@ async def zendesk_oauth_callback(request: Request):
 #  Admin Config Endpoints
 # ══════════════════════════════════════════════════════════════
 
+@router.post("/admin/zendesk/oauth/client-config")
+async def save_oauth_client_config(body: ZendeskOAuthClientConfig, request: Request):
+    """Save Zendesk OAuth client credentials (admin only). Stored in DB, not env vars."""
+    await _get_instance_access(request)
+    cid = body.client_id.strip()
+    cs = body.client_secret.strip()
+    if not cid or not cs:
+        raise HTTPException(400, "Both Client ID and Client Secret are required.")
+    now = datetime.now(timezone.utc).isoformat()
+    await _db.zendesk_oauth_client.update_one(
+        {"_id": "credentials"},
+        {"$set": {"client_id": cid, "client_secret": cs, "updated_at": now}},
+        upsert=True,
+    )
+    return {"success": True, "message": "Zendesk OAuth client credentials saved."}
+
+
+@router.get("/admin/zendesk/oauth/client-config")
+async def get_oauth_client_config(request: Request):
+    """Check if OAuth client credentials are configured (admin only). Never returns the secret."""
+    await _get_instance_access(request)
+    client_id, _ = await _get_oauth_credentials_async()
+    return {"configured": bool(client_id), "client_id_masked": f"{client_id[:4]}***" if len(client_id) > 4 else ("***" if client_id else "")}
+
+
+@router.delete("/admin/zendesk/oauth/client-config")
+async def delete_oauth_client_config(request: Request):
+    """Remove stored OAuth client credentials (admin only)."""
+    await _get_instance_access(request)
+    await _db.zendesk_oauth_client.delete_one({"_id": "credentials"})
+    return {"success": True, "message": "OAuth client credentials removed."}
+
+
 @router.get("/admin/zendesk-config")
 async def get_zendesk_config(request: Request):
     instance_id = await _get_instance_access(request)
 
     # Provide OAuth configuration status
-    client_id, _ = _get_oauth_credentials()
+    client_id, _ = await _get_oauth_credentials_async()
     oauth_configured = bool(client_id)
 
     cfg = await _db.zendesk_config.find_one({"instance_id": instance_id}, {"_id": 0})
