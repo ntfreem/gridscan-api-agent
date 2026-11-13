@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import api from "../utils/api";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
-import { Users as UsersIcon, CheckCircle, XCircle, Shield, Clock, Trash2, ShieldCheck, ShieldOff } from "lucide-react";
-import { colors, fonts, T, rowEnter, rowLeave } from "../theme";
+import { Users as UsersIcon, CheckCircle, XCircle, Shield, Clock, Trash2, ShieldCheck, ShieldOff, UserPlus, Mail, Loader2, X } from "lucide-react";
+import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 
 const badge = (color) => ({
   display: "inline-flex", alignItems: "center", gap: "4px",
@@ -26,6 +26,12 @@ export default function Users() {
   const [tab, setTab] = useState("all");
   const [deleting, setDeleting] = useState(null);
   const [togglingRole, setTogglingRole] = useState(null);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("user");
+  const [inviteInstance, setInviteInstance] = useState("");
+  const [instances, setInstances] = useState([]);
+  const [sending, setSending] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try { const res = await api.get("/admin/users"); setUsers(res.data); }
@@ -34,6 +40,27 @@ export default function Users() {
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  useEffect(() => {
+    api.get("/admin/instances").then(r => setInstances(r.data || [])).catch(() => {});
+  }, []);
+
+  const sendInvite = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) { toast.error("Enter an email address"); return; }
+    setSending(true);
+    try {
+      const payload = { email: inviteEmail.trim(), role: inviteRole };
+      if (inviteInstance) payload.instance_id = inviteInstance;
+      const res = await api.post("/admin/users/invite", payload);
+      toast.success(res.data.message);
+      setShowInvite(false);
+      setInviteEmail("");
+      setInviteRole("user");
+      setInviteInstance("");
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to send invite"); }
+    finally { setSending(false); }
+  };
 
   const deleteUser = async (user) => {
     if (!window.confirm(`Delete user "${user.email}"?\n\nThis will permanently remove their account and unassign them from all instances. They will need to register again.`)) return;
@@ -81,6 +108,16 @@ export default function Users() {
             {unassignedCount} unassigned
           </span>
         )}
+        <button onClick={() => setShowInvite(true)} data-testid="invite-user-btn"
+          style={{
+            marginLeft: "auto", marginBottom: "32px", display: "flex", alignItems: "center", gap: "6px",
+            padding: "8px 16px", borderRadius: "10px", border: "none",
+            background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.cyan})`,
+            color: "#fff", fontSize: "12px", fontWeight: "600",
+            fontFamily: fonts.body, cursor: "pointer",
+          }}>
+          <UserPlus size={14} /> Invite User
+        </button>
       </div>
       <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, marginBottom: "20px", marginTop: "-20px" }}>
         All registered users and their workspace assignments. Assign instances from the Instances page.
@@ -192,6 +229,92 @@ export default function Users() {
           </table>
         </div>
       )}
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <div style={{
+          position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 1000, padding: "16px",
+        }} onClick={() => setShowInvite(false)} data-testid="invite-modal-overlay">
+          <div style={{
+            maxWidth: "420px", width: "100%",
+            backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
+            borderRadius: "16px", padding: "28px",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.4)",
+          }} onClick={e => e.stopPropagation()} data-testid="invite-modal">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Mail size={18} color={colors.brand.cyan} />
+                <h3 style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                  Invite User
+                </h3>
+              </div>
+              <button onClick={() => setShowInvite(false)} style={{
+                background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px",
+              }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={sendInvite}>
+              <label style={{ ...T.label, marginBottom: "4px", display: "block" }}>Email Address</label>
+              <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                placeholder="colleague@company.com" type="email" autoFocus data-testid="invite-email-input"
+                style={{ ...T.input, marginBottom: "14px", width: "100%", boxSizing: "border-box" }}
+                onFocus={onFocus} onBlur={onBlur} />
+
+              <label style={{ ...T.label, marginBottom: "4px", display: "block" }}>Role</label>
+              <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                {[
+                  { value: "user", label: "Team Member" },
+                  { value: "superadmin", label: "Admin" },
+                ].map(opt => (
+                  <button key={opt.value} type="button" data-testid={`invite-role-${opt.value}`}
+                    onClick={() => setInviteRole(opt.value)}
+                    style={{
+                      flex: 1, padding: "8px 12px", borderRadius: "8px",
+                      border: `1px solid ${inviteRole === opt.value ? colors.brand.cyan : colors.border.default}`,
+                      backgroundColor: inviteRole === opt.value ? "rgba(59,130,246,0.08)" : colors.bg.base,
+                      color: inviteRole === opt.value ? colors.brand.cyan : colors.text.secondary,
+                      fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+                      cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <label style={{ ...T.label, marginBottom: "4px", display: "block" }}>Assign to Instance (optional)</label>
+              <select value={inviteInstance} onChange={e => setInviteInstance(e.target.value)}
+                data-testid="invite-instance-select"
+                style={{
+                  ...T.input, marginBottom: "20px", width: "100%", boxSizing: "border-box",
+                  appearance: "none", cursor: "pointer",
+                }}>
+                <option value="">No assignment (can be done later)</option>
+                {instances.map(inst => (
+                  <option key={inst.id} value={inst.id}>{inst.name}</option>
+                ))}
+              </select>
+
+              <button type="submit" disabled={sending} data-testid="invite-send-btn"
+                style={{
+                  width: "100%", padding: "10px", borderRadius: "10px", border: "none",
+                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.cyan})`,
+                  color: "#fff", fontSize: "13px", fontWeight: "600",
+                  fontFamily: fonts.body, cursor: sending ? "not-allowed" : "pointer",
+                  opacity: sending ? 0.5 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                }}>
+                {sending ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Mail size={14} />}
+                {sending ? "Sending..." : "Send Invitation"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 }

@@ -2049,6 +2049,8 @@ async def startup_event():
         await db.llm_usage.create_index([("timestamp", -1)])
         await db.users.create_index([("email", 1)], unique=True)
         await db.users.create_index([("id", 1)])
+        await db.invitations.create_index([("token", 1)], unique=True)
+        await db.invitations.create_index([("email", 1)])
         # TTL index: dedup records expire 5 minutes after creation (well past any sane Discord retry window)
         await db.processed_discord_messages.create_index(
             [("processed_at", 1)], expireAfterSeconds=300
@@ -2348,6 +2350,200 @@ async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dic
     await db.users.update_one({"id": user_id}, {"$set": {"role": body.role}})
     action = "promoted to Admin" if body.role == "superadmin" else "demoted to User"
     return {"success": True, "message": f"{user.get('email', '')} {action}"}
+
+# ── User Invitation System ──
+
+class InviteUserBody(BaseModel):
+    email: str
+    role: str = "user"
+    instance_id: Optional[str] = None
+
+class AcceptInviteBody(BaseModel):
+    username: str
+    password: str
+
+async def send_invitation_email(to_email: str, invite_token: str, role: str, inviter_name: str):
+    """Send invitation email with sign-up link via Resend."""
+    base_url = os.environ.get("REACT_APP_BACKEND_URL", "")
+    if not base_url:
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "..", "frontend", ".env")) as f:
+                for line in f:
+                    if line.startswith("REACT_APP_BACKEND_URL="):
+                        base_url = line.split("=", 1)[1].strip()
+                        break
+        except Exception:
+            pass
+    invite_url = f"{base_url.rstrip('/')}/invite/{invite_token}"
+    role_label = "Admin" if role == "superadmin" else "Team Member"
+
+    if not resend.api_key:
+        logger.warning("RESEND_API_KEY not set — printing invite to logs")
+        print(f"\n{'='*50}\nMOCK INVITE EMAIL\nTo: {to_email}\nLink: {invite_url}\nRole: {role_label}\n{'='*50}\n")
+        return
+    try:
+        html = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#111;color:#fff;padding:32px;border-radius:8px">
+          <h2 style="margin:0 0 8px;font-size:22px">BitBot Pro</h2>
+          <p style="color:#a1a1aa;margin:0 0 28px;font-size:14px">You're Invited</p>
+          <p style="font-size:14px;margin:0 0 16px"><strong>{inviter_name}</strong> invited you to join BitBot Pro as {('an' if role == 'superadmin' else 'a')} <strong>{role_label}</strong>.</p>
+          <a href="{invite_url}" style="display:inline-block;background:#2563EB;color:#fff;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:14px;margin-bottom:24px">Accept Invitation</a>
+          <p style="color:#a1a1aa;font-size:12px;margin:16px 0 0">This invitation expires in 7 days. If you didn't expect this, you can safely ignore it.</p>
+          <p style="color:#555;font-size:11px;margin:16px 0 0;word-break:break-all">{invite_url}</p>
+        </div>
+        """
+        params = {
+            "from": FROM_EMAIL,
+            "to": [to_email],
+            "subject": f"{inviter_name} invited you to BitBot Pro",
+            "html": html,
+        }
+        await asyncio.to_thread(resend.Emails.send, params)
+        logger.info(f"Invitation email sent to {to_email}")
+    except Exception as e:
+        logger.error(f"Resend invite error: {e}")
+        print(f"\n{'='*50}\nFALLBACK INVITE EMAIL\nTo: {to_email}\nLink: {invite_url}\n{'='*50}\n")
+
+@api_router.post("/admin/users/invite")
+async def invite_user(body: InviteUserBody, current_user: dict = Depends(require_admin)):
+    """Send an email invitation to a new user with a pre-assigned role and optional instance."""
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required")
+    if body.role not in ("superadmin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'superadmin' or 'user'")
+
+    # Check if email already registered
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"{email} is already registered")
+
+    # Check if there's already a pending invite
+    pending = await db.invitations.find_one({"email": email, "status": "pending"})
+    if pending:
+        created = datetime.fromisoformat(pending["created_at"])
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - created < timedelta(days=7):
+            raise HTTPException(status_code=400, detail=f"An invitation is already pending for {email}")
+
+    # Validate instance if provided
+    if body.instance_id:
+        inst = await db.bot_instances.find_one({"id": body.instance_id})
+        if not inst:
+            raise HTTPException(status_code=400, detail="Instance not found")
+
+    token = secrets.token_urlsafe(48)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.invitations.insert_one({
+        "token": token,
+        "email": email,
+        "role": body.role,
+        "instance_id": body.instance_id or None,
+        "invited_by": current_user["id"],
+        "invited_by_email": current_user.get("email", ""),
+        "status": "pending",
+        "created_at": now,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+    })
+
+    inviter_name = current_user.get("username", current_user.get("email", "An admin"))
+    await send_invitation_email(email, token, body.role, inviter_name)
+
+    return {"success": True, "message": f"Invitation sent to {email}", "token": token}
+
+@api_router.get("/admin/users/invitations")
+async def list_invitations(current_user: dict = Depends(require_admin)):
+    """List all pending and recent invitations."""
+    invites = await db.invitations.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"invitations": invites}
+
+@api_router.delete("/admin/users/invitations/{token}")
+async def revoke_invitation(token: str, current_user: dict = Depends(require_admin)):
+    """Revoke a pending invitation."""
+    result = await db.invitations.update_one(
+        {"token": token, "status": "pending"},
+        {"$set": {"status": "revoked", "revoked_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Invitation not found or already used")
+    return {"success": True, "message": "Invitation revoked"}
+
+@api_router.get("/invite/{token}")
+async def get_invite_details(token: str):
+    """Public endpoint: validate an invitation token and return details."""
+    invite = await db.invitations.find_one({"token": token}, {"_id": 0})
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if invite["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"This invitation has been {invite['status']}")
+    expires = datetime.fromisoformat(invite["expires_at"])
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(status_code=400, detail="This invitation has expired")
+    return {
+        "email": invite["email"],
+        "role": invite["role"],
+        "invited_by_email": invite.get("invited_by_email", ""),
+    }
+
+@api_router.post("/invite/{token}/accept")
+async def accept_invite(token: str, body: AcceptInviteBody):
+    """Public endpoint: accept an invitation and create the user account."""
+    invite = await db.invitations.find_one({"token": token})
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if invite["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"This invitation has been {invite['status']}")
+    expires = datetime.fromisoformat(invite["expires_at"])
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(status_code=400, detail="This invitation has expired")
+
+    username = body.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    if len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    # Check conflicts
+    if await db.users.find_one({"email": invite["email"]}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+    if await db.users.find_one({"username": username}):
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    hashed_pw = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    user_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.users.insert_one({
+        "id": user_id,
+        "email": invite["email"],
+        "username": username,
+        "hashed_password": hashed_pw,
+        "is_verified": True,  # Pre-verified since admin invited them
+        "verification_code": None,
+        "role": invite["role"],
+        "created_at": now,
+        "invited_by": invite.get("invited_by", ""),
+    })
+
+    # Assign to instance if specified
+    if invite.get("instance_id"):
+        await db.bot_instances.update_one(
+            {"id": invite["instance_id"]},
+            {"$addToSet": {"assigned_user_ids": user_id}}
+        )
+
+    # Mark invitation as accepted
+    await db.invitations.update_one(
+        {"token": token},
+        {"$set": {"status": "accepted", "accepted_at": now, "user_id": user_id}}
+    )
+
+    return {"success": True, "message": "Account created! You can now log in.", "email": invite["email"]}
 
 @api_router.get("/admin/instances")
 async def list_instances(current_user: dict = Depends(require_admin)):

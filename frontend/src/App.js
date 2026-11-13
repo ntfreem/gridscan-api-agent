@@ -26,6 +26,7 @@ import Docs from "@/pages/Docs";
 import ApiIntegrations from "@/pages/ApiIntegrations";
 import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
 import TelegramSettings from "@/pages/TelegramSettings";
+import InviteAccept from "@/pages/InviteAccept";
 import ZendeskSettings from "@/pages/ZendeskSettings";
 import ChangelogPage from "@/pages/ChangelogPage";
 import SetupGuide from "@/pages/SetupGuide";
@@ -69,6 +70,9 @@ function AppRoutes() {
 
       {/* Public landing after a shared Discord invite link is used */}
       <Route path="/discord/invited" element={<DiscordInvited />} />
+
+      {/* Public invitation accept page */}
+      <Route path="/invite/:token" element={<InviteAccept />} />
 
       {/* Admin area */}
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
