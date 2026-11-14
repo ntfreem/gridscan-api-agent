@@ -384,7 +384,6 @@ export default function AdminLayout() {
               <SideNavLink to={`/admin/bots/${botId}/integrations`} icon={Network} label="Integrations" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/conversations`} icon={MessageSquare} label="Conversations" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/suggestions`} icon={Sparkles} label="Suggestions" onClick={closeMobile} />
-              <SideNavLink to={`/admin/bots/${botId}/playground`} icon={Play} label="Playground" onClick={closeMobile} />
 
               <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
             </>

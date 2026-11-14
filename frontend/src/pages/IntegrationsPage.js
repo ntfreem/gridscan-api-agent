@@ -4,17 +4,19 @@ import {
   Network, Plus, Loader2, Zap, Send, Headphones, Link2, Power, PowerOff,
   CheckCircle, AlertCircle, ExternalLink, Copy, Mail, RefreshCw, Globe,
   MessageSquare, AtSign, Hash, Radio, Shield, WifiOff, ChevronRight, Settings,
-  Eye, Code, Users, Server,
+  Eye, Code, Users, Server, MessageCircle,
 } from "lucide-react";
 import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import { toast } from "sonner";
 import v2 from "@/utils/v2api";
 import api from "@/utils/api";
+import EmbedCode from "@/pages/EmbedCode";
 
 const PROVIDER_META = {
   discord: { label: "Discord", icon: Zap, color: "#5865F2", desc: "Connect your bot to Discord servers and channels" },
   telegram: { label: "Telegram", icon: Send, color: "#26A5E4", desc: "Reply to messages in Telegram groups and DMs" },
   zendesk: { label: "Zendesk", icon: Headphones, color: "#17A589", desc: "Auto-reply to tickets or assist agents with AI" },
+  webchat: { label: "Web Chat", icon: MessageCircle, color: "#8B5CF6", desc: "Embed a chat widget on your website", alwaysConnected: true },
 };
 
 const RESPONSE_MODES = [
@@ -1425,6 +1427,7 @@ export default function IntegrationsPage() {
         {activeProvider === "discord" && <DiscordDetail {...commonProps} />}
         {activeProvider === "telegram" && <TelegramDetail {...commonProps} />}
         {activeProvider === "zendesk" && <ZendeskDetail {...commonProps} />}
+        {activeProvider === "webchat" && <EmbedCode />}
       </div>
     );
   }
@@ -1449,6 +1452,7 @@ export default function IntegrationsPage() {
           {Object.entries(PROVIDER_META).map(([key, meta]) => {
             const conn = connByProvider[key];
             const isActive = conn?.enabled;
+            const isWebChat = key === "webchat";
             const Icon = meta.icon;
             return (
               <button key={key} onClick={() => setActiveProvider(key)}
@@ -1456,12 +1460,12 @@ export default function IntegrationsPage() {
                 style={{
                   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "12px",
                   padding: "20px", borderRadius: "14px", cursor: "pointer", textAlign: "left", width: "100%",
-                  border: `1px solid ${conn ? meta.color + "40" : colors.border.default}`,
-                  backgroundColor: conn ? meta.color + "08" : colors.bg.panel,
+                  border: `1px solid ${(conn || isWebChat) ? meta.color + "40" : colors.border.default}`,
+                  backgroundColor: (conn || isWebChat) ? meta.color + "08" : colors.bg.panel,
                   transition: "border-color 0.2s, box-shadow 0.2s",
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}30`; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = conn ? meta.color + "40" : colors.border.default; e.currentTarget.style.boxShadow = "none"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = (conn || isWebChat) ? meta.color + "40" : colors.border.default; e.currentTarget.style.boxShadow = "none"; }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                   <div style={{
@@ -1471,7 +1475,15 @@ export default function IntegrationsPage() {
                   }}>
                     <Icon size={20} color={meta.color} />
                   </div>
-                  {conn ? (
+                  {isWebChat ? (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
+                      backgroundColor: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)",
+                    }}>
+                      <CheckCircle size={12} color="#8B5CF6" />
+                      <span style={{ fontSize: "11px", fontWeight: "600", fontFamily: fonts.mono, color: "#8B5CF6" }}>Ready</span>
+                    </div>
+                  ) : conn ? (
                     <div style={{
                       display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
                       backgroundColor: isActive ? "rgba(52,211,153,0.1)" : "rgba(251,146,60,0.1)",
