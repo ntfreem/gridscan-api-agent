@@ -959,127 +959,299 @@ function TelegramDetail({ connection, account, onToggle, onCreateConnection, acc
   );
 }
 
-/* ── Zendesk Detail View ── */
+/* ── Zendesk Detail View (production-level) ── */
 function ZendeskDetail({ connection, account, onToggle, onCreateConnection, accounts, orgId, botId, botName, saving, onRefresh }) {
   const conn = connection;
   const isConnected = !!conn;
-  const [addMode, setAddMode] = useState("agent_assist");
+  const hasZdAccount = !!accounts.find(a => a.provider === "zendesk");
   const creds = account?.credentials_masked || {};
 
-  const handleCreate = () => {
-    const zdAccount = accounts.find(a => a.provider === "zendesk");
-    if (!zdAccount) { toast.error("No Zendesk account connected. Set one up first."); return; }
-    onCreateConnection({
-      account_id: zdAccount.id,
-      name: `Zendesk — ${botName || "Bot"}`,
-      response_mode: addMode,
-      destination: {},
-    });
+  const [subdomain, setSubdomain] = useState("");
+  const [email, setEmail] = useState("");
+  const [apiToken, setApiToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [addMode, setAddMode] = useState("agent_assist");
+
+  // Connect: create account + connection in one flow
+  const handleConnect = async () => {
+    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) {
+      toast.error("All fields are required");
+      return;
+    }
+    setConnecting(true);
+    try {
+      let accountId;
+      const existing = accounts.find(a => a.provider === "zendesk");
+      if (existing) {
+        accountId = existing.id;
+      } else {
+        const res = await v2.createAccount(orgId, {
+          provider: "zendesk",
+          name: `${subdomain}.zendesk.com`,
+          credentials: {
+            subdomain: subdomain.trim(),
+            user_email: email.trim(),
+            api_token: apiToken.trim(),
+            auth_type: "api_token",
+          },
+        });
+        accountId = res.data.id;
+        toast.success("Zendesk account created");
+      }
+      await onCreateConnection({
+        account_id: accountId,
+        name: `Zendesk — ${botName || "Bot"}`,
+        response_mode: addMode,
+        destination: {},
+      });
+      setSubdomain(""); setEmail(""); setApiToken("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to connect Zendesk");
+    } finally {
+      setConnecting(false);
+    }
   };
+
+  // Test existing connection
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const zdAccount = accounts.find(a => a.provider === "zendesk");
+      if (!zdAccount) { toast.error("No Zendesk account found"); setTesting(false); return; }
+      const res = await v2.testAccount(orgId, zdAccount.id);
+      toast.success(`Zendesk verified: ${res.data.username || "connected"}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Test failed — check credentials");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const ZD_COLOR = "#17A589";
 
   return (
     <div data-testid="zendesk-detail-view">
-      <p style={T.overline}>Integration</p>
-      <h1 style={{ ...T.h1, margin: "0 0 20px", fontSize: "28px" }}>Zendesk</h1>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "8px" }}>
+        <div style={{ width: "44px", height: "44px", borderRadius: "12px", backgroundColor: `${ZD_COLOR}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Headphones size={22} color={ZD_COLOR} />
+        </div>
+        <h1 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Zendesk</h1>
+      </div>
+      <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary, margin: "0 0 28px", lineHeight: "1.6" }}>
+        Connect your Zendesk account to let the bot draft replies, assist agents, or auto-respond to support tickets.
+      </p>
 
-      {/* Connection */}
+      {/* Account Connection Card */}
       <div style={{
-        padding: "20px", borderRadius: "14px", marginBottom: "16px",
-        border: `1px solid ${isConnected ? "rgba(52,211,153,0.2)" : colors.border.default}`,
-        backgroundColor: isConnected ? "rgba(52,211,153,0.03)" : colors.bg.panel,
+        padding: "24px", borderRadius: "14px", maxWidth: "720px",
+        backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Headphones size={18} color="#17A589" />
-          <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
-            Connection
+        <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>
+          Account Connection
+        </p>
+
+        {/* Info box */}
+        <div style={{
+          display: "flex", gap: "10px", padding: "14px 16px", borderRadius: "10px", marginBottom: "20px",
+          backgroundColor: `${ZD_COLOR}08`, border: `1px solid ${ZD_COLOR}25`,
+        }}>
+          <AlertCircle size={16} color={ZD_COLOR} style={{ flexShrink: 0, marginTop: "2px" }} />
+          <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
+            Go to <strong style={{ color: colors.text.primary }}>Zendesk Admin → Apps and Integrations → APIs → Zendesk API</strong> and generate an API token. Use the subdomain from your Zendesk URL (e.g. <strong style={{ color: colors.text.primary }}>mycompany</strong>.zendesk.com).
           </p>
         </div>
+
         {isConnected ? (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "14px 16px", borderRadius: "10px",
-            backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <CheckCircle size={16} color="#34D399" />
-              <div>
-                <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
-                  Connected{creds.subdomain ? ` to ${creds.subdomain}.zendesk.com` : ""}
-                </p>
-                <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
-                  via {conn.account_name} · {conn.enabled ? "active" : "paused"}
-                </p>
+          /* Connected state */
+          <>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 16px", borderRadius: "10px", marginBottom: "16px",
+              backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <CheckCircle size={16} color="#34D399" />
+                <div>
+                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
+                    Connected{creds.subdomain ? ` to ${creds.subdomain}.zendesk.com` : ""}
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.secondary, fontFamily: fonts.mono }}>
+                    via {conn.account_name || account?.name || "Zendesk"} · {conn.enabled ? "Active" : "Paused"}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={handleTest} disabled={testing} data-testid="zendesk-test-btn" style={{
+                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                  border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                  color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                  opacity: testing ? 0.6 : 1,
+                }}>
+                  <RefreshCw size={11} /> {testing ? "Testing..." : "Test"}
+                </button>
+                <button onClick={() => onToggle(conn)} data-testid="zendesk-disconnect-btn" style={{
+                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                  border: `1px solid ${conn.enabled ? "rgba(244,63,94,0.2)" : "rgba(52,211,153,0.2)"}`,
+                  backgroundColor: conn.enabled ? "rgba(244,63,94,0.06)" : "rgba(52,211,153,0.06)",
+                  color: conn.enabled ? "#F43F5E" : "#34D399",
+                  fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                }}>
+                  {conn.enabled ? <><PowerOff size={12} /> Disable</> : <><Power size={12} /> Enable</>}
+                </button>
               </div>
             </div>
-            <button onClick={() => onToggle(conn)}
-              style={{
-                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
-                border: `1px solid ${conn.enabled ? "rgba(244,63,94,0.2)" : "rgba(52,211,153,0.2)"}`,
-                backgroundColor: conn.enabled ? "rgba(244,63,94,0.06)" : "rgba(52,211,153,0.06)",
-                color: conn.enabled ? "#F43F5E" : "#34D399",
-                fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
-              }}>
-              {conn.enabled ? <><PowerOff size={12} /> Disable</> : <><Power size={12} /> Enable</>}
-            </button>
-          </div>
+
+            {/* Response Mode */}
+            <div style={{ paddingTop: "16px", borderTop: `1px solid ${colors.border.default}` }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "500", color: colors.text.secondary, margin: "0 0 8px" }}>
+                Response Mode
+              </p>
+              <ModeBadge mode={conn.response_mode} />
+            </div>
+          </>
         ) : (
-          <div>
-            {!accounts.find(a => a.provider === "zendesk") && (
-              <div style={{
-                padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
-                backgroundColor: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)",
-              }}>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#FBBF24", margin: 0 }}>
-                  <AlertCircle size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: "6px" }} />
-                  No Zendesk account connected yet. Ask your admin to add one.
-                </p>
-              </div>
-            )}
-            {accounts.find(a => a.provider === "zendesk") && (
-              <>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 12px" }}>
-                  Select a response mode and connect this bot to Zendesk.
-                </p>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                  {RESPONSE_MODES.map(mode => (
-                    <button key={mode.value} onClick={() => setAddMode(mode.value)}
-                      style={{
-                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
-                        border: `1px solid ${addMode === mode.value ? "#17A589" + "50" : colors.border.default}`,
-                        backgroundColor: addMode === mode.value ? "#17A589" + "0a" : colors.bg.base,
-                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                        color: addMode === mode.value ? "#17A589" : colors.text.secondary,
-                      }}>
-                      {mode.label}
-                    </button>
-                  ))}
+          /* Not connected */
+          <>
+            {hasZdAccount ? (
+              /* Account exists, just need to create a connection */
+              <div>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px",
+                  backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
+                }}>
+                  <CheckCircle size={14} color="#34D399" />
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>
+                    Zendesk account configured. Connect it to this bot below.
+                  </p>
                 </div>
-                <button onClick={handleCreate} disabled={saving}
-                  style={{ ...T.btnPrimary, width: "100%", justifyContent: "center" }}>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={T.label}>Response Mode</label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {RESPONSE_MODES.map(mode => (
+                      <button key={mode.value} onClick={() => setAddMode(mode.value)} style={{
+                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
+                        border: `1px solid ${addMode === mode.value ? `${ZD_COLOR}50` : colors.border.default}`,
+                        backgroundColor: addMode === mode.value ? `${ZD_COLOR}0a` : colors.bg.base,
+                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                        color: addMode === mode.value ? ZD_COLOR : colors.text.secondary,
+                      }}>{mode.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => {
+                  const zdAccount = accounts.find(a => a.provider === "zendesk");
+                  onCreateConnection({
+                    account_id: zdAccount.id,
+                    name: `Zendesk — ${botName || "Bot"}`,
+                    response_mode: addMode,
+                    destination: {},
+                  });
+                }} disabled={saving} data-testid="zendesk-connect-existing-btn" style={{
+                  ...T.btnPrimary, width: "100%", justifyContent: "center",
+                  backgroundColor: ZD_COLOR, opacity: saving ? 0.6 : 1,
+                }}>
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />}
                   Connect Zendesk Bot
                 </button>
-              </>
+              </div>
+            ) : (
+              /* No account — show credential form */
+              <div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={T.label}>Subdomain</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
+                    <input
+                      value={subdomain}
+                      onChange={e => setSubdomain(e.target.value)}
+                      placeholder="mycompany"
+                      style={{ ...T.input, flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }}
+                      onFocus={onFocus} onBlur={onBlur}
+                      data-testid="zendesk-subdomain-input"
+                    />
+                    <span style={{
+                      padding: "10px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+                      borderTopRightRadius: "10px", borderBottomRightRadius: "10px",
+                      fontFamily: fonts.mono, fontSize: "12px", color: colors.text.muted, whiteSpace: "nowrap",
+                    }}>.zendesk.com</span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={T.label}>Admin Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="admin@company.com"
+                    style={{ ...T.input, width: "100%" }}
+                    onFocus={onFocus} onBlur={onBlur}
+                    data-testid="zendesk-email-input"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <label style={T.label}>API Token</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showToken ? "text" : "password"}
+                      value={apiToken}
+                      onChange={e => setApiToken(e.target.value)}
+                      placeholder="Your Zendesk API token"
+                      style={{ ...T.input, width: "100%", paddingRight: "40px" }}
+                      onFocus={onFocus} onBlur={onBlur}
+                      data-testid="zendesk-token-input"
+                    />
+                    <button
+                      onClick={() => setShowToken(!showToken)}
+                      data-testid="zendesk-toggle-token"
+                      style={{
+                        position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                        background: "none", border: "none", cursor: "pointer",
+                        color: colors.text.muted, padding: "4px",
+                      }}>
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                  <p style={T.hint}>Found in Zendesk Admin → Apps and Integrations → APIs → Zendesk API</p>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={T.label}>Response Mode</label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {RESPONSE_MODES.map(mode => (
+                      <button key={mode.value} onClick={() => setAddMode(mode.value)} style={{
+                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
+                        border: `1px solid ${addMode === mode.value ? `${ZD_COLOR}50` : colors.border.default}`,
+                        backgroundColor: addMode === mode.value ? `${ZD_COLOR}0a` : colors.bg.base,
+                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                        color: addMode === mode.value ? ZD_COLOR : colors.text.secondary,
+                      }}>{mode.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleConnect}
+                  disabled={connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()}
+                  data-testid="zendesk-connect-btn"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                    width: "100%", padding: "12px 24px", borderRadius: "10px", border: "none",
+                    backgroundColor: ZD_COLOR, color: "#fff",
+                    fontFamily: fonts.body, fontSize: "14px", fontWeight: "600",
+                    cursor: connecting ? "not-allowed" : "pointer",
+                    opacity: (connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()) ? 0.6 : 1,
+                  }}>
+                  <Headphones size={14} /> {connecting ? "Connecting..." : "Connect"}
+                </button>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
-
-      {/* Response Mode (when connected) */}
-      {isConnected && (
-        <div style={{
-          padding: "20px", borderRadius: "14px",
-          backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
-        }}>
-          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
-            Response Mode
-          </p>
-          <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 12px" }}>
-            How the bot handles incoming Zendesk tickets
-          </p>
-          <ModeBadge mode={conn.response_mode} />
-        </div>
-      )}
     </div>
   );
 }
