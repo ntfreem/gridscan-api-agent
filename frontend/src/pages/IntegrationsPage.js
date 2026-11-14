@@ -959,299 +959,379 @@ function TelegramDetail({ connection, account, onToggle, onCreateConnection, acc
   );
 }
 
-/* ── Zendesk Detail View (production-level) ── */
+/* ── Zendesk Detail View (full production feature set) ── */
 function ZendeskDetail({ connection, account, onToggle, onCreateConnection, accounts, orgId, botId, botName, saving, onRefresh }) {
   const conn = connection;
   const isConnected = !!conn;
   const hasZdAccount = !!accounts.find(a => a.provider === "zendesk");
   const creds = account?.credentials_masked || {};
 
+  // Form state for new connections
   const [subdomain, setSubdomain] = useState("");
   const [email, setEmail] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [addMode, setAddMode] = useState("agent_assist");
 
-  // Connect: create account + connection in one flow
+  // V1 live config
+  const [zdConfig, setZdConfig] = useState(null);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [sidebarKey, setSidebarKey] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [autoReply, setAutoReply] = useState(false);
+  const [agentAssist, setAgentAssist] = useState(true);
+
+  const ZD = "#17A589";
+
+  // Load Zendesk config from V1
+  useEffect(() => {
+    if (!isConnected) return;
+    api.get("/admin/zendesk-config").then(r => {
+      setZdConfig(r.data);
+      setAutoReply(r.data?.response_mode === "auto_reply");
+      setAgentAssist(r.data?.response_mode === "agent_assist" || r.data?.response_mode === "both" || r.data?.agent_assist_enabled);
+    }).catch(() => {});
+    api.get("/admin/zendesk-config/webhook-url").then(r => setWebhookUrl(r.data?.webhook_url || "")).catch(() => {});
+    api.get("/admin/zendesk/sidebar-key").then(r => setSidebarKey(r.data?.sidebar_api_key || "")).catch(() => {});
+  }, [isConnected]);
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      await api.post("/admin/zendesk-config/test");
+      toast.success("Zendesk connection verified");
+    } catch (e) { toast.error(e.response?.data?.detail || "Test failed"); }
+    finally { setTesting(false); }
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const mode = autoReply && agentAssist ? "both" : autoReply ? "auto_reply" : agentAssist ? "agent_assist" : "agent_assist";
+      await api.put("/admin/zendesk-config", { response_mode: mode, agent_assist_enabled: agentAssist });
+      toast.success("Settings saved");
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to save"); }
+    finally { setSavingSettings(false); }
+  };
+
+  const handleRegenerateKey = async () => {
+    setRegenerating(true);
+    try {
+      const r = await api.post("/admin/zendesk/sidebar-key/regenerate");
+      setSidebarKey(r.data?.sidebar_api_key || "");
+      toast.success("API key regenerated");
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to regenerate"); }
+    finally { setRegenerating(false); }
+  };
+
   const handleConnect = async () => {
-    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) {
-      toast.error("All fields are required");
-      return;
-    }
+    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error("All fields are required"); return; }
     setConnecting(true);
     try {
       let accountId;
       const existing = accounts.find(a => a.provider === "zendesk");
-      if (existing) {
-        accountId = existing.id;
-      } else {
+      if (existing) { accountId = existing.id; }
+      else {
         const res = await v2.createAccount(orgId, {
-          provider: "zendesk",
-          name: `${subdomain}.zendesk.com`,
-          credentials: {
-            subdomain: subdomain.trim(),
-            user_email: email.trim(),
-            api_token: apiToken.trim(),
-            auth_type: "api_token",
-          },
+          provider: "zendesk", name: `${subdomain}.zendesk.com`,
+          credentials: { subdomain: subdomain.trim(), user_email: email.trim(), api_token: apiToken.trim(), auth_type: "api_token" },
         });
         accountId = res.data.id;
         toast.success("Zendesk account created");
       }
-      await onCreateConnection({
-        account_id: accountId,
-        name: `Zendesk — ${botName || "Bot"}`,
-        response_mode: addMode,
-        destination: {},
-      });
+      await onCreateConnection({ account_id: accountId, name: `Zendesk — ${botName || "Bot"}`, response_mode: addMode, destination: {} });
       setSubdomain(""); setEmail(""); setApiToken("");
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to connect Zendesk");
-    } finally {
-      setConnecting(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to connect"); }
+    finally { setConnecting(false); }
   };
 
-  // Test existing connection
-  const handleTest = async () => {
-    setTesting(true);
-    try {
-      const zdAccount = accounts.find(a => a.provider === "zendesk");
-      if (!zdAccount) { toast.error("No Zendesk account found"); setTesting(false); return; }
-      const res = await v2.testAccount(orgId, zdAccount.id);
-      toast.success(`Zendesk verified: ${res.data.username || "connected"}`);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Test failed — check credentials");
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const ZD_COLOR = "#17A589";
+  const connSubdomain = creds.subdomain || zdConfig?.subdomain || "";
+  const connEmail = creds.user_email || creds.email || zdConfig?.email || "";
+  const connScopes = zdConfig?.scopes || "tickets:read tickets:write users:read";
 
   return (
-    <div data-testid="zendesk-detail-view">
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "8px" }}>
-        <div style={{ width: "44px", height: "44px", borderRadius: "12px", backgroundColor: `${ZD_COLOR}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Headphones size={22} color={ZD_COLOR} />
-        </div>
-        <h1 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Zendesk</h1>
-      </div>
-      <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary, margin: "0 0 28px", lineHeight: "1.6" }}>
-        Connect your Zendesk account to let the bot draft replies, assist agents, or auto-respond to support tickets.
-      </p>
+    <div data-testid="zendesk-detail-view" style={{ maxWidth: "780px" }}>
 
-      {/* Account Connection Card */}
-      <div style={{
-        padding: "24px", borderRadius: "14px", maxWidth: "720px",
-        backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
-      }}>
-        <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>
-          Account Connection
-        </p>
-
-        {/* Info box */}
-        <div style={{
-          display: "flex", gap: "10px", padding: "14px 16px", borderRadius: "10px", marginBottom: "20px",
-          backgroundColor: `${ZD_COLOR}08`, border: `1px solid ${ZD_COLOR}25`,
-        }}>
-          <AlertCircle size={16} color={ZD_COLOR} style={{ flexShrink: 0, marginTop: "2px" }} />
-          <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
-            Go to <strong style={{ color: colors.text.primary }}>Zendesk Admin → Apps and Integrations → APIs → Zendesk API</strong> and generate an API token. Use the subdomain from your Zendesk URL (e.g. <strong style={{ color: colors.text.primary }}>mycompany</strong>.zendesk.com).
-          </p>
-        </div>
+      {/* ── Connection ── */}
+      <div style={cardStyle} data-testid="zendesk-connection-card">
+        <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>Connection</p>
 
         {isConnected ? (
-          /* Connected state */
           <>
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "14px 16px", borderRadius: "10px", marginBottom: "16px",
+              padding: "14px 16px", borderRadius: "10px", marginBottom: "12px",
               backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <CheckCircle size={16} color="#34D399" />
                 <div>
                   <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
-                    Connected{creds.subdomain ? ` to ${creds.subdomain}.zendesk.com` : ""}
+                    Connected to {connSubdomain ? `${connSubdomain}.zendesk.com` : "Zendesk"}
                   </p>
-                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.secondary, fontFamily: fonts.mono }}>
-                    via {conn.account_name || account?.name || "Zendesk"} · {conn.enabled ? "Active" : "Paused"}
+                  <p style={{ margin: "3px 0 0", fontSize: "11px", color: colors.text.secondary, fontFamily: fonts.mono }}>
+                    {connEmail && <>Email: {connEmail}. </>}Scopes: {connScopes}
                   </p>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={handleTest} disabled={testing} data-testid="zendesk-test-btn" style={{
-                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
-                  border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
-                  color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
-                  opacity: testing ? 0.6 : 1,
-                }}>
-                  <RefreshCw size={11} /> {testing ? "Testing..." : "Test"}
-                </button>
-                <button onClick={() => onToggle(conn)} data-testid="zendesk-disconnect-btn" style={{
-                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
-                  border: `1px solid ${conn.enabled ? "rgba(244,63,94,0.2)" : "rgba(52,211,153,0.2)"}`,
-                  backgroundColor: conn.enabled ? "rgba(244,63,94,0.06)" : "rgba(52,211,153,0.06)",
-                  color: conn.enabled ? "#F43F5E" : "#34D399",
-                  fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
-                }}>
-                  {conn.enabled ? <><PowerOff size={12} /> Disable</> : <><Power size={12} /> Enable</>}
-                </button>
-              </div>
+              <button onClick={handleTest} disabled={testing} data-testid="zendesk-test-btn" style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                opacity: testing ? 0.6 : 1,
+              }}>
+                <RefreshCw size={11} /> {testing ? "Testing..." : "Test"}
+              </button>
             </div>
 
-            {/* Response Mode */}
-            <div style={{ paddingTop: "16px", borderTop: `1px solid ${colors.border.default}` }}>
-              <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "500", color: colors.text.secondary, margin: "0 0 8px" }}>
-                Response Mode
-              </p>
-              <ModeBadge mode={conn.response_mode} />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => onToggle(conn)} data-testid="zendesk-reconnect-btn" style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+                <RefreshCw size={11} /> Reconnect
+              </button>
+              <button onClick={() => onToggle(conn)} data-testid="zendesk-disconnect-btn" style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                border: "1px solid rgba(244,63,94,0.2)", backgroundColor: "rgba(244,63,94,0.06)",
+                color: "#F43F5E", fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+                <WifiOff size={11} /> Disconnect
+              </button>
             </div>
           </>
         ) : (
-          /* Not connected */
-          <>
-            {hasZdAccount ? (
-              /* Account exists, just need to create a connection */
-              <div>
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px",
-                  backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
-                }}>
-                  <CheckCircle size={14} color="#34D399" />
-                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>
-                    Zendesk account configured. Connect it to this bot below.
-                  </p>
-                </div>
-                <div style={{ marginBottom: "14px" }}>
-                  <label style={T.label}>Response Mode</label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {RESPONSE_MODES.map(mode => (
-                      <button key={mode.value} onClick={() => setAddMode(mode.value)} style={{
-                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
-                        border: `1px solid ${addMode === mode.value ? `${ZD_COLOR}50` : colors.border.default}`,
-                        backgroundColor: addMode === mode.value ? `${ZD_COLOR}0a` : colors.bg.base,
-                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                        color: addMode === mode.value ? ZD_COLOR : colors.text.secondary,
-                      }}>{mode.label}</button>
-                    ))}
-                  </div>
-                </div>
-                <button onClick={() => {
-                  const zdAccount = accounts.find(a => a.provider === "zendesk");
-                  onCreateConnection({
-                    account_id: zdAccount.id,
-                    name: `Zendesk — ${botName || "Bot"}`,
-                    response_mode: addMode,
-                    destination: {},
-                  });
-                }} disabled={saving} data-testid="zendesk-connect-existing-btn" style={{
-                  ...T.btnPrimary, width: "100%", justifyContent: "center",
-                  backgroundColor: ZD_COLOR, opacity: saving ? 0.6 : 1,
-                }}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />}
-                  Connect Zendesk Bot
-                </button>
+          /* Not connected — token form or account-exists CTA */
+          hasZdAccount ? (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}>
+                <CheckCircle size={14} color="#34D399" />
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>Zendesk account configured. Connect it to this bot below.</p>
               </div>
-            ) : (
-              /* No account — show credential form */
-              <div>
-                <div style={{ marginBottom: "14px" }}>
-                  <label style={T.label}>Subdomain</label>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
-                    <input
-                      value={subdomain}
-                      onChange={e => setSubdomain(e.target.value)}
-                      placeholder="mycompany"
-                      style={{ ...T.input, flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }}
-                      onFocus={onFocus} onBlur={onBlur}
-                      data-testid="zendesk-subdomain-input"
-                    />
-                    <span style={{
-                      padding: "10px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
-                      borderTopRightRadius: "10px", borderBottomRightRadius: "10px",
-                      fontFamily: fonts.mono, fontSize: "12px", color: colors.text.muted, whiteSpace: "nowrap",
-                    }}>.zendesk.com</span>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: "14px" }}>
-                  <label style={T.label}>Admin Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="admin@company.com"
-                    style={{ ...T.input, width: "100%" }}
-                    onFocus={onFocus} onBlur={onBlur}
-                    data-testid="zendesk-email-input"
-                  />
-                </div>
-
-                <div style={{ marginBottom: "20px" }}>
-                  <label style={T.label}>API Token</label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type={showToken ? "text" : "password"}
-                      value={apiToken}
-                      onChange={e => setApiToken(e.target.value)}
-                      placeholder="Your Zendesk API token"
-                      style={{ ...T.input, width: "100%", paddingRight: "40px" }}
-                      onFocus={onFocus} onBlur={onBlur}
-                      data-testid="zendesk-token-input"
-                    />
-                    <button
-                      onClick={() => setShowToken(!showToken)}
-                      data-testid="zendesk-toggle-token"
-                      style={{
-                        position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
-                        background: "none", border: "none", cursor: "pointer",
-                        color: colors.text.muted, padding: "4px",
-                      }}>
-                      <Eye size={16} />
-                    </button>
-                  </div>
-                  <p style={T.hint}>Found in Zendesk Admin → Apps and Integrations → APIs → Zendesk API</p>
-                </div>
-
-                <div style={{ marginBottom: "16px" }}>
-                  <label style={T.label}>Response Mode</label>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {RESPONSE_MODES.map(mode => (
-                      <button key={mode.value} onClick={() => setAddMode(mode.value)} style={{
-                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
-                        border: `1px solid ${addMode === mode.value ? `${ZD_COLOR}50` : colors.border.default}`,
-                        backgroundColor: addMode === mode.value ? `${ZD_COLOR}0a` : colors.bg.base,
-                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                        color: addMode === mode.value ? ZD_COLOR : colors.text.secondary,
-                      }}>{mode.label}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleConnect}
-                  disabled={connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()}
-                  data-testid="zendesk-connect-btn"
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                    width: "100%", padding: "12px 24px", borderRadius: "10px", border: "none",
-                    backgroundColor: ZD_COLOR, color: "#fff",
-                    fontFamily: fonts.body, fontSize: "14px", fontWeight: "600",
-                    cursor: connecting ? "not-allowed" : "pointer",
-                    opacity: (connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()) ? 0.6 : 1,
-                  }}>
-                  <Headphones size={14} /> {connecting ? "Connecting..." : "Connect"}
-                </button>
+              <button onClick={() => {
+                const a = accounts.find(x => x.provider === "zendesk");
+                onCreateConnection({ account_id: a.id, name: `Zendesk — ${botName || "Bot"}`, response_mode: addMode, destination: {} });
+              }} disabled={saving} data-testid="zendesk-connect-existing-btn" style={{ ...T.btnPrimary, width: "100%", justifyContent: "center", backgroundColor: ZD }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Headphones size={14} />} Connect Zendesk Bot
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: "flex", gap: "10px", padding: "14px 16px", borderRadius: "10px", marginBottom: "18px", backgroundColor: `${ZD}08`, border: `1px solid ${ZD}25` }}>
+                <AlertCircle size={16} color={ZD} style={{ flexShrink: 0, marginTop: "2px" }} />
+                <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
+                  Go to <strong style={{ color: colors.text.primary }}>Zendesk Admin → Apps and Integrations → APIs → Zendesk API</strong> and generate an API token. Use the subdomain from your Zendesk URL (e.g. <strong style={{ color: colors.text.primary }}>mycompany</strong>.zendesk.com).
+                </p>
               </div>
-            )}
-          </>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={T.label}>Subdomain</label>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <input value={subdomain} onChange={e => setSubdomain(e.target.value)} placeholder="mycompany" style={{ ...T.input, flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }} onFocus={onFocus} onBlur={onBlur} data-testid="zendesk-subdomain-input" />
+                  <span style={{ padding: "10px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`, borderTopRightRadius: "10px", borderBottomRightRadius: "10px", fontFamily: fonts.mono, fontSize: "12px", color: colors.text.muted, whiteSpace: "nowrap" }}>.zendesk.com</span>
+                </div>
+              </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={T.label}>Admin Email</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@company.com" style={{ ...T.input, width: "100%" }} onFocus={onFocus} onBlur={onBlur} data-testid="zendesk-email-input" />
+              </div>
+              <div style={{ marginBottom: "18px" }}>
+                <label style={T.label}>API Token</label>
+                <div style={{ position: "relative" }}>
+                  <input type={showToken ? "text" : "password"} value={apiToken} onChange={e => setApiToken(e.target.value)} placeholder="Your Zendesk API token" style={{ ...T.input, width: "100%", paddingRight: "40px" }} onFocus={onFocus} onBlur={onBlur} data-testid="zendesk-token-input" />
+                  <button onClick={() => setShowToken(!showToken)} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px" }}><Eye size={16} /></button>
+                </div>
+              </div>
+              <button onClick={handleConnect} disabled={connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()} data-testid="zendesk-connect-btn" style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", padding: "12px 24px", borderRadius: "10px", border: "none", backgroundColor: ZD, color: "#fff", fontFamily: fonts.body, fontSize: "14px", fontWeight: "600", cursor: connecting ? "not-allowed" : "pointer", opacity: (connecting || !subdomain.trim() || !email.trim() || !apiToken.trim()) ? 0.6 : 1,
+              }}>
+                <Headphones size={14} /> {connecting ? "Connecting..." : "Connect"}
+              </button>
+            </div>
+          )
         )}
       </div>
+
+      {/* ── Only show remaining sections when connected ── */}
+      {isConnected && (
+        <>
+          {/* ── Integration Status ── */}
+          <div style={cardStyle} data-testid="zendesk-status-card">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Integration Status</p>
+              <span style={{
+                display: "flex", alignItems: "center", gap: "6px", padding: "5px 14px", borderRadius: "8px",
+                backgroundColor: conn.enabled ? "rgba(52,211,153,0.1)" : "rgba(244,63,94,0.1)",
+                color: conn.enabled ? "#34D399" : "#F43F5E",
+                fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+              }}>
+                {conn.enabled ? <CheckCircle size={13} /> : <PowerOff size={13} />}
+                {conn.enabled ? "Active" : "Inactive"}
+              </span>
+            </div>
+            <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "8px 0 0" }}>
+              Webhooks and AI responses are {conn.enabled ? "currently running" : "paused"} for incoming tickets.
+            </p>
+          </div>
+
+          {/* ── Response Mode ── */}
+          <div style={cardStyle} data-testid="zendesk-response-mode-card">
+            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>Response Mode</p>
+
+            {/* Auto-Reply */}
+            <div style={{
+              display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "14px",
+              padding: "14px 16px", borderRadius: "10px", marginBottom: "10px",
+              backgroundColor: autoReply ? `${ZD}08` : colors.bg.base,
+              border: `1px solid ${autoReply ? `${ZD}30` : colors.border.default}`,
+            }}>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <MessageSquare size={16} color={autoReply ? ZD : colors.text.muted} style={{ marginTop: "2px", flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>Auto-Reply</p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
+                    Automatically post a public AI-generated reply when a new ticket is created.
+                  </p>
+                </div>
+              </div>
+              <ToggleSwitch on={autoReply} onChange={() => setAutoReply(!autoReply)} testId="toggle-auto-reply" />
+            </div>
+
+            {/* Agent Assist */}
+            <div style={{
+              display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "14px",
+              padding: "14px 16px", borderRadius: "10px", marginBottom: "16px",
+              backgroundColor: agentAssist ? `${ZD}08` : colors.bg.base,
+              border: `1px solid ${agentAssist ? `${ZD}30` : colors.border.default}`,
+            }}>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <Users size={16} color={agentAssist ? ZD : colors.text.muted} style={{ marginTop: "2px", flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>Agent Assist</p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
+                    Sends AI suggestions for agents to review via the Zendesk sidebar app.
+                  </p>
+                </div>
+              </div>
+              <ToggleSwitch on={agentAssist} onChange={() => setAgentAssist(!agentAssist)} testId="toggle-agent-assist" />
+            </div>
+
+            <button onClick={handleSaveSettings} disabled={savingSettings} data-testid="zendesk-save-settings-btn" style={{
+              ...T.btnPrimary, backgroundColor: ZD, opacity: savingSettings ? 0.6 : 1,
+            }}>
+              <Shield size={14} /> {savingSettings ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+
+          {/* ── Webhook Setup ── */}
+          <div style={cardStyle} data-testid="zendesk-webhook-card">
+            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 6px" }}>Webhook Setup</p>
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: "0 0 16px", lineHeight: "1.5" }}>
+              Add this URL as a webhook in Zendesk Admin Center, then create a trigger for "Ticket is Created".
+            </p>
+
+            <label style={T.label}>Webhook URL</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <input value={webhookUrl} readOnly style={{ ...T.input, flex: 1, fontSize: "11px", fontFamily: fonts.mono, color: colors.text.muted }} data-testid="zendesk-webhook-url" />
+              <button onClick={() => { navigator.clipboard.writeText(webhookUrl); toast.success("Copied webhook URL"); }} data-testid="zendesk-copy-webhook" style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+                <Copy size={12} /> Copy
+              </button>
+            </div>
+
+            <a href={connSubdomain ? `https://${connSubdomain}.zendesk.com/admin/objects-rules/rules/triggers` : "https://support.zendesk.com"} target="_blank" rel="noopener noreferrer" style={{
+              display: "inline-flex", alignItems: "center", gap: "5px",
+              fontFamily: fonts.body, fontSize: "12px", color: colors.brand.light, textDecoration: "none",
+            }}>
+              <ExternalLink size={11} /> Open Zendesk Triggers
+            </a>
+          </div>
+
+          {/* ── Sidebar App – Agent Assist ── */}
+          <div style={cardStyle} data-testid="zendesk-sidebar-card">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+              <Settings size={16} color={ZD} />
+              <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Sidebar App — Agent Assist</p>
+            </div>
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: "0 0 20px", lineHeight: "1.5" }}>
+              Install the BitBot Pro sidebar in Zendesk so agents can generate AI suggestions on any ticket — without auto-replying.
+            </p>
+
+            {/* Step 1 */}
+            <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`, marginBottom: "14px" }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: "0 0 10px" }}>Step 1: Download the app</p>
+              <button data-testid="zendesk-download-sidebar" style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "10px 18px", borderRadius: "8px", border: "none", cursor: "pointer",
+                backgroundColor: ZD, color: "#fff",
+                fontFamily: fonts.body, fontSize: "13px", fontWeight: "600",
+              }}>
+                <ExternalLink size={13} /> Download Sidebar App (.zip)
+              </button>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`, marginBottom: "14px" }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: "0 0 10px" }}>Step 2: Install in Zendesk</p>
+              <ol style={{ margin: 0, paddingLeft: "18px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, lineHeight: "1.8" }}>
+                <li>Go to <strong style={{ color: colors.text.primary }}>Zendesk Admin Center → Apps and Integrations → Apps → Zendesk Support apps</strong>.</li>
+                <li>Click <strong style={{ color: colors.text.primary }}>Upload private app</strong>, select the downloaded .ZIP.</li>
+                <li>When prompted, paste the <strong style={{ color: colors.text.primary }}>Sidebar API Key</strong> below into the settings.</li>
+                <li>The Sidebar Pro URL will be pre-filled — verify it matches your deployment.</li>
+                <li>Click <strong style={{ color: colors.text.primary }}>Install</strong>.</li>
+              </ol>
+            </div>
+
+            {/* Step 3 */}
+            <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <Shield size={14} color={ZD} />
+                <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Step 3: Sidebar API Key</p>
+              </div>
+              <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "0 0 10px", lineHeight: "1.5" }}>
+                Paste this key into the app settings when installing. It authenticates your Zendesk requests to BitBot Pro.
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                <input value={sidebarKey} readOnly style={{ ...T.input, flex: 1, fontSize: "11px", fontFamily: fonts.mono, color: colors.text.muted }} data-testid="zendesk-sidebar-key" />
+                <button onClick={() => { navigator.clipboard.writeText(sidebarKey); toast.success("Copied API key"); }} data-testid="zendesk-copy-sidebar-key" style={{
+                  display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px",
+                  border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.panel,
+                  color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                }}>
+                  <Copy size={12} /> Copy
+                </button>
+              </div>
+              <button onClick={handleRegenerateKey} disabled={regenerating} data-testid="zendesk-regenerate-key" style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.panel,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                opacity: regenerating ? 0.6 : 1,
+              }}>
+                <RefreshCw size={11} /> {regenerating ? "Regenerating..." : "Regenerate key"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── How it Works ── */}
+          <div style={cardStyle} data-testid="zendesk-how-it-works">
+            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 14px" }}>How it Works</p>
+            <ul style={{ margin: 0, paddingLeft: "18px", fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, lineHeight: "2" }}>
+              <li>A Zendesk trigger fires when a new ticket is created and sends a webhook to BitBot Pro.</li>
+              <li>BitBot Pro fetches the ticket content, searches your Knowledge Base, and runs API Integrations.</li>
+              <li>An AI response is generated based on your bot's personality and knowledge.</li>
+              <li><strong style={{ color: ZD }}>Auto-Reply:</strong> Response is posted as a public ticket comment.</li>
+              <li><strong style={{ color: ZD }}>Agent Assist:</strong> Response is sent for agents to view in the Zendesk sidebar app.</li>
+              <li>All ticket conversations appear in the Conversations tab with platform: <strong style={{ color: colors.text.primary }}>zendesk</strong>.</li>
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   );
 }

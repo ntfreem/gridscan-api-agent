@@ -111,7 +111,7 @@ Organisation
 - [x] Discord Bot detail production-matching layout: 50/50 grid, invite link always visible with fallback warning, production-accurate descriptions, section icons (Eye, Code, Users), Open Discord Developer Portal link, helper text under all fields, Save + Start side-by-side layout
 - [x] Discord Bot detail full production parity: Bot Status card (live polling), Specific Channels fetch+select, live handoff status, Start Bot (restart), Resume Bot Now (handoff-resume), OAuth invite flow, Passive/Scripted Mode Active badges + tip, Save syncs V2+V1
 - [x] Telegram detail view: production-matching with @BotFather info, token input + show/hide, connect flow, test/enable buttons, response mode badge
-- [x] Zendesk detail view: production-matching with API setup info, subdomain/email/token form, connect flow, test/disable buttons, response mode badge
+- [x] Zendesk detail view: full production parity — Connection (status, email, scopes, test/reconnect/disconnect), Integration Status badge, Response Mode (Auto-Reply + Agent Assist toggles), Webhook Setup (URL + copy + Zendesk Triggers link), Sidebar App (download, install steps, API key + regenerate), How it Works section
 
 ### Self-Hosting Readiness Docs (Done — Nov 2026)
 - [x] Complete API Inventory (190+ endpoints, v1 + v2)
