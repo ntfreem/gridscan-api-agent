@@ -250,12 +250,28 @@ export function AuthProvider({ children }) {
     } catch {}
   }, []);
 
+  const refreshOrgs = useCallback(async () => {
+    const tk = localStorage.getItem("bf_token");
+    if (!tk) return;
+    try {
+      const res = await axios.get(`${BASE}/v2/orgs`, {
+        headers: { Authorization: `Bearer ${tk}` },
+      });
+      const fetchedOrgs = res.data.organisations || [];
+      setOrgs(fetchedOrgs);
+      if (selectedOrg) {
+        const updated = fetchedOrgs.find(o => o.id === selectedOrg.id);
+        if (updated) setSelectedOrg(updated);
+      }
+    } catch {}
+  }, [selectedOrg]);
+
   const value = useMemo(() => ({
     user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
     // v2
-    orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots,
+    orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs,
   }), [user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
-       orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots]);
+       orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs]);
 
   return (
     <AuthContext.Provider value={value}>

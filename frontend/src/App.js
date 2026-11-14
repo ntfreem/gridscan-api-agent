@@ -41,6 +41,7 @@ import IntegrationsPage from "@/pages/IntegrationsPage";
 import ProviderApps from "@/pages/ProviderApps";
 import Workspaces from "@/pages/Workspaces";
 import SuggestionsInbox from "@/pages/SuggestionsInbox";
+import Organisations from "@/pages/Organisations";
 
 import "@/App.css";
 
@@ -84,6 +85,7 @@ function AppRoutes() {
       <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
         {/* Organisation-level */}
         <Route index element={<Dashboard />} />
+        <Route path="organisations" element={<Organisations />} />
         <Route path="bots" element={<BotList />} />
         <Route path="accounts" element={<ConnectedAccounts />} />
         <Route path="team" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />

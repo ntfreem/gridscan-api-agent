@@ -14,7 +14,9 @@ function headers() {
 const v2 = {
   // Orgs
   listOrgs: () => axios.get(`${BASE}/v2/orgs`, { headers: headers() }),
+  createOrg: (data) => axios.post(`${BASE}/v2/orgs`, data, { headers: headers() }),
   getOrg: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
+  updateOrg: (orgId, data) => axios.put(`${BASE}/v2/orgs/${orgId}`, data, { headers: headers() }),
   orgOverview: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/overview`, { headers: headers() }),
   getOrgMembers: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/members`, { headers: headers() }),
 

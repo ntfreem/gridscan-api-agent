@@ -354,6 +354,7 @@ export default function AdminLayout() {
             </div>
           )}
           <SideNavLink to="/admin" icon={LayoutDashboard} label="Overview" end onClick={closeMobile} />
+          <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />
           <SideNavLink to="/admin/bots" icon={Bot} label="Bots" onClick={closeMobile} />
           <SideNavLink to="/admin/accounts" icon={Link2} label="Connected Accounts" onClick={closeMobile} />
           <SideNavLink to="/admin/team" icon={Users} label="Team & Access" onClick={closeMobile} />
