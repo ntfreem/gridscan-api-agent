@@ -356,8 +356,6 @@ export default function AdminLayout() {
           <SideNavLink to="/admin" icon={LayoutDashboard} label="Overview" end onClick={closeMobile} />
           <SideNavLink to="/admin/bots" icon={Bot} label="Bots" onClick={closeMobile} />
           <SideNavLink to="/admin/accounts" icon={Link2} label="Connected Accounts" onClick={closeMobile} />
-          <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />
-          <SideNavLink to="/admin/team" icon={Users} label="Team & Access" onClick={closeMobile} />
 
           {/* Divider */}
           <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
@@ -396,6 +394,8 @@ export default function AdminLayout() {
           {isSuperAdmin && (
             <>
               <SectionLabel icon={Shield} label="Platform Admin" />
+              <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />
+              <SideNavLink to="/admin/team" icon={Users} label="Team & Access" onClick={closeMobile} />
               <SideNavLink to="/admin/platform/analytics" icon={BarChart2} label="Analytics" onClick={closeMobile} />
               <SideNavLink to="/admin/platform/api-keys" icon={Key} label="API Key Usage" onClick={closeMobile} />
             </>
