@@ -105,7 +105,9 @@ Organisation
 - [x] Organisation management page with CRUD
 - [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
 - [x] API scraper merged into Knowledge Base tab
-- [x] Dashboard org-scoped overview metrics
+- [x] Integrations page redesign: 3 provider cards (Discord, Telegram, Zendesk) with one connection per bot per provider
+- [x] Discord Bot detail: two-column layout with Connect card + invite link (left), Bot Status + Configuration + Listen Mode (right)
+- [x] Telegram & Zendesk detail views: connection status + response mode display
 
 ### Self-Hosting Readiness Docs (Done — Nov 2026)
 - [x] Complete API Inventory (190+ endpoints, v1 + v2)
