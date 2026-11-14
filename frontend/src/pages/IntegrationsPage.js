@@ -728,122 +728,233 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 function TelegramDetail({ connection, account, onToggle, onCreateConnection, accounts, orgId, botId, botName, saving, onRefresh }) {
   const conn = connection;
   const isConnected = !!conn;
+  const hasTgAccount = !!accounts.find(a => a.provider === "telegram");
+
+  const [botToken, setBotToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [addMode, setAddMode] = useState("auto_reply");
 
-  const handleCreate = () => {
-    const tgAccount = accounts.find(a => a.provider === "telegram");
-    if (!tgAccount) { toast.error("No Telegram account connected. Set one up first."); return; }
-    onCreateConnection({
-      account_id: tgAccount.id,
-      name: `Telegram — ${botName || "Bot"}`,
-      response_mode: addMode,
-      destination: {},
-    });
+  // Connect: create account + connection in one flow
+  const handleConnect = async () => {
+    if (!botToken.trim()) { toast.error("Enter a bot token"); return; }
+    setConnecting(true);
+    try {
+      // If no Telegram account exists, create one first
+      let accountId;
+      const existingAccount = accounts.find(a => a.provider === "telegram");
+      if (existingAccount) {
+        accountId = existingAccount.id;
+      } else {
+        const res = await v2.createAccount(orgId, {
+          provider: "telegram",
+          name: "Telegram Bot",
+          credentials: { bot_token: botToken.trim() },
+        });
+        accountId = res.data.id;
+        toast.success("Telegram account created");
+      }
+      // Now create the connection
+      await onCreateConnection({
+        account_id: accountId,
+        name: `Telegram — ${botName || "Bot"}`,
+        response_mode: addMode,
+        destination: {},
+      });
+      setBotToken("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to connect Telegram bot");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // Test existing connection
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const tgAccount = accounts.find(a => a.provider === "telegram");
+      if (!tgAccount) { toast.error("No Telegram account found"); setTesting(false); return; }
+      const res = await v2.testAccount(orgId, tgAccount.id);
+      toast.success(`Bot verified: @${res.data.username || "connected"}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Test failed — check the bot token");
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
     <div data-testid="telegram-detail-view">
-      <p style={T.overline}>Integration</p>
-      <h1 style={{ ...T.h1, margin: "0 0 20px", fontSize: "28px" }}>Telegram Bot</h1>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "8px" }}>
+        <div style={{ width: "44px", height: "44px", borderRadius: "12px", backgroundColor: "rgba(38,165,228,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Send size={22} color="#26A5E4" />
+        </div>
+        <h1 style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Telegram</h1>
+      </div>
+      <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary, margin: "0 0 28px", lineHeight: "1.6" }}>
+        Connect a Telegram bot to respond to messages using your knowledge base and API integrations.
+      </p>
 
-      {/* Connection Status */}
+      {/* Bot Connection Card */}
       <div style={{
-        padding: "20px", borderRadius: "14px", marginBottom: "16px",
-        border: `1px solid ${isConnected ? "rgba(52,211,153,0.2)" : colors.border.default}`,
-        backgroundColor: isConnected ? "rgba(52,211,153,0.03)" : colors.bg.panel,
+        padding: "24px", borderRadius: "14px", maxWidth: "720px",
+        backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-          <Send size={18} color="#26A5E4" />
-          <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
-            Connection
+        <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>
+          Bot Connection
+        </p>
+
+        {/* Info box */}
+        <div style={{
+          display: "flex", gap: "10px", padding: "14px 16px", borderRadius: "10px", marginBottom: "20px",
+          backgroundColor: "rgba(38,165,228,0.05)", border: "1px solid rgba(38,165,228,0.15)",
+        }}>
+          <AlertCircle size={16} color="#26A5E4" style={{ flexShrink: 0, marginTop: "2px" }} />
+          <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
+            Create a bot with <strong style={{ color: colors.text.primary }}>@BotFather</strong> on Telegram, then paste the token below. Make sure to disable "Group Privacy" in BotFather settings if you want the bot to read all group messages.
           </p>
         </div>
+
         {isConnected ? (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "14px 16px", borderRadius: "10px",
-            backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <CheckCircle size={16} color="#34D399" />
-              <div>
-                <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
-                  Bot connected
-                </p>
-                <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
-                  via {conn.account_name} · {conn.enabled ? "active" : "paused"}
-                </p>
+          /* Connected state */
+          <>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 16px", borderRadius: "10px", marginBottom: "16px",
+              backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <CheckCircle size={16} color="#34D399" />
+                <div>
+                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
+                    Bot connected
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.secondary, fontFamily: fonts.mono }}>
+                    via {conn.account_name || account?.name || "Telegram Bot"} · {conn.enabled ? "Active" : "Paused"}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={handleTest} disabled={testing} data-testid="telegram-test-btn" style={{
+                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                  border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                  color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                  opacity: testing ? 0.6 : 1,
+                }}>
+                  <RefreshCw size={11} /> {testing ? "Testing..." : "Test"}
+                </button>
+                <button onClick={() => onToggle(conn)} data-testid="telegram-disconnect-btn" style={{
+                  display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
+                  border: `1px solid ${conn.enabled ? "rgba(244,63,94,0.2)" : "rgba(52,211,153,0.2)"}`,
+                  backgroundColor: conn.enabled ? "rgba(244,63,94,0.06)" : "rgba(52,211,153,0.06)",
+                  color: conn.enabled ? "#F43F5E" : "#34D399",
+                  fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                }}>
+                  {conn.enabled ? <><PowerOff size={12} /> Disable</> : <><Power size={12} /> Enable</>}
+                </button>
               </div>
             </div>
-            <button onClick={() => onToggle(conn)}
-              style={{
-                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px",
-                border: `1px solid ${conn.enabled ? "rgba(244,63,94,0.2)" : "rgba(52,211,153,0.2)"}`,
-                backgroundColor: conn.enabled ? "rgba(244,63,94,0.06)" : "rgba(52,211,153,0.06)",
-                color: conn.enabled ? "#F43F5E" : "#34D399",
-                fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
-              }}>
-              {conn.enabled ? <><PowerOff size={12} /> Disable</> : <><Power size={12} /> Enable</>}
-            </button>
-          </div>
+
+            {/* Response Mode (when connected) */}
+            <div style={{ paddingTop: "16px", borderTop: `1px solid ${colors.border.default}` }}>
+              <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "500", color: colors.text.secondary, margin: "0 0 8px" }}>
+                Response Mode
+              </p>
+              <ModeBadge mode={conn.response_mode} />
+            </div>
+          </>
         ) : (
-          <div>
-            {!accounts.find(a => a.provider === "telegram") && (
-              <div style={{
-                padding: "10px 14px", borderRadius: "8px", marginBottom: "12px",
-                backgroundColor: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)",
-              }}>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#FBBF24", margin: 0 }}>
-                  <AlertCircle size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: "6px" }} />
-                  No Telegram account connected yet. Ask your admin to add one.
-                </p>
-              </div>
-            )}
-            {accounts.find(a => a.provider === "telegram") && (
-              <>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 12px" }}>
-                  Select a response mode and connect this bot to Telegram.
-                </p>
+          /* Not connected — show token input */
+          <>
+            {hasTgAccount ? (
+              /* Account exists, just need to create a connection */
+              <div>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px",
+                  backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
+                }}>
+                  <CheckCircle size={14} color="#34D399" />
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>
+                    Telegram account configured. Connect it to this bot below.
+                  </p>
+                </div>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                   {RESPONSE_MODES.slice(0, 2).map(mode => (
-                    <button key={mode.value} onClick={() => setAddMode(mode.value)}
-                      style={{
-                        flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
-                        border: `1px solid ${addMode === mode.value ? "#26A5E4" + "50" : colors.border.default}`,
-                        backgroundColor: addMode === mode.value ? "#26A5E4" + "0a" : colors.bg.base,
-                        fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                        color: addMode === mode.value ? "#26A5E4" : colors.text.secondary,
-                      }}>
-                      {mode.label}
-                    </button>
+                    <button key={mode.value} onClick={() => setAddMode(mode.value)} style={{
+                      flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
+                      border: `1px solid ${addMode === mode.value ? "rgba(38,165,228,0.5)" : colors.border.default}`,
+                      backgroundColor: addMode === mode.value ? "rgba(38,165,228,0.06)" : colors.bg.base,
+                      fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                      color: addMode === mode.value ? "#26A5E4" : colors.text.secondary,
+                    }}>{mode.label}</button>
                   ))}
                 </div>
-                <button onClick={handleCreate} disabled={saving}
-                  style={{ ...T.btnPrimary, width: "100%", justifyContent: "center" }}>
+                <button onClick={() => {
+                  const tgAccount = accounts.find(a => a.provider === "telegram");
+                  onCreateConnection({
+                    account_id: tgAccount.id,
+                    name: `Telegram — ${botName || "Bot"}`,
+                    response_mode: addMode,
+                    destination: {},
+                  });
+                }} disabled={saving} data-testid="telegram-connect-existing-btn" style={{
+                  ...T.btnPrimary, width: "100%", justifyContent: "center",
+                  backgroundColor: "#26A5E4", opacity: saving ? 0.6 : 1,
+                }}>
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   Connect Telegram Bot
                 </button>
-              </>
+              </div>
+            ) : (
+              /* No account — show token input form */
+              <div>
+                <label style={T.label}>Bot Token</label>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <div style={{ flex: 1, position: "relative" }}>
+                    <input
+                      type={showToken ? "text" : "password"}
+                      value={botToken}
+                      onChange={e => setBotToken(e.target.value)}
+                      placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyz"
+                      style={{ ...T.input, width: "100%", paddingRight: "40px" }}
+                      onFocus={onFocus} onBlur={onBlur}
+                      data-testid="telegram-token-input"
+                    />
+                    <button
+                      onClick={() => setShowToken(!showToken)}
+                      data-testid="telegram-toggle-token"
+                      style={{
+                        position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                        background: "none", border: "none", cursor: "pointer",
+                        color: colors.text.muted, padding: "4px",
+                      }}>
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleConnect}
+                    disabled={connecting || !botToken.trim()}
+                    data-testid="telegram-connect-btn"
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "10px 24px", borderRadius: "10px", border: "none",
+                      backgroundColor: "#26A5E4", color: "#fff",
+                      fontFamily: fonts.body, fontSize: "14px", fontWeight: "600",
+                      cursor: (connecting || !botToken.trim()) ? "not-allowed" : "pointer",
+                      opacity: (connecting || !botToken.trim()) ? 0.6 : 1,
+                      flexShrink: 0, whiteSpace: "nowrap",
+                    }}>
+                    <Send size={14} /> {connecting ? "Connecting..." : "Connect"}
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
-
-      {/* Response Mode (when connected) */}
-      {isConnected && (
-        <div style={{
-          padding: "20px", borderRadius: "14px",
-          backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
-        }}>
-          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
-            Response Mode
-          </p>
-          <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 12px" }}>
-            How the bot handles incoming Telegram messages
-          </p>
-          <ModeBadge mode={conn.response_mode} />
-        </div>
-      )}
     </div>
   );
 }
