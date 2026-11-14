@@ -101,7 +101,7 @@ function AppRoutes() {
 
         {/* Platform Admin */}
         <Route path="platform/provider-apps" element={<AdminOnlyRoute><ProviderApps /></AdminOnlyRoute>} />
-        <Route path="platform/workspaces" element={<AdminOnlyRoute><Workspaces /></AdminOnlyRoute>} />
+        <Route path="platform/workspaces" element={<AdminOnlyRoute><Organisations /></AdminOnlyRoute>} />
         <Route path="platform/analytics" element={<AdminOnlyRoute><Analytics /></AdminOnlyRoute>} />
         <Route path="platform/api-keys" element={<AdminOnlyRoute><ApiKeyAnalytics /></AdminOnlyRoute>} />
 
