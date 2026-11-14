@@ -222,3 +222,43 @@ User message
 2. **Telegram and Zendesk have a minor divergence**: They call `_call_emergent` directly instead of `stream_chat_response`, missing streaming logic. This is intentional — webhooks can't stream
 3. **Discord runs in-process**: The bot is a background task, not a separate service. For self-hosting, consider splitting into a worker process
 4. **No channel breaks instance isolation**: Every channel correctly scopes to its configured instance_id
+
+---
+
+## V2 Multi-Route Webhook Resolution (Added Nov 2026)
+
+### Overview
+The V2 architecture adds a **webhook router** (`webhook_router.py`) that intercepts all incoming channel messages before they reach the legacy V1 handlers. This enables:
+- **Multi-route**: One Discord server can be mapped to multiple bots (via different connections)
+- **Per-connection response modes**: `auto_reply`, `agent_assist`, `internal_note`
+- **Organisation-scoped accounts**: Provider credentials (bot tokens, OAuth tokens) are stored in `connected_accounts` and shared across bots
+
+### Resolution Flow
+```
+Incoming message (e.g., Discord guild_id or Telegram chat_id)
+  → webhook_router.resolve_v2(provider, destination_id)
+  → Query: connections WHERE provider=X AND destination=destination_id AND enabled=true
+  → For each matched connection:
+      → Load bot settings (persona, KB, LLM config)
+      → Execute response_mode logic
+  → If agent_assist: create v2_suggestion instead of replying
+  → If no V2 match: fallback to V1 legacy routing
+```
+
+### V2 Channel Entry Points (Updated)
+
+| Channel | V2 Entry Point | V1 Fallback | Notes |
+|---|---|---|---|
+| Discord | `webhook_router.resolve_v2("discord", guild_id)` | `discord_config.guild_id` lookup | V2 checked first on every `on_message` |
+| Telegram | `webhook_router.resolve_v2("telegram", chat_id)` | `telegram_config.instance_id` | V2 checked first in webhook handler |
+| Zendesk | `webhook_router.resolve_v2("zendesk", ticket_group_id)` | `zendesk_config.instance_id` | V2 checked first in webhook handler |
+| Web Chat | Direct `stream_chat_response()` | N/A | Not routed through V2 (uses instance_id directly) |
+| API v1 | Direct `stream_chat_response()` | N/A | Not routed through V2 (uses API key → instance_id) |
+
+### V2 Collections for Channel Routing
+- `connected_accounts` — Provider credentials (encrypted), status, org_id
+- `connections` — Bot ↔ destination mapping, response_mode, priority
+- `v2_suggestions` — Agent-assist suggestions (pending/accepted/dismissed)
+
+### Self-Hosting Impact
+No additional infrastructure needed. The webhook router is a pure Python module with no external dependencies beyond MongoDB.

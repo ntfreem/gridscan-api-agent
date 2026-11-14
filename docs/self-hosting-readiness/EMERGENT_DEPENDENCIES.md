@@ -166,3 +166,9 @@ No — the app runs as standard Python + Node processes.
 3. **Medium Priority**: Create Dockerfiles and docker-compose.yml
 4. **Low Priority**: Set up CI/CD pipeline
 5. **Not Needed**: Frontend requires no changes beyond `REACT_APP_BACKEND_URL`
+
+---
+
+## V2 Architecture — No Additional Emergent Dependencies
+
+The V2 multi-tenant architecture (organisations, bots, connected accounts, connections, webhook router, platform admin, suggestions inbox) was built entirely with standard Python + MongoDB and does not introduce any new Emergent-specific dependencies. All V2 route files (`org_routes.py`, `bot_routes.py`, `account_routes.py`, `connection_routes.py`, `platform_routes.py`, `webhook_router.py`) use only FastAPI, Motor (MongoDB), and the Python standard library.

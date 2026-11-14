@@ -1,30 +1,38 @@
 # BitBot Pro — Complete API Inventory
 
-> Generated from the FastAPI backend. 154 operations across 132 paths.
+> Generated from the FastAPI backend. **190+ operations** across v1 legacy + v2 multi-tenant routes.
+> Last updated: November 2026 (includes V2 Architecture — all 5 phases).
 
 ## Summary
 
-| Category | Endpoints | Auth Required |
-|---|---|---|
-| Authentication & User Mgmt | 12 | Mixed |
-| Bot Instance Management | 7 | Yes (Admin) |
-| Bot Configuration | 7 | Yes |
-| Knowledge Base | 17 | Yes |
-| AI Chat & Streaming | 3 | Mixed |
-| Embed/Widget | 3 | Mixed |
-| API Integrations | 10 | Yes |
-| API Intelligence / Diagnostics | 7 | Yes |
-| API Keys (External) | 5 | Yes |
-| Analytics & Usage | 10 | Yes |
-| Discord | 22 | Yes |
-| Telegram | 5 | Yes |
-| Zendesk | 8 | Yes |
-| Changelog | 4 | Mixed |
-| Conversations | 4 | Yes |
-| Onboarding | 4 | Yes |
-| LLM Configuration | 4 | Yes (Admin) |
-| Administration | 3 | Yes (Admin) |
-| System | 2 | No |
+| Category | Endpoints | Auth Required | Version |
+|---|---|---|---|
+| Authentication & User Mgmt | 12 | Mixed | v1 |
+| Bot Instance Management | 7 | Yes (Admin) | v1 |
+| Bot Configuration | 7 | Yes | v1 |
+| Knowledge Base | 17 | Yes | v1 |
+| AI Chat & Streaming | 3 | Mixed | v1 |
+| Embed/Widget | 3 | Mixed | v1 |
+| API Integrations | 10 | Yes | v1 |
+| API Intelligence / Diagnostics | 7 | Yes | v1 |
+| API Keys (External) | 5 | Yes | v1 |
+| Analytics & Usage | 10 | Yes | v1 |
+| Discord | 22 | Yes | v1 |
+| Telegram | 5 | Yes | v1 |
+| Zendesk | 8 | Yes | v1 |
+| Changelog | 4 | Mixed | v1 |
+| Conversations | 4 | Yes | v1 |
+| Onboarding | 4 | Yes | v1 |
+| LLM Configuration | 4 | Yes (Admin) | v1 |
+| Administration | 3 | Yes (Admin) | v1 |
+| System | 2 | No | v1 |
+| **V2 — Organisations** | **6** | **Yes** | **v2** |
+| **V2 — Bots** | **6** | **Yes** | **v2** |
+| **V2 — Connected Accounts** | **6** | **Yes** | **v2** |
+| **V2 — Connections** | **6** | **Yes** | **v2** |
+| **V2 — Suggestions** | **2** | **Yes** | **v2** |
+| **V2 — Platform Admin** | **4** | **Yes (Admin)** | **v2** |
+| **V2 — Webhook Router** | **—** | **N/A (internal)** | **v2** |
 
 ---
 
@@ -837,3 +845,271 @@
 - **Purpose**: Health check with uptime
 - **Auth**: None
 - **Response**: `{ status, uptime }`
+
+
+---
+
+## 18. V2 — Organisations (prefix: `/api/v2/orgs`)
+
+> V2 endpoints use `org_routes.py`. Auth is Bearer JWT. Org context is resolved from the URL path, not headers.
+
+### GET /api/v2/orgs
+- **Purpose**: List organisations the current user belongs to (with bot/member/account counts)
+- **Auth**: Bearer JWT
+- **Response**: `{ orgs: [{ id, name, description, bot_count, member_count, account_count }] }`
+- **Frontend**: `AuthContext.js`, `AdminLayout.js` (org selector)
+
+### POST /api/v2/orgs
+- **Purpose**: Create a new organisation
+- **Auth**: Bearer JWT
+- **Request Body**: `{ name, description }`
+- **Response**: `{ id, name, owner_id, created_at }`
+- **Frontend**: `Organisations.js`
+
+### GET /api/v2/orgs/{org_id}
+- **Purpose**: Get single org details
+- **Auth**: Bearer JWT (must be member)
+- **Response**: `{ id, name, description, owner_id, member_count }`
+- **Frontend**: `Organisations.js`
+
+### PUT /api/v2/orgs/{org_id}
+- **Purpose**: Update org name/description
+- **Auth**: Bearer JWT (owner or admin)
+- **Request Body**: `{ name, description }`
+- **Frontend**: `Organisations.js`
+
+### GET /api/v2/orgs/{org_id}/members
+- **Purpose**: List org members with roles
+- **Auth**: Bearer JWT (must be member)
+- **Response**: `{ members: [{ user_id, email, username, role }] }`
+- **Frontend**: `Organisations.js` (Team & Access tab)
+
+### POST /api/v2/orgs/{org_id}/members
+- **Purpose**: Add member to org
+- **Auth**: Bearer JWT (owner or admin)
+- **Request Body**: `{ user_id, role }`
+- **Frontend**: `Organisations.js`
+
+### DELETE /api/v2/orgs/{org_id}/members/{member_id}
+- **Purpose**: Remove member from org
+- **Auth**: Bearer JWT (owner or admin)
+- **Frontend**: `Organisations.js`
+
+### PATCH /api/v2/orgs/{org_id}/members/{member_id}/role
+- **Purpose**: Update member role
+- **Auth**: Bearer JWT (owner or admin)
+- **Request Body**: `{ role }`
+- **Frontend**: `Organisations.js`
+
+### GET /api/v2/orgs/{org_id}/overview
+- **Purpose**: Get org-scoped overview metrics (bots, connections, messages, KB size, suggestions)
+- **Auth**: Bearer JWT (must be member)
+- **Response**: `{ bots, connections, conversations, messages, knowledge, suggestions }`
+- **Frontend**: `Dashboard.js`
+
+---
+
+## 19. V2 — Bots (prefix: `/api/v2/orgs/{org_id}/bots`)
+
+> V2 endpoints use `bot_routes.py`. Bots are scoped to organisations.
+
+### GET /api/v2/orgs/{org_id}/bots
+- **Purpose**: List bots in organisation (with connection counts, KB size)
+- **Auth**: Bearer JWT
+- **Response**: `{ bots: [{ id, name, persona, connection_count, kb_size }] }`
+- **Frontend**: `AdminLayout.js` (bot selector), `BotList.js`
+
+### POST /api/v2/orgs/{org_id}/bots
+- **Purpose**: Create a new bot (optionally linked to legacy instance)
+- **Auth**: Bearer JWT
+- **Request Body**: `{ name, persona, instructions, legacy_instance_id }`
+- **Response**: `{ id, org_id, name, created_at }`
+- **Frontend**: `BotList.js`
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}
+- **Purpose**: Get single bot with enriched data
+- **Auth**: Bearer JWT
+- **Response**: `{ id, name, persona, connections, settings }`
+- **Frontend**: `BotOverview.js`
+
+### PUT /api/v2/orgs/{org_id}/bots/{bot_id}
+- **Purpose**: Update bot name, persona, instructions
+- **Auth**: Bearer JWT
+- **Request Body**: `{ name, persona, instructions }`
+- **Frontend**: `BotOverview.js`
+
+### DELETE /api/v2/orgs/{org_id}/bots/{bot_id}
+- **Purpose**: Delete bot (cascades to connections)
+- **Auth**: Bearer JWT
+- **Frontend**: `BotList.js`
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}/settings
+- **Purpose**: Get bot behaviour settings (LLM config, response mode, knowledge gate)
+- **Auth**: Bearer JWT
+- **Response**: `{ llm_config, response_mode, knowledge_gate, custom_instructions }`
+- **Frontend**: `BotSettings.js` (V2 Behaviour page)
+
+### PUT /api/v2/orgs/{org_id}/bots/{bot_id}/settings
+- **Purpose**: Update bot behaviour settings
+- **Auth**: Bearer JWT
+- **Request Body**: Full settings object
+- **Frontend**: `BotSettings.js`
+
+---
+
+## 20. V2 — Connected Accounts (prefix: `/api/v2/orgs/{org_id}/accounts`)
+
+> V2 endpoints use `account_routes.py`. Accounts are reusable provider identities (Discord bot, Telegram bot, Zendesk OAuth) shared across bots in an org.
+
+### GET /api/v2/orgs/{org_id}/accounts
+- **Purpose**: List all connected accounts for org (with connection counts)
+- **Auth**: Bearer JWT
+- **Response**: `{ accounts: [{ id, provider, name, status, connection_count, active_connection_count, credentials_display }] }`
+- **Frontend**: `ConnectedAccounts.js`
+
+### POST /api/v2/orgs/{org_id}/accounts
+- **Purpose**: Create a new connected account
+- **Auth**: Bearer JWT
+- **Request Body**: `{ provider, name, credentials }` (credentials encrypted at rest)
+- **Providers**: `discord`, `telegram`, `zendesk`
+- **Frontend**: `ConnectedAccounts.js` (Discord guided setup, Telegram/Zendesk inline forms)
+
+### GET /api/v2/orgs/{org_id}/accounts/{account_id}
+- **Purpose**: Get single account details (with masked credentials)
+- **Auth**: Bearer JWT
+- **Response**: `{ id, provider, name, status, credentials_display, metadata }`
+- **Frontend**: `ConnectedAccounts.js` (Settings panel)
+
+### PUT /api/v2/orgs/{org_id}/accounts/{account_id}
+- **Purpose**: Update account name and/or credentials
+- **Auth**: Bearer JWT
+- **Request Body**: `{ name, credentials }` (only non-empty credential fields are updated)
+- **Frontend**: `ConnectedAccounts.js` (Discord Settings panel)
+
+### POST /api/v2/orgs/{org_id}/accounts/{account_id}/disconnect
+- **Purpose**: Soft-disconnect account (pauses all connections using it)
+- **Auth**: Bearer JWT
+- **Response**: `{ status, connections_paused, warning }`
+- **Frontend**: `ConnectedAccounts.js`
+
+### POST /api/v2/orgs/{org_id}/accounts/{account_id}/reconnect
+- **Purpose**: Re-activate a disconnected account
+- **Auth**: Bearer JWT
+- **Frontend**: `ConnectedAccounts.js`
+
+---
+
+## 21. V2 — Connections (prefix: `/api/v2/orgs/{org_id}/bots/{bot_id}/connections`)
+
+> V2 endpoints use `connection_routes.py`. Connections link a bot to a destination (e.g., Discord server, Telegram group) via a connected account.
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}/connections
+- **Purpose**: List all connections for a bot (with account info)
+- **Auth**: Bearer JWT
+- **Response**: `{ connections: [{ id, account_id, provider, destination, response_mode, enabled, account_name, account_status }] }`
+- **Frontend**: `IntegrationsPage.js`
+
+### POST /api/v2/orgs/{org_id}/bots/{bot_id}/connections
+- **Purpose**: Create a new connection route
+- **Auth**: Bearer JWT
+- **Request Body**: `{ account_id, provider, destination, response_mode, overrides, priority }`
+- **Response Modes**: `auto_reply`, `agent_assist`, `internal_note`
+- **Frontend**: `IntegrationsPage.js` (Add Connection wizard)
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}
+- **Purpose**: Get connection details
+- **Auth**: Bearer JWT
+- **Response**: `{ id, provider, destination, response_mode, enabled, overrides, account }`
+- **Frontend**: `IntegrationsPage.js`
+
+### PUT /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}
+- **Purpose**: Update connection settings
+- **Auth**: Bearer JWT
+- **Request Body**: `{ destination, response_mode, overrides, priority }`
+- **Frontend**: `IntegrationsPage.js`
+
+### PATCH /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}/toggle
+- **Purpose**: Enable/disable a connection
+- **Auth**: Bearer JWT
+- **Response**: `{ enabled }`
+- **Frontend**: `IntegrationsPage.js`
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}/connections/{conn_id}/activity
+- **Purpose**: Get connection activity log and recent agent_assist suggestions
+- **Auth**: Bearer JWT
+- **Response**: `{ activity: [...], suggestions: [...] }`
+- **Frontend**: `IntegrationsPage.js`
+
+---
+
+## 22. V2 — Suggestions (prefix: `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions`)
+
+> Stored in `v2_suggestions` collection. Generated when a connection operates in `agent_assist` mode.
+
+### GET /api/v2/orgs/{org_id}/bots/{bot_id}/suggestions
+- **Purpose**: List AI suggestions for review (filterable by status, connection_id)
+- **Auth**: Bearer JWT
+- **Query**: `?status=pending&connection_id=xxx&limit=50&skip=0`
+- **Response**: `{ suggestions: [{ id, connection_id, platform, user_message, ai_suggestion, status, created_at }] }`
+- **Frontend**: `SuggestionsInbox.js`
+
+### PATCH /api/v2/orgs/{org_id}/bots/{bot_id}/suggestions/{suggestion_id}
+- **Purpose**: Accept or dismiss a suggestion
+- **Auth**: Bearer JWT
+- **Request Body**: `{ status: "accepted" | "dismissed" }`
+- **Frontend**: `SuggestionsInbox.js`
+
+---
+
+## 23. V2 — Platform Admin (prefix: `/api/v2/platform`)
+
+> V2 endpoints use `platform_routes.py`. Requires admin role. Cross-org visibility.
+
+### GET /api/v2/platform/stats
+- **Purpose**: Platform-wide statistics (org count, total bots, accounts, connections, messages)
+- **Auth**: Bearer JWT + Admin
+- **Response**: `{ orgs, bots, accounts, connections, active_connections, total_messages, total_conversations }`
+- **Frontend**: `Dashboard.js` (Platform Admin section)
+
+### GET /api/v2/platform/workspaces
+- **Purpose**: List all organisations with stats (cross-org admin view)
+- **Auth**: Bearer JWT + Admin
+- **Response**: `{ workspaces: [{ id, name, owner, bot_count, account_count, member_count }] }`
+- **Frontend**: `Organisations.js` (Platform Admin view)
+
+### GET /api/v2/platform/workspaces/{org_id}/detail
+- **Purpose**: Detailed org breakdown (members, bots, accounts for admin inspection)
+- **Auth**: Bearer JWT + Admin
+- **Response**: `{ org, members: [...], bots: [...], accounts: [...] }`
+- **Frontend**: `Organisations.js` (expandable row detail)
+
+### GET /api/v2/platform/provider-apps
+- **Purpose**: Provider account/connection stats breakdown across all orgs
+- **Auth**: Bearer JWT + Admin
+- **Response**: `{ providers: { discord: { accounts, connections, active }, telegram: {...}, zendesk: {...} } }`
+- **Frontend**: `ProviderApps.js`
+
+---
+
+## 24. V2 — Webhook Router (Internal Module)
+
+> `webhook_router.py` is NOT exposed as API endpoints. It is an internal routing engine called by Discord `on_message`, Telegram webhook handler, and Zendesk webhook handler.
+
+### Resolution Logic
+```
+Incoming message (provider + destination identifier)
+  → webhook_router.resolve_v2(provider, destination_id)
+  → Query connections collection: { provider, destination, enabled: true }
+  → Match by account_id + destination (guild_id, chat_id, ticket_group_id)
+  → Return { bot_id, connection_id, response_mode, overrides }
+  → If no V2 match → fallback to V1 legacy routing
+```
+
+### Key Functions
+- `resolve_v2_connection(provider, destination_id, account_id)` — Primary resolver
+- `resolve_all_v2_connections(provider, destination_id)` — Returns all matching connections (multi-route)
+- `log_v2_activity(connection_id, event_type, data)` — Activity tracking
+- `create_v2_suggestion(connection_id, bot_id, ...)` — Agent-assist suggestion creation
+
+### Test Coverage
+- `tests/test_v2_webhook_router.py` — Comprehensive unit tests for resolution logic

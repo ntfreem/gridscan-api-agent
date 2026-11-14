@@ -5,8 +5,8 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ## Core Architecture
 - **Frontend**: React SPA with neon electric blue theme
-- **Backend**: FastAPI (Python) with 140+ v1 endpoints + 30+ v2 endpoints
-- **Database**: MongoDB Atlas
+- **Backend**: FastAPI (Python) with 170 paths / 190+ operations (v1 legacy + v2 multi-tenant)
+- **Database**: MongoDB Atlas (29 collections)
 - **Channels**: Web Chat, Discord, Telegram, Zendesk, External API (v1)
 - **LLM**: Claude/OpenAI via Emergent Universal Key
 - **Storage**: Emergent Object Storage
@@ -46,6 +46,7 @@ Organisation
 | `/api/v2/orgs` | GET/POST | List/create organisations |
 | `/api/v2/orgs/{org_id}` | GET/PUT | Get/update org |
 | `/api/v2/orgs/{org_id}/members` | GET/POST/DELETE/PATCH | Member management |
+| `/api/v2/orgs/{org_id}/overview` | GET | Org-scoped overview metrics |
 | `/api/v2/orgs/{org_id}/bots` | GET/POST | List/create bots |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}` | GET/PUT/DELETE | Bot CRUD |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/settings` | GET/PUT | Bot behaviour |
@@ -53,6 +54,8 @@ Organisation
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions/{id}` | PATCH | Accept/dismiss suggestion |
 | `/api/v2/orgs/{org_id}/accounts` | GET/POST | List/create accounts |
 | `/api/v2/orgs/{org_id}/accounts/{id}` | GET/PUT | Account CRUD |
+| `/api/v2/orgs/{org_id}/accounts/{id}/disconnect` | POST | Soft-disconnect |
+| `/api/v2/orgs/{org_id}/accounts/{id}/reconnect` | POST | Re-activate |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections` | GET/POST | List/create connections |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}` | GET/PUT | Connection CRUD |
 | `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/toggle` | PATCH | Enable/disable |
@@ -92,6 +95,23 @@ Organisation
 - [x] Suggestions list + update endpoints in `connection_routes.py`
 - [x] Tested: 100% pass (iteration_67.json)
 
+### UI/UX Polish (Done — Nov 2026)
+- [x] Discord guided setup panel in ConnectedAccounts.js (matches DiscordAppSetup.js design)
+- [x] Organisation management page with CRUD
+- [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
+- [x] API scraper merged into Knowledge Base tab
+- [x] Dashboard org-scoped overview metrics
+
+### Self-Hosting Readiness Docs (Done — Nov 2026)
+- [x] Complete API Inventory (190+ endpoints, v1 + v2)
+- [x] Frontend-Backend API Map (v1 api.js + v2 v2api.js)
+- [x] Environment Variables doc with .env.example files
+- [x] Emergent Dependencies with replacement strategies
+- [x] Channel Integrations audit with V2 webhook router
+- [x] Migration Readiness report
+- [x] OpenAPI 3.1 spec export (openapi.json)
+- [x] Updated README.md for GitHub export
+
 ### Earlier Completed Work
 - Zendesk OAuth, ZAF sidebar app, Analytics, Admin roles
 - User email invitations, Landing page, Self-hosting docs
@@ -100,9 +120,9 @@ Organisation
 ## Pending / Upcoming Tasks
 
 ### Backlog
-- P0: GitHub Export for self-hosting migration
+- P0: GitHub Export — push to GitHub and use Claude Code for self-hosting migration (DO NOT remove Emergent dependencies until user instructs)
 - P1: WhatsApp integration (use integration_playbook_expert_v2)
-- P2: Backend refactor (server.py modularization)
+- P2: Backend refactor — server.py modularization, extract v1 routes into separate modules
 - P2: APP_MODE env splitting (worker vs api)
 - P2: Legacy v1 endpoint cleanup (after V2 fully operational)
 

@@ -12,7 +12,9 @@
 | Variable | Required | Description | Self-Hosting Notes |
 |---|---|---|---|
 | `JWT_SECRET` | Yes | Secret for JWT token signing | Generate a strong random string |
-| `ENCRYPTION_KEY` | Yes | Fernet key for encrypting stored API keys | Generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `ENCRYPTION_KEY` | Yes | Fernet key for encrypting stored API keys and V2 connected account credentials | Generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `ADMIN_EMAIL` | Yes | Default admin account email | Set during first run; used for admin seeding |
+| `ADMIN_PASSWORD` | Yes | Default admin account password | Set during first run; used for admin seeding |
 
 ### CORS
 | Variable | Required | Description | Self-Hosting Notes |
@@ -73,7 +75,7 @@
 
 ### MongoDB (Required)
 - **Usage**: Primary data store for all collections
-- **Collections**: users, bot_instances, bot_config, knowledge_sources, conversations, messages, api_integrations, api_endpoints, api_diagnostics_history, discord_config, telegram_config, zendesk_config, zendesk_events, zendesk_suggestions, zendesk_oauth_states, embed_config, api_keys, api_key_usage, usage_tracking, llm_usage, onboarding, changelog_entries, scripted_scenarios, scripted_counters
+- **Collections**: users, bot_instances, bot_config, knowledge_sources, conversations, messages, api_integrations, api_endpoints, api_diagnostics_history, discord_config, telegram_config, zendesk_config, zendesk_events, zendesk_suggestions, zendesk_oauth_states, zendesk_oauth_client, embed_configs, api_keys, api_request_logs, llm_usage, onboarding, changelog, invitations, processed_discord_messages, **organisations** (V2), **bots** (V2), **connected_accounts** (V2), **connections** (V2), **v2_suggestions** (V2)
 - **Self-hosting**: MongoDB Atlas (managed) or self-hosted MongoDB 6+
 - **Vector search**: Uses MongoDB Atlas text search for knowledge retrieval (NOT Atlas Vector Search)
 

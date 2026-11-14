@@ -5,13 +5,14 @@
 | Metric | Value |
 |---|---|
 | OpenAPI Version | 3.1.0 |
-| Total Paths | 132 |
-| Total Operations | 154 |
-| Total Schemas | 42 |
-| Endpoints with Summaries | 154 / 154 (100%) |
-| Endpoints with Response Schema | 154 / 154 (100%) |
+| Total Paths | 170 |
+| Total Operations | 190+ |
+| Total Schemas | 42+ |
+| V2 Paths | 23 |
+| Endpoints with Summaries | 190+ / 190+ (100%) |
+| Endpoints with Response Schema | 190+ / 190+ (100%) |
 
-The exported spec is at: `docs/self-hosting-readiness/openapi.json`
+The exported spec is at: `docs/self-hosting-readiness/openapi.json` (updated Nov 2026 with V2 endpoints)
 
 ## Coverage Assessment
 

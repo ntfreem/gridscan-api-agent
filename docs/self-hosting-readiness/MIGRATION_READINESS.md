@@ -10,14 +10,15 @@ BitBot Pro is **ready for GitHub export and self-hosting migration** with manage
 
 | Area | Status | Notes |
 |---|---|---|
-| API Documentation | Ready | 154 operations, 100% have summaries. OpenAPI exported. |
+| API Documentation | Ready | 190+ operations, 100% have summaries. OpenAPI exported. |
 | Frontend/Backend Separation | Ready | Frontend only talks to backend via REST + SSE. Single env var change. |
 | Environment Config | Ready | All secrets in .env files. `.env.example` created. |
-| Database | Ready | Standard MongoDB. No proprietary extensions. |
+| Database | Ready | Standard MongoDB. No proprietary extensions. 29 collections. |
+| V2 Multi-Tenant Architecture | Ready | 5 new route modules, webhook router, org-scoped data. |
 | LLM Integration | Needs Work | Replace `emergentintegrations` with direct SDKs |
 | Object Storage | Needs Work | Replace Emergent Object Storage with S3/MinIO |
 | Authentication | Ready | Standard JWT + bcrypt. No Emergent auth dependency. |
-| Channel Integrations | Ready | Discord, Telegram, Zendesk all self-contained |
+| Channel Integrations | Ready | Discord, Telegram, Zendesk all self-contained + V2 webhook router |
 | Background Jobs | Caution | Discord bot runs in-process; consider separating |
 
 ---
@@ -112,12 +113,25 @@ Everything else (MongoDB, email, Discord, Telegram, Zendesk) uses standard APIs 
 
 ## Statistics
 
-- **Total backend endpoints**: 154 operations across 132 paths
+- **Total backend endpoints**: 190+ operations across v1 legacy + v2 multi-tenant routes
+- **V2 endpoints**: 30+ new REST endpoints across 5 route modules
+- **V2 frontend pages**: 8 new/refactored pages with org-scoped context
 - **OpenAPI documentation coverage**: 100% summaries, 100% response schemas
-- **Frontend API calls**: ~120 unique calls across 20 page components
+- **Frontend API calls**: ~150 unique calls across 25+ page components (v1 `api.js` + v2 `v2api.js`)
 - **Emergent-specific dependencies**: 2 (LLM library + Object Storage)
+- **MongoDB collections**: 29 (including 4 new V2 collections: `organisations`, `bots`, `connected_accounts`, `connections`, `v2_suggestions`)
 - **Estimated migration effort**: 2-3 days for a competent developer
 - **Risk level**: Low — standard tech stack, well-isolated dependencies
+
+## V2 Architecture Notes for Self-Hosting
+
+The V2 multi-tenant architecture introduces:
+- **Organisation scoping**: All data is scoped to organisations instead of flat bot instances
+- **Webhook Router** (`webhook_router.py`): Intercepts incoming channel messages and resolves them to V2 connections before falling back to V1 legacy routing
+- **Encrypted credentials**: Connected account credentials are encrypted at rest using Fernet (`ENCRYPTION_KEY` env var)
+- **Multi-route resolution**: A single incoming message can match multiple connections (e.g., the same Discord server mapped to different bots)
+
+Self-hosting the V2 architecture requires no additional infrastructure beyond what V1 needs. The only new env var consideration is `ENCRYPTION_KEY` for credential encryption.
 
 ## Confirmation
 
