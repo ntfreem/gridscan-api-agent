@@ -756,6 +756,236 @@ function ZendeskSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDis
   );
 }
 
+/* ── Telegram-specific setup & settings panel ── */
+
+function TelegramSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDisconnect, onReconnect, onRefresh }) {
+  const [name, setName] = useState(editAccount?.name || "");
+  const [botToken, setBotToken] = useState("");
+  const [testing, setTesting] = useState(false);
+
+  const isEdit = !!editAccount;
+  const isConnected = editAccount?.status === "connected";
+  const creds = editAccount?.credentials_masked || {};
+
+  const handleTest = async () => {
+    if (!orgId || !editAccount?.id) return;
+    setTesting(true);
+    try {
+      const res = await v2.testAccount(orgId, editAccount.id);
+      toast.success(`Connected! Bot: @${res.data.username} (${res.data.first_name})`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Test failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSaveNew = () => {
+    if (!name.trim()) { toast.error("Account name is required"); return; }
+    if (!botToken.trim()) { toast.error("Bot Token is required"); return; }
+    onSave({ name: name.trim(), credentials: { bot_token: botToken.trim() } });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!orgId || !editAccount?.id) return;
+    try {
+      const update = {};
+      if (name.trim() && name.trim() !== editAccount.name) update.name = name.trim();
+      if (botToken.trim()) update.credentials = { bot_token: botToken.trim() };
+      if (Object.keys(update).length === 0) { toast.info("No changes"); return; }
+      await v2.updateAccount(orgId, editAccount.id, update);
+      toast.success("Telegram account updated");
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save");
+    }
+  };
+
+  // ── Connected settings view ──
+  if (isEdit && isConnected) {
+    return (
+      <div data-testid="telegram-setup-panel" style={{ maxWidth: "680px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{
+              width: "36px", height: "36px", borderRadius: "10px",
+              background: "linear-gradient(135deg, #1B95D2, #26A5E4)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Send size={18} color="#fff" />
+            </div>
+            <h2 style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+              Telegram
+            </h2>
+            <span data-testid="telegram-status-badge" style={{
+              fontSize: "11px", fontFamily: fonts.mono, padding: "3px 10px", borderRadius: "20px", letterSpacing: "0.05em",
+              backgroundColor: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)",
+            }}>ACTIVE</span>
+          </div>
+          <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px" }}><X size={16} /></button>
+        </div>
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 24px" }}>
+          Auto-reply to messages in Telegram groups and direct chats using your knowledge base.
+        </p>
+
+        {/* Connection Card */}
+        <div style={zdCard} data-testid="telegram-connection-card">
+          <h3 style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 14px" }}>
+            Connection
+          </h3>
+          <div style={{
+            display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", borderRadius: "10px",
+            backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)", marginBottom: "14px",
+          }}>
+            <CheckCircle size={16} color="#34D399" />
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
+                Bot connected
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                Token: {creds.bot_token || "••••••••"}
+              </p>
+            </div>
+            <button onClick={handleTest} disabled={testing} data-testid="telegram-test-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px",
+                borderRadius: "8px", border: `1px solid ${colors.border.default}`,
+                backgroundColor: colors.bg.base, color: colors.text.secondary,
+                fontSize: "11px", fontFamily: fonts.body, cursor: testing ? "not-allowed" : "pointer",
+              }}>
+              <RefreshCw size={12} className={testing ? "animate-spin" : ""} /> Test
+            </button>
+          </div>
+
+          {/* Update token */}
+          <div style={{ marginBottom: "14px" }}>
+            <label style={T.label}>Update Bot Token</label>
+            <CredField label="" value={botToken} onChange={setBotToken} isSecret
+              placeholder="Leave blank to keep current" testId="telegram-bot-token-edit"
+              hint="BotFather → /mybots → API Token" />
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button onClick={handleSaveEdit} data-testid="telegram-save-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px",
+                border: "none", background: "linear-gradient(135deg, #1B95D2, #26A5E4)",
+                color: "#fff", fontSize: "12px", fontWeight: "600", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+              <Save size={12} /> Save Changes
+            </button>
+            <button onClick={() => onReconnect && onReconnect(editAccount)} data-testid="telegram-reconnect-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px",
+                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+              <RefreshCw size={12} /> Reconnect
+            </button>
+            <button onClick={() => onDisconnect && onDisconnect(editAccount)} data-testid="telegram-disconnect-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "8px",
+                border: "1px solid rgba(244,63,94,0.2)", backgroundColor: "rgba(244,63,94,0.06)",
+                color: "#F43F5E", fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+              }}>
+              <WifiOff size={12} /> Disconnect
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── New account setup ──
+  return (
+    <div data-testid="telegram-setup-panel" style={{ marginBottom: "24px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{
+            width: "36px", height: "36px", borderRadius: "10px",
+            background: "linear-gradient(135deg, #1B95D2, #26A5E4)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Send size={20} color="#fff" />
+          </div>
+          <h2 style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+            Telegram Setup
+          </h2>
+        </div>
+        <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px" }}><X size={16} /></button>
+      </div>
+      <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 20px" }}>
+        Connect a Telegram bot to respond to messages in groups and direct chats.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+        <div>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={T.label}>Account Name</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              placeholder="e.g., Support Bot" style={T.input}
+              onFocus={onFocus} onBlur={onBlur} data-testid="telegram-account-name" />
+          </div>
+
+          <div style={{ ...T.card, padding: "16px" }}>
+            <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 14px" }}>
+              Enter Bot Token
+            </p>
+            <CredField label="Bot Token" value={botToken} onChange={setBotToken} isSecret
+              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+              testId="telegram-bot-token"
+              hint="Get this from @BotFather on Telegram" />
+            <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
+              <button onClick={handleSaveNew} disabled={saving || !name.trim() || !botToken.trim()}
+                data-testid="telegram-save-btn"
+                style={{ ...T.btnPrimary, opacity: saving || !name.trim() || !botToken.trim() ? 0.5 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                Connect Telegram
+              </button>
+              <button onClick={onCancel} style={T.btnGhost}>Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Setup Guide */}
+        <div style={{ ...T.card, padding: "20px", alignSelf: "start" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <BookOpen size={16} color="#26A5E4" />
+            <div>
+              <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                Telegram Bot Setup Guide
+              </p>
+              <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "2px 0 0" }}>
+                Create a bot via BotFather
+              </p>
+            </div>
+          </div>
+
+          <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer"
+            data-testid="telegram-botfather-link"
+            style={{ display: "flex", alignItems: "center", gap: "6px", color: "#26A5E4", fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", textDecoration: "none", marginBottom: "20px" }}>
+            <ExternalLink size={13} /> Open @BotFather on Telegram
+          </a>
+
+          <StepCard step="1" title="Start a Chat with BotFather">
+            Open Telegram and search for <strong>@BotFather</strong>. Start the conversation and send <code>/newbot</code>.
+          </StepCard>
+          <StepCard step="2" title="Name Your Bot">
+            Follow the prompts: enter a <strong>display name</strong> (e.g., "My Support Bot") and a <strong>username</strong> ending in "bot" (e.g., "my_support_bot").
+          </StepCard>
+          <StepCard step="3" title="Copy the API Token">
+            BotFather will reply with an API token like <code>123456:ABC-DEF...</code>. Copy it and paste it into the form on the left.
+          </StepCard>
+          <StepCard step="4" title="Add Bot to a Group (Optional)">
+            Add the bot to a Telegram group, then configure a <strong>Connection</strong> in the Integrations page to map it to a specific bot persona.
+          </StepCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ── */
 
 export default function ConnectedAccounts() {
@@ -818,6 +1048,25 @@ export default function ConnectedAccounts() {
     }
   };
 
+  const handleTelegramSave = async ({ name, credentials }) => {
+    setSaving(true);
+    try {
+      if (editAccount) {
+        await v2.updateAccount(selectedOrg.id, editAccount.id, { name, credentials });
+        toast.success("Telegram account updated");
+      } else {
+        await v2.createAccount(selectedOrg.id, { provider: "telegram", name, credentials });
+        toast.success("Telegram account connected");
+      }
+      closeForm();
+      fetchAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAdd = async () => {
     if (!addProvider || !addName.trim()) return;
     setSaving(true);
@@ -868,10 +1117,31 @@ export default function ConnectedAccounts() {
   };
 
   const handleEdit = (acc) => {
-    if (acc.provider === "discord" || acc.provider === "zendesk") {
-      setEditAccount(acc);
+    setEditAccount(acc);
+    setShowAdd(false);
+    setAddProvider("");
+  };
+
+  // Build a lookup: provider → first account of that type
+  const accountByProvider = {};
+  for (const acc of accounts) {
+    if (!accountByProvider[acc.provider]) {
+      accountByProvider[acc.provider] = acc;
+    }
+  }
+
+  const handleProviderClick = (provider) => {
+    const existing = accountByProvider[provider];
+    if (existing) {
+      // Open settings for the existing account
+      setEditAccount(existing);
       setShowAdd(false);
       setAddProvider("");
+    } else {
+      // Open new setup form
+      setAddProvider(provider);
+      setShowAdd(false);
+      setEditAccount(null);
     }
   };
 
@@ -915,151 +1185,126 @@ export default function ConnectedAccounts() {
     );
   }
 
+  // Telegram setup panel (new or edit)
+  if (addProvider === "telegram" || editAccount?.provider === "telegram") {
+    return (
+      <div style={T.page} data-testid="connected-accounts-page">
+        <p style={T.overline}>Provider Accounts</p>
+        <TelegramSetupPanel
+          onSave={handleTelegramSave}
+          onCancel={closeForm}
+          saving={saving}
+          editAccount={editAccount}
+          orgId={selectedOrg?.id}
+          onDisconnect={handleDisconnect}
+          onReconnect={handleReconnect}
+          onRefresh={fetchAccounts}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={T.page} data-testid="connected-accounts-page">
       <p style={T.overline}>Provider Accounts</p>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
-        <h1 style={{ ...T.h1, margin: 0 }}>Connected Accounts</h1>
-        <button onClick={() => setShowAdd(true)} data-testid="add-account-btn"
-          style={{ ...T.btnPrimary, padding: "8px 16px", fontSize: "12px" }}>
-          <Plus size={14} /> Connect Account
-        </button>
+      <div style={{ marginBottom: "28px" }}>
+        <h1 style={{ ...T.h1, margin: "0 0 6px" }}>Connected Accounts</h1>
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0 }}>
+          Each organisation has one account per provider. Click a provider to connect or manage settings.
+        </p>
       </div>
 
-      {/* Add account — provider selector + non-Discord forms */}
-      {showAdd && (
-        <div style={{ ...T.card, marginBottom: "20px", border: `1px solid ${colors.brand.primary}40` }}>
-          <h3 style={{ ...T.sectionTitle, marginBottom: "14px" }}>Connect a Provider Account</h3>
-
-          {!addProvider ? (
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              {Object.entries(PROVIDER_META).map(([key, meta]) => (
-                <button key={key} onClick={() => setAddProvider(key)}
-                  data-testid={`select-provider-${key}`}
-                  style={{
-                    ...T.card, cursor: "pointer", display: "flex", alignItems: "center", gap: "10px",
-                    padding: "14px 20px", flex: "1", minWidth: "140px", transition: "border-color 0.2s",
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = meta.color}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = colors.border.default}
-                >
-                  <meta.icon size={20} color={meta.color} />
-                  <span style={{ fontFamily: fonts.body, fontSize: "14px", fontWeight: "600", color: colors.text.primary }}>
-                    {meta.label}
-                  </span>
-                </button>
-              ))}
-              <button onClick={closeForm} style={{ ...T.btnGhost, alignSelf: "center" }}>Cancel</button>
-            </div>
-          ) : (
-            /* Telegram / Zendesk inline form */
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
-                {(() => { const M = PROVIDER_META[addProvider]; return <M.icon size={16} color={M.color} />; })()}
-                <span style={{ fontFamily: fonts.body, fontSize: "14px", fontWeight: "600", color: colors.text.primary }}>
-                  {PROVIDER_META[addProvider].label}
-                </span>
-                <button onClick={() => setAddProvider("")} style={{ ...T.btnGhost, marginLeft: "auto", fontSize: "11px" }}>Change</button>
-              </div>
-
-              <label style={T.label}>Account Name</label>
-              <input value={addName} onChange={e => setAddName(e.target.value)}
-                placeholder={`e.g., My ${PROVIDER_META[addProvider].label} Bot`}
-                style={{ ...T.input, marginBottom: "12px" }} onFocus={onFocus} onBlur={onBlur}
-                data-testid="account-name-input" />
-
-              {(PROVIDER_FIELDS[addProvider] || []).map(field => (
-                <div key={field.key} style={{ marginBottom: "12px" }}>
-                  <label style={T.label}>{field.label}</label>
-                  {field.type === "select" ? (
-                    <select value={addCreds[field.key] || field.options[0]}
-                      onChange={e => setAddCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      style={{ ...T.input, cursor: "pointer" }}>
-                      {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  ) : (
-                    <input type={field.type === "password" ? "password" : "text"}
-                      value={addCreds[field.key] || ""}
-                      onChange={e => setAddCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.label} style={T.input} onFocus={onFocus} onBlur={onBlur}
-                      data-testid={`account-cred-${field.key}`} />
-                  )}
-                  {field.hint && <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "4px 0 0" }}>{field.hint}</p>}
-                </div>
-              ))}
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                <button onClick={handleAdd} disabled={saving || !addName.trim()}
-                  data-testid="save-account-btn"
-                  style={{ ...T.btnPrimary, opacity: saving || !addName.trim() ? 0.5 : 1 }}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : "Connect"}
-                </button>
-                <button onClick={closeForm} style={T.btnGhost}>Cancel</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Account list */}
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px" }}>
           <Loader2 size={24} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
         </div>
-      ) : accounts.length === 0 ? (
-        <div style={{ ...T.card, textAlign: "center", padding: "48px" }}>
-          <Link2 size={32} color={colors.text.muted} style={{ marginBottom: "12px" }} />
-          <p style={{ ...T.sectionTitle, marginBottom: "8px" }}>No connected accounts</p>
-          <p style={T.sectionSub}>Connect a Discord bot, Telegram bot, or Zendesk account to get started.</p>
-        </div>
       ) : (
-        <div style={{ display: "grid", gap: "12px" }}>
-          {accounts.map(acc => {
-            const meta = PROVIDER_META[acc.provider] || { label: acc.provider, icon: Link2, color: colors.text.muted };
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
+          {Object.entries(PROVIDER_META).map(([key, meta]) => {
+            const acc = accountByProvider[key];
+            const connected = acc?.status === "connected";
+            const disconnected = acc?.status === "disconnected";
             const Icon = meta.icon;
             return (
-              <div key={acc.id} style={{ ...T.card, display: "flex", alignItems: "center", gap: "14px", padding: "16px 20px" }}
-                data-testid={`account-card-${acc.id}`}>
-                <div style={{
-                  width: "38px", height: "38px", borderRadius: radius.md,
-                  backgroundColor: meta.color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }}>
-                  <Icon size={18} color={meta.color} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "3px" }}>
-                    <span style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary }}>{acc.name}</span>
-                    <StatusBadge status={acc.status} />
+              <button key={key} onClick={() => handleProviderClick(key)}
+                data-testid={`provider-card-${key}`}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "12px",
+                  padding: "20px", borderRadius: "14px", cursor: "pointer", textAlign: "left", width: "100%",
+                  border: `1px solid ${connected ? meta.color + "40" : colors.border.default}`,
+                  backgroundColor: connected ? meta.color + "08" : colors.bg.panel,
+                  transition: "border-color 0.2s, box-shadow 0.2s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}30`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = connected ? meta.color + "40" : colors.border.default; e.currentTarget.style.boxShadow = "none"; }}
+              >
+                {/* Top row: icon + status */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                  <div style={{
+                    width: "42px", height: "42px", borderRadius: "12px",
+                    backgroundColor: meta.color + "18",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Icon size={20} color={meta.color} />
                   </div>
-                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
-                    {meta.label} · {acc.connection_count || 0} connection{acc.connection_count !== 1 ? "s" : ""}
-                    {acc.active_connection_count > 0 && ` · ${acc.active_connection_count} active`}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                  {(acc.provider === "discord" || acc.provider === "zendesk") && acc.status === "connected" && (
-                    <button onClick={() => handleEdit(acc)} title="Settings"
-                      data-testid={`edit-account-${acc.id}`}
-                      style={{ ...T.btnGhost, fontSize: "11px" }}>
-                      {acc.provider === "discord"
-                        ? <><Zap size={12} color="#5865F2" /> Settings</>
-                        : <><Settings size={12} color="#17A589" /> Settings</>
-                      }
-                    </button>
+                  {connected && (
+                    <div data-testid={`provider-connected-${key}`} style={{
+                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
+                      backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)",
+                    }}>
+                      <CheckCircle size={12} color="#34D399" />
+                      <span style={{ fontSize: "11px", fontWeight: "600", color: "#34D399", fontFamily: fonts.mono }}>Connected</span>
+                    </div>
                   )}
-                  {acc.status === "disconnected" && (
-                    <button onClick={() => handleReconnect(acc)} title="Reconnect"
-                      style={{ ...T.btnGhost, color: colors.brand.success, borderColor: "rgba(52,211,153,0.3)" }}>
-                      <RefreshCw size={12} /> Reconnect
-                    </button>
+                  {disconnected && (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
+                      backgroundColor: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)",
+                    }}>
+                      <AlertCircle size={12} color="#FB923C" />
+                      <span style={{ fontSize: "11px", fontWeight: "600", color: "#FB923C", fontFamily: fonts.mono }}>Disconnected</span>
+                    </div>
                   )}
-                  <button onClick={() => handleDisconnect(acc)} title="Disconnect"
-                    data-testid={`disconnect-account-${acc.id}`}
-                    style={{ ...T.btnGhost, color: colors.brand.error, borderColor: "rgba(244,63,94,0.2)" }}>
-                    <WifiOff size={12} />
-                  </button>
+                  {!acc && (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
+                      backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
+                    }}>
+                      <Plus size={12} color={colors.text.muted} />
+                      <span style={{ fontSize: "11px", fontWeight: "500", color: colors.text.muted, fontFamily: fonts.mono }}>Connect</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+
+                {/* Provider name */}
+                <div>
+                  <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 3px" }}>
+                    {meta.label}
+                  </p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: 0, lineHeight: "1.4" }}>
+                    {key === "discord" && "Connect your Discord bot to respond in servers and channels."}
+                    {key === "telegram" && "Connect a Telegram bot for group and direct message responses."}
+                    {key === "zendesk" && "Auto-reply to tickets or provide AI suggestions for agents."}
+                  </p>
+                </div>
+
+                {/* Account info if exists */}
+                {acc && (
+                  <div style={{
+                    width: "100%", padding: "8px 12px", borderRadius: "8px",
+                    backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+                    marginTop: "-4px",
+                  }}>
+                    <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "500", color: colors.text.secondary, margin: 0 }}>
+                      {acc.name}
+                    </p>
+                    <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>
+                      {acc.connection_count || 0} connection{acc.connection_count !== 1 ? "s" : ""}
+                      {acc.active_connection_count > 0 && ` · ${acc.active_connection_count} active`}
+                    </p>
+                  </div>
+                )}
+              </button>
             );
           })}
         </div>

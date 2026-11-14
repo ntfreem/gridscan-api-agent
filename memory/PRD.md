@@ -98,6 +98,8 @@ Organisation
 ### UI/UX Polish (Done — Nov 2026)
 - [x] Discord guided setup panel in ConnectedAccounts.js (matches DiscordAppSetup.js design)
 - [x] Zendesk guided setup & settings panel in ConnectedAccounts.js (matches ZendeskSettings.js design — Connection card, Integration Status, Response Mode toggles)
+- [x] Telegram guided setup & settings panel in ConnectedAccounts.js (Connection card, masked token, Test button, Save/Reconnect/Disconnect)
+- [x] Provider Cards grid — 3 cards (Discord, Telegram, Zendesk) always visible with Connected/Disconnected/Connect badges, one account per org per provider
 - [x] Organisation management page with CRUD
 - [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
 - [x] API scraper merged into Knowledge Base tab
