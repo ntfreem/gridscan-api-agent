@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Network, Plus, Loader2, Zap, Send, Headphones, Link2, Power, PowerOff,
   CheckCircle, AlertCircle, ExternalLink, Copy, Mail, RefreshCw, Globe,
   MessageSquare, AtSign, Hash, Radio, Shield, WifiOff, ChevronRight, Settings,
-  Eye, Code, Users,
+  Eye, Code, Users, Server,
 } from "lucide-react";
 import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import { toast } from "sonner";
 import v2 from "@/utils/v2api";
+import api from "@/utils/api";
 
 const PROVIDER_META = {
   discord: { label: "Discord", icon: Zap, color: "#5865F2", desc: "Connect your bot to Discord servers and channels" },
@@ -77,14 +78,94 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
   const [cooldown, setCooldown] = useState(overrides.human_takeover?.cooldown_minutes ?? 15);
   const [resumeCommand] = useState(overrides.human_takeover?.resume_command || "!bot resume");
   const [followUpMsg, setFollowUpMsg] = useState(overrides.human_takeover?.follow_up_message || "Is there anything else I can help with?");
-  const [handoffChannels] = useState(overrides.human_takeover?.handoff_channels || []);
   const [savingConfig, setSavingConfig] = useState(false);
 
-  // Read client_id from credentials_masked or credentials_display
+  // V1 live-state: bot status, channels, handoff
+  const [botStatus, setBotStatus] = useState({ status: "offline", bot_name: null });
+  const [handoffChannels, setHandoffChannels] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [monitoredChannelIds, setMonitoredChannelIds] = useState(overrides.monitored_channel_ids || conn?.destination?.monitored_channel_ids || []);
+  const [fetchingChannels, setFetchingChannels] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [resumingHandoff, setResumingHandoff] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const pollRef = useRef(null);
+
+  // Invite URL from account credentials
   const clientId = account?.credentials_masked?.application_id || account?.credentials_masked?.client_id || account?.credentials_display?.client_id || "";
   const inviteUrl = clientId
     ? `https://discord.com/oauth2/authorize?client_id=${clientId}&scope=bot+applications.commands&permissions=2147483648`
     : null;
+
+  const isOnline = botStatus.status === "online";
+
+  // Poll bot status + handoff status via V1 api
+  const loadStatus = useCallback(() => {
+    api.get("/discord/status").then(r => setBotStatus(r.data)).catch(() => {});
+    api.get("/discord/handoff-status").then(r => setHandoffChannels(r.data?.channels || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadStatus();
+    pollRef.current = setInterval(loadStatus, 5000);
+    return () => clearInterval(pollRef.current);
+  }, [loadStatus]);
+
+  // Fetch channels from Discord for specific_channels mode
+  const fetchChannels = async () => {
+    setFetchingChannels(true);
+    try {
+      const res = await api.get("/discord/channels");
+      setChannels(res.data);
+      if (res.data.length === 0) toast.info("No text channels found.");
+      else toast.success(`Found ${res.data.length} channel(s)`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to fetch channels"); }
+    finally { setFetchingChannels(false); }
+  };
+
+  const toggleChannel = (id) => setMonitoredChannelIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+
+  // Start / restart bot
+  const startBot = async () => {
+    setStarting(true);
+    try { await api.post("/discord/restart"); toast.success("Discord bot starting..."); setTimeout(loadStatus, 3000); }
+    catch (e) { toast.error(e.response?.data?.detail || "Failed to start bot"); }
+    finally { setStarting(false); }
+  };
+
+  // Sync name to Discord
+  const syncName = async () => {
+    setSyncing(true);
+    try { const res = await api.post("/discord/sync-name"); toast.success(res.data?.message || "Name synced"); setTimeout(loadStatus, 2000); }
+    catch (e) { toast.error(e.response?.data?.detail || "Failed to sync name"); }
+    finally { setSyncing(false); }
+  };
+
+  // Resume from handoff
+  const resumeHandoff = async () => {
+    setResumingHandoff(true);
+    try {
+      const r = await api.post("/discord/handoff-resume");
+      toast.success(r.data?.cleared > 0 ? `Bot resumed in ${r.data.cleared} channel(s)` : "No active handoffs");
+      setHandoffChannels([]);
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to resume"); }
+    finally { setResumingHandoff(false); }
+  };
+
+  // Invite bot via OAuth
+  const inviteBot = async () => {
+    setInviting(true);
+    try {
+      const res = await api.get("/discord/oauth-url");
+      window.location.href = res.data.url;
+    } catch {
+      // Fallback to manual invite URL
+      if (inviteUrl) window.open(inviteUrl, "_blank");
+      else toast.error("Add an Application ID in Discord App Setup to generate the invite link.");
+      setInviting(false);
+    }
+  };
 
   const handleCreate = () => {
     const discordAccount = accounts.find(a => a.provider === "discord");
@@ -102,21 +183,34 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
     setSavingConfig(true);
     try {
       await v2.updateConnection(orgId, botId, conn.id, {
-        destination: { ...conn.destination, listen_mode: listenMode },
+        destination: { ...conn.destination, listen_mode: listenMode, monitored_channel_ids: monitoredChannelIds },
         overrides: {
           listen_mode: listenMode,
           reply_style: replyStyle,
           passive_mode: passiveMode,
           scripted_mode: scriptedMode,
+          monitored_channel_ids: monitoredChannelIds,
           human_takeover: {
             staff_role_name: staffRole,
             cooldown_minutes: cooldown,
             resume_command: resumeCommand,
             follow_up_message: followUpMsg,
-            handoff_channels: handoffChannels,
           },
         },
       });
+      // Also save to V1 config for the running bot
+      try {
+        await api.put("/discord/config", {
+          is_active: conn.enabled,
+          listen_mode: listenMode,
+          reply_style: replyStyle,
+          monitored_channel_ids: monitoredChannelIds,
+          staff_role_name: staffRole,
+          handoff_cooldown_minutes: cooldown,
+          handoff_followup_message: followUpMsg,
+          passive_mode: passiveMode,
+        });
+      } catch { /* V1 sync is best-effort */ }
       toast.success("Configuration saved");
       onRefresh();
     } catch {
@@ -125,6 +219,12 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
       setSavingConfig(false);
     }
   };
+
+  // Group channels by guild
+  const channelsByGuild = channels.reduce((acc, ch) => {
+    (acc[ch.guild_name] = acc[ch.guild_name] || []).push(ch);
+    return acc;
+  }, {});
 
   return (
     <div data-testid="discord-detail-view">
@@ -151,34 +251,36 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
         {/* ═══ Left column ═══ */}
         <div>
-          {/* Connect to Discord */}
+          {/* Connect to Discord / Invite */}
           <div style={{
             padding: "20px", borderRadius: "14px", marginBottom: "16px",
             border: `1px solid ${isConnected ? "rgba(52,211,153,0.2)" : colors.border.default}`,
             backgroundColor: isConnected ? "rgba(52,211,153,0.03)" : colors.bg.panel,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-              <Globe size={18} color={colors.text.secondary} />
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+              <div style={{ width: "36px", height: "36px", borderRadius: "10px", backgroundColor: "rgba(88,101,242,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Server size={18} color="#5865F2" />
+              </div>
               <div>
-                <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Connect to Discord</p>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "2px 0 0" }}>Invite the bot to your Discord server</p>
+                <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Connect to Discord</p>
+                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "2px 0 0" }}>Invite the bot to your Discord server</p>
               </div>
             </div>
 
-            {isConnected ? (
-              <div style={{
+            {isConnected && (
+              <div data-testid="discord-guild-info" style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "14px 16px", borderRadius: "10px", marginBottom: "14px",
-                backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)",
+                padding: "12px 14px", borderRadius: "10px", marginBottom: "16px",
+                backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.2)",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <CheckCircle size={18} color="#34D399" />
+                  <CheckCircle size={15} color="#34D399" />
                   <div>
-                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "#34D399", fontFamily: fonts.body }}>
+                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "500", color: "#34D399", fontFamily: fonts.body }}>
                       Connected to "{conn.name.replace(/^Discord — /, "")}"
                     </p>
                     {conn.destination?.guild_id && (
-                      <p style={{ margin: "2px 0 0", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
+                      <p style={{ margin: "2px 0 0", fontSize: "10px", color: colors.text.secondary, fontFamily: fonts.mono }}>
                         Guild ID: {conn.destination.guild_id}
                       </p>
                     )}
@@ -192,34 +294,28 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
                   <WifiOff size={12} /> Disconnect
                 </button>
               </div>
-            ) : (
-              <div style={{ marginBottom: "14px" }}>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 12px" }}>No Discord connection yet.</p>
-                {!accounts.find(a => a.provider === "discord") && (
-                  <div style={{ padding: "10px 14px", borderRadius: "8px", marginBottom: "12px", backgroundColor: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)" }}>
-                    <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#FBBF24", margin: 0 }}>
-                      <AlertCircle size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: "6px" }} />
-                      Set up a Discord account first in <a href="/admin/accounts/discord" style={{ color: colors.brand.light }}>Discord App Setup</a>
-                    </p>
-                  </div>
-                )}
+            )}
+
+            {!isConnected && !accounts.find(a => a.provider === "discord") && (
+              <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.default}`, marginBottom: "16px" }}>
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0 }}>
+                  Discord OAuth is not configured. Open <a href="/admin/accounts/discord" style={{ color: colors.brand.light }}>Discord App Setup</a> to configure credentials.
+                </p>
               </div>
             )}
 
-            {/* Invite button — always visible */}
-            <a href={inviteUrl || "#"} target={inviteUrl ? "_blank" : undefined} rel="noopener noreferrer"
-              data-testid="discord-invite-btn"
-              onClick={e => { if (!inviteUrl) { e.preventDefault(); toast.error("Add an Application ID in Discord App Setup to generate the invite link."); } }}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                width: "100%", padding: "12px 20px", borderRadius: "10px",
-                background: "linear-gradient(135deg, #4752C4, #5865F2)", color: "#fff",
-                fontFamily: fonts.body, fontSize: "14px", fontWeight: "700",
-                textDecoration: "none", marginBottom: "16px", border: "none", cursor: "pointer",
-                opacity: inviteUrl ? 1 : 0.6,
-              }}>
-              <Link2 size={16} /> {isConnected ? "Invite to Another Server" : "Invite Bot to Server"}
-            </a>
+            {/* Invite Bot button */}
+            <button onClick={inviteBot} disabled={inviting} data-testid="discord-invite-btn" style={{
+              width: "100%", padding: "13px 20px", backgroundColor: "#5865F2",
+              color: "#FFFFFF", border: "none", borderRadius: "10px",
+              fontSize: "14px", fontFamily: fonts.body, fontWeight: "600",
+              cursor: inviting ? "not-allowed" : "pointer", opacity: inviting ? 0.7 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+              transition: "all 0.2s", marginBottom: "16px",
+            }}>
+              <Link2 size={16} />
+              {inviting ? "Redirecting to Discord..." : isConnected ? "Invite to Another Server" : "Invite Bot to Server"}
+            </button>
 
             {/* Share invite link */}
             <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}` }}>
@@ -270,27 +366,23 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
           {/* Setup Guide */}
           <div style={cardStyle} data-testid="discord-setup-guide">
-            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 14px" }}>Setup Guide</p>
+            <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 24px" }}>Setup Guide</p>
             {[
               { n: "01", title: "Enable Message Content Intent", desc: "Go to the Discord Developer Portal, select your app, navigate to \"Bot\" settings, and enable \"Message Content Intent\".", link: { label: "Open Discord Developer Portal", url: "https://discord.com/developers/applications" } },
               { n: "02", title: "Invite Bot to Your Server", desc: "Click the \"Invite Bot to Server\" button above. Select a server and authorize the bot." },
               { n: "03", title: "Configure & Start", desc: "Set your preferred listen mode and reply style, toggle Active, save, then start the bot." },
             ].map(s => (
-              <div key={s.n} style={{ display: "flex", gap: "12px", marginBottom: "14px" }}>
-                <div style={{
-                  width: "28px", height: "28px", borderRadius: "8px", backgroundColor: "#5865F218",
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  fontFamily: fonts.mono, fontSize: "11px", fontWeight: "700", color: "#5865F2",
-                }}>{s.n}</div>
+              <div key={s.n} style={{ display: "flex", gap: "16px", marginBottom: "22px" }}>
+                <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: "#5865F2", flexShrink: 0, paddingTop: "2px", minWidth: "24px" }}>{s.n}</span>
                 <div>
-                  <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: "0 0 3px" }}>{s.title}</p>
-                  <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0, lineHeight: "1.5" }}>{s.desc}</p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: "500", color: colors.text.primary, margin: "0 0 4px" }}>{s.title}</p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: "0 0 6px", lineHeight: "1.6" }}>{s.desc}</p>
                   {s.link && (
                     <a href={s.link.url} target="_blank" rel="noopener noreferrer" style={{
-                      display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "4px",
-                      fontFamily: fonts.body, fontSize: "11px", color: colors.brand.light, textDecoration: "none",
+                      fontSize: "12px", color: colors.brand.light, fontFamily: fonts.body,
+                      textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px",
                     }}>
-                      {s.link.label} <ExternalLink size={10} />
+                      {s.link.label} <ExternalLink size={11} />
                     </a>
                   )}
                 </div>
@@ -324,23 +416,51 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
         {/* ═══ Right column ═══ */}
         <div>
+          {/* Bot Status */}
+          <div style={{ ...cardStyle, borderColor: isOnline ? "rgba(52,211,153,0.3)" : colors.border.default }} data-testid="discord-bot-status-card">
+            <p style={{ fontFamily: fonts.mono, fontSize: "10px", letterSpacing: "0.1em", color: colors.text.muted, margin: "0 0 12px", textTransform: "uppercase" }}>Bot Status</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: isOnline ? "#34D399" : colors.text.muted, boxShadow: isOnline ? "0 0 12px #34D399" : "none", flexShrink: 0 }} />
+              <div>
+                <p style={{ fontFamily: fonts.heading, fontSize: "18px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>{isOnline ? "Online" : "Offline"}</p>
+                {botStatus.bot_name && <p style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, margin: "2px 0 0" }}>{botStatus.bot_name}</p>}
+              </div>
+              <button onClick={loadStatus} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: colors.text.secondary, padding: "4px" }}><RefreshCw size={14} /></button>
+            </div>
+            <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: `1px solid ${colors.border.default}` }}>
+              <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: "0 0 10px" }}>
+                Bot name is set in <strong style={{ color: colors.text.primary }}>Bot Settings</strong>. Sync it to Discord here.
+              </p>
+              <button onClick={syncName} disabled={syncing} data-testid="sync-name-btn" style={{
+                display: "flex", alignItems: "center", gap: "6px", padding: "7px 14px",
+                borderRadius: "8px", border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
+                opacity: syncing ? 0.6 : 1,
+              }}>
+                <RefreshCw size={11} /> {syncing ? "Syncing..." : "Sync Name to Discord"}
+              </button>
+            </div>
+          </div>
+
           {/* Configuration — Bot Active */}
           <div style={cardStyle} data-testid="discord-config-card">
-            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 14px" }}>Configuration</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0 }}>Bot Active</p>
+            <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 20px" }}>Configuration</p>
+            <div>
+              <label style={T.label}>Bot Active</label>
               {isConnected ? (
                 <button onClick={() => onToggle(conn)} data-testid="discord-active-toggle" style={{
-                  display: "flex", alignItems: "center", gap: "6px", padding: "6px 16px",
-                  borderRadius: "10px", border: "none", cursor: "pointer",
-                  backgroundColor: conn.enabled ? "rgba(52,211,153,0.1)" : "rgba(244,63,94,0.1)",
-                  color: conn.enabled ? "#34D399" : "#F43F5E",
-                  fontFamily: fonts.body, fontSize: "13px", fontWeight: "600",
+                  display: "flex", alignItems: "center", gap: "10px", padding: "10px 16px",
+                  backgroundColor: conn.enabled ? "rgba(52,211,153,0.06)" : colors.bg.panel,
+                  border: `1px solid ${conn.enabled ? "rgba(52,211,153,0.3)" : colors.border.default}`,
+                  borderRadius: "10px", cursor: "pointer",
+                  color: conn.enabled ? "#34D399" : colors.text.secondary,
+                  fontFamily: fonts.body, fontSize: "13px", fontWeight: "500", transition: "all 0.2s",
                 }}>
-                  {conn.enabled ? <><CheckCircle size={14} /> Active</> : <><PowerOff size={14} /> Inactive</>}
+                  {conn.enabled ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+                  {conn.enabled ? "Active" : "Inactive"}
                 </button>
               ) : (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 16px", borderRadius: "10px", backgroundColor: "rgba(148,163,184,0.08)", color: colors.text.muted, fontFamily: fonts.body, fontSize: "13px", fontWeight: "600" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "10px 16px", borderRadius: "10px", backgroundColor: "rgba(148,163,184,0.08)", color: colors.text.muted, fontFamily: fonts.body, fontSize: "13px", fontWeight: "500" }}>
                   <PowerOff size={14} /> Not Connected
                 </span>
               )}
@@ -349,75 +469,144 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
           {/* Listen Mode */}
           <div style={cardStyle} data-testid="discord-listen-mode-card">
-            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 14px" }}>Listen Mode</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+            <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>Listen Mode</p>
+            <div style={{ display: "flex", gap: "8px", marginBottom: listenMode === "specific_channels" ? "20px" : "0" }}>
               {[
                 { value: "mention_only", label: "Mention Only", icon: AtSign, desc: "Responds when @tagged or in DMs" },
                 { value: "all_channels", label: "All Channels", icon: Radio, desc: "Responds to every human message" },
                 { value: "specific_channels", label: "Specific Channels", icon: Hash, desc: "Pick which channels to monitor" },
               ].map(mode => (
                 <button key={mode.value} onClick={() => setListenMode(mode.value)} data-testid={`listen-mode-${mode.value}`} style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: "6px",
-                  padding: "14px 8px", borderRadius: "10px", cursor: "pointer", textAlign: "center",
+                  flex: 1, padding: "10px 12px", borderRadius: "10px", cursor: "pointer",
                   border: `1px solid ${listenMode === mode.value ? "#5865F250" : colors.border.default}`,
-                  backgroundColor: listenMode === mode.value ? "#5865F20a" : colors.bg.base,
+                  backgroundColor: listenMode === mode.value ? "rgba(96,165,250,0.06)" : colors.bg.base,
+                  color: listenMode === mode.value ? colors.text.primary : colors.text.secondary,
+                  fontFamily: fonts.body, fontSize: "12px", fontWeight: listenMode === mode.value ? "600" : "400",
+                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px",
+                  transition: "all 0.2s",
                 }}>
-                  <mode.icon size={18} color={listenMode === mode.value ? "#5865F2" : colors.text.muted} />
-                  <span style={{ fontFamily: fonts.body, fontSize: "11px", fontWeight: "700", color: listenMode === mode.value ? "#5865F2" : colors.text.primary }}>{mode.label}</span>
-                  <span style={{ fontFamily: fonts.body, fontSize: "9px", color: colors.text.muted, lineHeight: "1.3" }}>{mode.desc}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><mode.icon size={12} />{mode.label}</span>
+                  <span style={{ fontSize: "10px", color: colors.text.secondary, fontFamily: fonts.body }}>{mode.desc}</span>
                 </button>
               ))}
             </div>
+
+            {/* Specific Channels selector */}
+            {listenMode === "specific_channels" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                  <label style={{ ...T.label, margin: 0 }}>Select Channels to Monitor</label>
+                  <button onClick={fetchChannels} disabled={fetchingChannels} data-testid="fetch-channels-btn" style={{
+                    display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px",
+                    borderRadius: "8px", border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+                    color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.body, cursor: "pointer",
+                    opacity: fetchingChannels ? 0.6 : 1,
+                  }}>
+                    <RefreshCw size={11} className={fetchingChannels ? "animate-spin" : ""} />
+                    {fetchingChannels ? "Fetching..." : "Fetch Channels"}
+                  </button>
+                </div>
+                {channels.length === 0 && (
+                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, padding: "16px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.default}`, margin: 0 }}>
+                    Click "Fetch Channels" to load channels from your Discord server.
+                    {monitoredChannelIds.length > 0 && ` (${monitoredChannelIds.length} saved)`}
+                  </p>
+                )}
+                {Object.entries(channelsByGuild).map(([guildName, guildChannels]) => (
+                  <div key={guildName} style={{ marginBottom: "12px" }}>
+                    <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.secondary, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>{guildName}</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {guildChannels.map(ch => (
+                        <button key={ch.id} onClick={() => toggleChannel(ch.id)} data-testid={`channel-${ch.id}`} style={{
+                          display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px",
+                          border: `1px solid ${monitoredChannelIds.includes(ch.id) ? "#5865F250" : colors.border.default}`,
+                          borderRadius: "10px", backgroundColor: monitoredChannelIds.includes(ch.id) ? "rgba(96,165,250,0.06)" : colors.bg.base,
+                          cursor: "pointer", transition: "all 0.2s",
+                          fontFamily: fonts.body, fontSize: "12px",
+                          color: monitoredChannelIds.includes(ch.id) ? colors.text.primary : colors.text.secondary,
+                        }}>
+                          <Hash size={11} /> {ch.name}
+                          {monitoredChannelIds.includes(ch.id) && <CheckCircle size={10} color="#34D399" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {monitoredChannelIds.length > 0 && (
+                  <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.brand.light, marginTop: "8px" }}>
+                    {monitoredChannelIds.length} channel{monitoredChannelIds.length !== 1 ? "s" : ""} selected
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Reply Style */}
           <div style={cardStyle} data-testid="discord-reply-style-card">
-            <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 14px" }}>Reply Style</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: "0 0 16px" }}>Reply Style</p>
+            <div style={{ display: "flex", gap: "8px" }}>
               {[
                 { value: "natural", icon: MessageSquare, label: "Natural reply", desc: "Replies without mentioning the user" },
                 { value: "mention", icon: AtSign, label: "With @mention", desc: "Pings the user in the reply" },
               ].map(s => (
                 <button key={s.value} onClick={() => setReplyStyle(s.value)} data-testid={`reply-style-${s.value}`} style={{
-                  padding: "14px", borderRadius: "10px", cursor: "pointer", textAlign: "left",
+                  flex: 1, padding: "10px 12px", borderRadius: "10px", cursor: "pointer",
                   border: `1px solid ${replyStyle === s.value ? "#5865F250" : colors.border.default}`,
-                  backgroundColor: replyStyle === s.value ? "#5865F20a" : colors.bg.base,
+                  backgroundColor: replyStyle === s.value ? "rgba(96,165,250,0.06)" : colors.bg.base,
+                  color: replyStyle === s.value ? colors.text.primary : colors.text.secondary,
+                  fontFamily: fonts.body, fontSize: "12px", fontWeight: replyStyle === s.value ? "600" : "400",
+                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px",
+                  transition: "all 0.2s",
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <s.icon size={14} color={replyStyle === s.value ? "#5865F2" : colors.text.muted} />
-                    <span style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "700", color: replyStyle === s.value ? "#5865F2" : colors.text.primary }}>{s.label}</span>
-                  </div>
-                  <span style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, lineHeight: "1.4" }}>{s.desc}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><s.icon size={12} />{s.label}</span>
+                  <span style={{ fontSize: "10px", color: colors.text.secondary, fontFamily: fonts.body }}>{s.desc}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Passive Mode */}
-          <div style={cardStyle} data-testid="discord-passive-mode-card">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+          <div style={{ ...cardStyle, borderColor: passiveMode ? "rgba(96,165,250,0.3)" : colors.border.default }} data-testid="discord-passive-mode-card">
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
               <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                  <Eye size={16} color={colors.text.secondary} />
-                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Passive Mode</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <Radio size={15} color={passiveMode ? colors.brand.light : colors.text.muted} />
+                  <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Passive Mode</p>
+                  {passiveMode && (
+                    <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.light, backgroundColor: "rgba(96,165,250,0.1)", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Active
+                    </span>
+                  )}
                 </div>
-                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0, lineHeight: "1.6" }}>
-                  Only reply when the bot detects a real question it can answer confidently from your knowledge base. Silently ignores small talk, greetings, opinions, and off-topic chatter. Direct @mentions and DMs always get a reply, regardless of this setting.
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
+                  Only reply when the bot detects a real question it can answer confidently from your knowledge base.
+                  Silently ignores small talk, greetings, opinions, and off-topic chatter.
+                  Direct @mentions and DMs always get a reply, regardless of this setting.
                 </p>
               </div>
               <ToggleSwitch on={passiveMode} onChange={() => setPassiveMode(!passiveMode)} testId="toggle-passive-mode" />
             </div>
+            {passiveMode && (
+              <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, marginTop: "12px", marginBottom: 0, padding: "8px 12px", backgroundColor: "rgba(96,165,250,0.04)", border: "1px solid rgba(96,165,250,0.15)", borderRadius: "8px", lineHeight: "1.5" }}>
+                <strong style={{ color: colors.text.primary }}>Tip:</strong> Best paired with <em>All Channels</em> listen mode in busy servers — the bot will quietly monitor every channel and only chime in when it has a useful answer.
+              </p>
+            )}
           </div>
 
           {/* Scripted Mode */}
           <div style={cardStyle} data-testid="discord-scripted-mode-card">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
               <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                  <Code size={16} color={colors.text.secondary} />
-                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Scripted Mode</p>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <Code size={15} color={scriptedMode ? colors.brand.light : colors.text.muted} />
+                  <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Scripted Mode</p>
+                  {scriptedMode && (
+                    <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.light, backgroundColor: "rgba(96,165,250,0.1)", padding: "2px 8px", borderRadius: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Active
+                    </span>
+                  )}
                 </div>
-                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: 0, lineHeight: "1.6" }}>
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.6" }}>
                   Bypasses the knowledge base and reply with a fixed maintenance/incident message. Useful for service outages, bridge pauses, or scheduled downtime. First reply to a user is verbatim; follow-ups get rephrased so it doesn't feel robotic.
                 </p>
               </div>
@@ -427,11 +616,11 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
           {/* Human Takeover */}
           <div style={cardStyle} data-testid="discord-human-takeover-card">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-              <Users size={16} color={colors.text.secondary} />
-              <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>Human Takeover</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <Users size={16} color={colors.brand.light} />
+              <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Human Takeover</p>
             </div>
-            <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 16px", lineHeight: "1.6" }}>
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: "0 0 16px", lineHeight: "1.6" }}>
               When a team member with the designated role replies in a channel, the bot automatically goes silent in that specific channel. It continues monitoring all other channels. After the cooldown, the bot re-engages.
             </p>
 
@@ -440,87 +629,93 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
               <input value={staffRole} onChange={e => setStaffRole(e.target.value)}
                 placeholder="e.g. Support, Moderator" style={T.input}
                 onFocus={onFocus} onBlur={onBlur} data-testid="staff-role-name" />
-              <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "4px 0 0" }}>
-                Discord role name for staff members. Leave empty to disable human takeover.
-              </p>
+              <p style={T.hint}>Discord role name for staff members. Leave empty to disable human takeover.</p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               <div>
                 <label style={T.label}>Cooldown (minutes)</label>
-                <input type="number" value={cooldown} onChange={e => setCooldown(parseInt(e.target.value) || 0)}
-                  style={T.input} data-testid="cooldown-minutes" />
-                <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "4px 0 0" }}>
-                  Time before bot re-engages after staff stops replying.
-                </p>
+                <input type="number" min="1" max="120" value={cooldown}
+                  onChange={e => setCooldown(Math.max(1, parseInt(e.target.value) || 15))}
+                  style={T.input} data-testid="cooldown-minutes" onFocus={onFocus} onBlur={onBlur} />
+                <p style={T.hint}>Time before bot re-engages after staff stops replying.</p>
               </div>
               <div>
                 <label style={T.label}>Resume Command</label>
-                <div style={{ ...T.input, display: "flex", alignItems: "center", color: colors.text.muted, cursor: "default", padding: "8px 12px" }}>
-                  <code style={{ fontFamily: fonts.mono, fontSize: "12px" }}>{resumeCommand}</code>
+                <div style={{ padding: "10px 14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.default}`, fontFamily: fonts.mono, fontSize: "13px", color: colors.brand.light }}>
+                  {resumeCommand}
                 </div>
-                <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "4px 0 0" }}>
-                  Staff can type this to hand back to the bot immediately.
-                </p>
+                <p style={T.hint}>Staff can type this to hand back to the bot immediately.</p>
               </div>
             </div>
 
-            <div style={{ marginBottom: "14px" }}>
+            <div style={{ marginBottom: "18px" }}>
               <label style={T.label}>Follow-up Message</label>
               <input value={followUpMsg} onChange={e => setFollowUpMsg(e.target.value)}
-                placeholder="Message when bot resumes control" style={T.input}
+                placeholder="Is there anything else I can help with?" style={T.input}
                 onFocus={onFocus} onBlur={onBlur} data-testid="follow-up-message" />
-              <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "4px 0 0" }}>
-                Message the bot sends when it re-engages after cooldown.
-              </p>
+              <p style={T.hint}>Message the bot sends when it re-engages after cooldown.</p>
             </div>
 
+            {/* Currently in handoff — live from API */}
             <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "12px 14px", borderRadius: "10px",
-              backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
+              padding: "14px 16px", borderRadius: "10px",
+              backgroundColor: handoffChannels.length > 0 ? "rgba(251,191,36,0.05)" : colors.bg.base,
+              border: `1px solid ${handoffChannels.length > 0 ? "rgba(251,191,36,0.25)" : colors.border.default}`,
             }}>
-              <div>
-                <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.text.secondary, margin: 0 }}>
-                  Currently in handoff · <span style={{ fontFamily: fonts.mono }}>{handoffChannels.length} channel{handoffChannels.length !== 1 ? "s" : ""}</span>
-                </p>
-                <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>
-                  Bot is silent here until cooldown ends, a non-staff user posts, or you click Resume.
-                </p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: handoffChannels.length > 0 ? "10px" : 0 }}>
+                <div>
+                  <p style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                    Currently in handoff
+                    <span style={{ marginLeft: "8px", fontFamily: fonts.mono, fontSize: "11px", color: handoffChannels.length > 0 ? "#FBBF24" : colors.text.muted }}>
+                      {handoffChannels.length} channel{handoffChannels.length === 1 ? "" : "s"}
+                    </span>
+                  </p>
+                  <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.secondary, margin: "3px 0 0", lineHeight: "1.5" }}>
+                    Bot is silent here until cooldown ends, a non-staff user posts, or you click Resume.
+                  </p>
+                </div>
+                <button onClick={resumeHandoff} disabled={resumingHandoff || handoffChannels.length === 0} data-testid="resume-bot-now" style={{
+                  padding: "8px 14px",
+                  backgroundColor: handoffChannels.length > 0 ? "#34D399" : colors.bg.panel,
+                  color: handoffChannels.length > 0 ? "#FFFFFF" : colors.text.muted,
+                  border: "none", borderRadius: "8px",
+                  fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                  cursor: (resumingHandoff || handoffChannels.length === 0) ? "not-allowed" : "pointer",
+                  opacity: resumingHandoff ? 0.6 : 1,
+                  display: "flex", alignItems: "center", gap: "6px", flexShrink: 0,
+                }}>
+                  <RefreshCw size={12} /> {resumingHandoff ? "Resuming..." : "Resume Bot Now"}
+                </button>
               </div>
-              <button data-testid="resume-bot-now" style={{
-                display: "flex", alignItems: "center", gap: "5px", padding: "7px 14px", borderRadius: "8px", flexShrink: 0,
-                border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.panel,
-                color: colors.text.secondary, fontSize: "12px", fontFamily: fonts.body, cursor: "pointer",
-              }}>
-                <RefreshCw size={12} /> Resume Bot Now
-              </button>
+              {handoffChannels.length > 0 && (
+                <ul style={{ margin: "8px 0 0", paddingLeft: "16px", fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.7" }}>
+                  {handoffChannels.map((c) => (
+                    <li key={c.channel_id} data-testid="handoff-channel-row">
+                      #{c.channel_name || c.channel_id} — silent for ~{c.elapsed_min} min, {c.remaining_min} min remaining
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
-          {/* Save Configuration + Start Bot */}
-          <div style={{ display: "flex", gap: "10px" }}>
+          {/* Save + Start */}
+          <div style={{ display: "flex", gap: "12px" }}>
             <button onClick={handleSaveConfig} disabled={savingConfig || !isConnected} data-testid="save-config-btn" style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              flex: 1, padding: "14px 20px", borderRadius: "12px", border: "none", cursor: isConnected ? "pointer" : "not-allowed",
-              background: isConnected ? "linear-gradient(135deg, #4752C4, #5865F2)" : "rgba(148,163,184,0.15)",
-              color: isConnected ? "#fff" : colors.text.muted,
-              fontFamily: fonts.body, fontSize: "14px", fontWeight: "700",
-              opacity: savingConfig ? 0.6 : 1,
+              ...T.btnPrimary, flex: 1, justifyContent: "center",
+              opacity: (savingConfig || !isConnected) ? 0.6 : 1,
             }}>
-              {savingConfig ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
-              Save Configuration
+              {savingConfig ? "Saving..." : "Save Configuration"}
             </button>
-
-            <button data-testid="start-bot-btn" style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              padding: "14px 20px", borderRadius: "12px",
-              border: `1px solid ${isConnected ? "#5865F240" : colors.border.default}`,
-              backgroundColor: isConnected ? "#5865F20a" : colors.bg.base,
-              color: isConnected ? "#5865F2" : colors.text.muted,
-              fontFamily: fonts.body, fontSize: "13px", fontWeight: "600", cursor: "pointer", flexShrink: 0,
+            <button onClick={startBot} disabled={starting} data-testid="start-bot-btn" style={{
+              padding: "11px 20px", backgroundColor: colors.bg.panel,
+              color: "#34D399", border: "1px solid rgba(52,211,153,0.3)",
+              borderRadius: "10px", fontSize: "13px", fontFamily: fonts.body, fontWeight: "500",
+              cursor: starting ? "not-allowed" : "pointer", opacity: starting ? 0.6 : 1,
+              display: "flex", alignItems: "center", gap: "7px", transition: "all 0.2s", flexShrink: 0,
             }}>
-              <Zap size={16} /> Start Bot
+              <Zap size={13} /> {starting ? "Starting..." : "Start Bot"}
             </button>
           </div>
         </div>

@@ -109,6 +109,7 @@ Organisation
 - [x] Discord Bot detail: two-column layout with Connect card + invite link (left), Bot Status + Configuration + Listen Mode (right)
 - [x] Discord Bot detail production features: Reply Style, Passive Mode toggle, Scripted Mode toggle, Human Takeover (staff role, cooldown, resume command, follow-up message, handoff channels), Setup Guide, Save Configuration, Start Bot — Tested: 100% pass (iteration_72.json)
 - [x] Discord Bot detail production-matching layout: 50/50 grid, invite link always visible with fallback warning, production-accurate descriptions, section icons (Eye, Code, Users), Open Discord Developer Portal link, helper text under all fields, Save + Start side-by-side layout
+- [x] Discord Bot detail full production parity: Bot Status card (live polling), Specific Channels fetch+select, live handoff status, Start Bot (restart), Resume Bot Now (handoff-resume), OAuth invite flow, Passive/Scripted Mode Active badges + tip, Save syncs V2+V1
 - [x] Telegram & Zendesk detail views: connection status + response mode display
 
 ### Self-Hosting Readiness Docs (Done — Nov 2026)
