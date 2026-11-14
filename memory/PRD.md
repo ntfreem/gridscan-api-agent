@@ -100,6 +100,8 @@ Organisation
 - [x] Zendesk guided setup & settings panel in ConnectedAccounts.js (matches ZendeskSettings.js design — Connection card, Integration Status, Response Mode toggles)
 - [x] Telegram guided setup & settings panel in ConnectedAccounts.js (Connection card, masked token, Test button, Save/Reconnect/Disconnect)
 - [x] Provider Cards grid — 3 cards (Discord, Telegram, Zendesk) always visible with Connected/Disconnected/Connect badges, one account per org per provider
+- [x] Separate sidebar nav items for Discord, Telegram, Zendesk (replaces single "Connected Accounts" link), each at /admin/accounts/:provider
+- [x] Discord two-column layout always visible: Current Config (2x2 credential badges + timestamp) + Setup Guide (matching old DiscordAppSetup.js)
 - [x] Organisation management page with CRUD
 - [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
 - [x] API scraper merged into Knowledge Base tab

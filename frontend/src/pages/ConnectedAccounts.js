@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   Link2, Plus, Loader2, Zap, Send, Headphones, WifiOff, Wifi, RefreshCw,
@@ -128,72 +129,91 @@ function DiscordSetupPanel({ onSave, onCancel, saving, editAccount }) {
     onSave({ name: name.trim(), credentials });
   };
 
+  const isEdit = !!editAccount;
+
   return (
     <div data-testid="discord-setup-panel" style={{ marginBottom: "24px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Zap size={20} color="#5865F2" />
-          <h2 style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
-            Discord {editAccount ? "Account Settings" : "App Setup"}
-          </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
+        <div style={{
+          width: "36px", height: "36px", borderRadius: "10px",
+          background: "linear-gradient(135deg, #4752C4, #5865F2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Zap size={18} color="#fff" />
         </div>
-        <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px" }}><X size={16} /></button>
+        <h2 style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+          Discord App Setup
+        </h2>
+        {isEdit && allSet && (
+          <span style={{
+            fontSize: "11px", fontFamily: fonts.mono, padding: "3px 10px", borderRadius: "20px", letterSpacing: "0.05em",
+            backgroundColor: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)",
+          }}>CONFIGURED</span>
+        )}
       </div>
       <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 20px" }}>
-        Configure the Discord application that powers this bot account.
-        {!editAccount && " Follow the guide on the right to get your credentials."}
+        Configure the global Discord application that powers every bot instance on this platform.
+        {!isEdit && " You only need to do this once."}
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: editAccount ? "1fr" : "1fr 1fr", gap: "20px" }}>
+      {/* Always two columns: config + guide */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         {/* Left column — config + form */}
         <div>
-          {/* Account name */}
-          <div style={{ marginBottom: "16px" }}>
-            <label style={T.label}>Account Name</label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              placeholder="e.g., My Discord Bot" style={T.input}
-              onFocus={onFocus} onBlur={onBlur} data-testid="discord-account-name" />
-          </div>
-
           {/* Current config (for existing accounts) */}
-          {editAccount && (
+          {isEdit && (
             <div style={{ ...T.card, padding: "16px", marginBottom: "16px" }}>
-              <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
-                Current Configuration
-              </p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                  Current Configuration
+                </p>
+                {editAccount?.updated_at && (
+                  <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                    {new Date(editAccount.updated_at).toLocaleDateString()} {new Date(editAccount.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+              </div>
               <p style={{ fontFamily: fonts.body, fontSize: "11px", color: allSet ? colors.brand.success : colors.text.muted, margin: "0 0 12px" }}>
                 {allSet ? "All credentials configured" : "Some credentials missing"}
               </p>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                 <CredBadge ok={hasClientId} label="Client ID" display={existing.client_id} />
                 <CredBadge ok={hasClientSecret} label="Client Secret" display={existing.client_secret} />
+                <CredBadge ok={true} label="Redirect URI" display={suggestedRedirect.replace("https://", "").slice(0, 35) + "..."} />
                 <CredBadge ok={hasBotToken} label="Bot Token" display={existing.bot_token} />
               </div>
-              <div style={{ marginTop: "8px" }}>
-                <CredBadge ok={true} label="Redirect URI" display={suggestedRedirect.replace("https://", "").slice(0, 35) + "..."} />
-              </div>
+            </div>
+          )}
+
+          {/* Account name */}
+          {!isEdit && (
+            <div style={{ marginBottom: "16px" }}>
+              <label style={T.label}>Account Name</label>
+              <input value={name} onChange={e => setName(e.target.value)}
+                placeholder="e.g., My Discord Bot" style={T.input}
+                onFocus={onFocus} onBlur={onBlur} data-testid="discord-account-name" />
             </div>
           )}
 
           {/* Credential form */}
           <div style={{ ...T.card, padding: "16px" }}>
             <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>
-              {editAccount ? "Update Credentials" : "Enter Credentials"}
+              {isEdit ? "Update Credentials" : "Enter Credentials"}
             </p>
             <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 14px" }}>
-              {editAccount ? "Paste values from your Discord Developer Portal. Leave blank to keep existing." : "Paste your Discord app credentials from the Developer Portal."}
+              {isEdit ? "Paste values from your Discord Developer Portal. Leave blank to keep existing values." : "Paste your Discord app credentials from the Developer Portal."}
             </p>
 
             <CredField label="Client ID" value={creds.client_id}
               onChange={v => setCreds(p => ({ ...p, client_id: v }))}
-              placeholder={editAccount ? existing.client_id || "Developer Portal → General Information" : "Developer Portal → General Information"}
+              placeholder={isEdit ? (existing.client_id ? `Current: ${existing.client_id}` : "Developer Portal → General Information") : "Developer Portal → General Information"}
               testId="discord-client-id"
               hint="Developer Portal → Your App → General Information" />
 
             <CredField label="Client Secret" value={creds.client_secret}
               onChange={v => setCreds(p => ({ ...p, client_secret: v }))}
-              placeholder={editAccount ? "Leave blank to keep current" : "OAuth2 → Reset Secret"}
+              placeholder={isEdit ? "Leave blank to keep current" : "OAuth2 → Reset Secret"}
               isSecret testId="discord-client-secret"
               hint="Developer Portal → Your App → OAuth2 → Reset Secret" />
 
@@ -215,74 +235,71 @@ function DiscordSetupPanel({ onSave, onCancel, saving, editAccount }) {
 
             <CredField label="Bot Token" value={creds.bot_token}
               onChange={v => setCreds(p => ({ ...p, bot_token: v }))}
-              placeholder={editAccount ? "Leave blank to keep current" : "Bot → Reset Token"}
+              placeholder={isEdit ? "Leave blank to keep current" : "Bot → Reset Token"}
               isSecret testId="discord-bot-token"
               hint="Developer Portal → Your App → Bot → Reset Token" />
 
             <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
               <button onClick={handleSubmit} disabled={saving || !name.trim()}
                 data-testid="discord-save-btn"
-                style={{ ...T.btnPrimary, opacity: saving || !name.trim() ? 0.5 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+                style={{ ...T.btnPrimary, opacity: saving || (!isEdit && !name.trim()) ? 0.5 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {editAccount ? "Save Changes" : "Connect Discord"}
+                {isEdit ? "Save Changes" : "Connect Discord"}
               </button>
-              <button onClick={onCancel} style={T.btnGhost}>Cancel</button>
             </div>
           </div>
         </div>
 
-        {/* Right column — Setup Guide (only for new accounts) */}
-        {!editAccount && (
-          <div style={{ ...T.card, padding: "20px", alignSelf: "start" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <BookOpen size={16} color={colors.brand.light} />
-              <div>
-                <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
-                  Developer Portal Setup Guide
-                </p>
-                <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "2px 0 0" }}>
-                  One-time setup for your Discord bot app
-                </p>
-              </div>
-            </div>
-
-            <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer"
-              data-testid="discord-dev-portal-link"
-              style={{ display: "flex", alignItems: "center", gap: "6px", color: colors.brand.light, fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", textDecoration: "none", marginBottom: "20px" }}>
-              <ExternalLink size={13} /> Open Discord Developer Portal
-            </a>
-
-            <StepCard step="1" title="Create the Application">
-              On the Developer Portal, click <strong>New Application</strong>, name it (e.g., "BitBot Pro"), and accept the terms.
-            </StepCard>
-            <StepCard step="2" title="Set App Branding">
-              Under <strong>General Information</strong>, upload an icon and add a short description. This is what users see on the invite screen.
-            </StepCard>
-            <StepCard step="3" title="Create the Bot User">
-              Open the <strong>Bot</strong> tab → click <strong>Reset Token</strong> and copy it. Enable all three Privileged Gateway Intents: <strong>Presence</strong>, <strong>Server Members</strong>, <strong>Message Content</strong>. Save changes.
-            </StepCard>
-            <StepCard step="4" title="Copy OAuth2 Credentials">
-              Open the <strong>OAuth2</strong> tab → copy <strong>Client ID</strong>, then click <strong>Reset Secret</strong> and copy the secret. Paste both in the form on the left.
-            </StepCard>
-            <StepCard step="5" title="Add Redirect URI">
-              In <strong>OAuth2 → Redirects</strong>, click <strong>Add Redirect</strong> and paste:
-              <div style={{
-                fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.light,
-                padding: "8px 12px", marginTop: "6px",
-                backgroundColor: "rgba(96,165,250,0.06)", borderRadius: radius.sm,
-                border: `1px solid rgba(96,165,250,0.15)`, wordBreak: "break-all",
-              }}>
-                {suggestedRedirect}
-              </div>
-              <p style={{ fontSize: "10px", color: colors.text.muted, marginTop: "4px" }}>
-                Must match exactly — including https://, no trailing slash.
+        {/* Right column — Setup Guide (always visible) */}
+        <div style={{ ...T.card, padding: "20px", alignSelf: "start" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <BookOpen size={16} color={colors.brand.light} />
+            <div>
+              <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+                Developer Portal Setup Guide
               </p>
-            </StepCard>
-            <StepCard step="6" title="Set Bot Permissions">
-              Under <strong>OAuth2 → URL Generator</strong>, check <strong>bot</strong> and <strong>applications.commands</strong>. Under Bot Permissions, select <strong>Send Messages</strong>, <strong>Read Message History</strong>, <strong>Manage Nicknames</strong>.
-            </StepCard>
+              <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "2px 0 0" }}>
+                One-time setup for the global Discord app
+              </p>
+            </div>
           </div>
-        )}
+
+          <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer"
+            data-testid="discord-dev-portal-link"
+            style={{ display: "flex", alignItems: "center", gap: "6px", color: colors.brand.light, fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", textDecoration: "none", marginBottom: "20px" }}>
+            <ExternalLink size={13} /> Open Discord Developer Portal
+          </a>
+
+          <StepCard step="1" title="Create the Application">
+            On the Developer Portal, click <strong>New Application</strong>, name it (e.g., "BitBot Pro"), and accept the terms.
+          </StepCard>
+          <StepCard step="2" title="Set App Branding">
+            Under <strong>General Information</strong>, upload an icon and add a short description. This is what users see on the invite screen.
+          </StepCard>
+          <StepCard step="3" title="Create the Bot User">
+            Open the <strong>Bot</strong> tab → click <strong>Reset Token</strong> and copy it. Enable all three Privileged Gateway Intents: <strong>Presence</strong>, <strong>Server Members</strong>, <strong>Message Content</strong>. Save changes.
+          </StepCard>
+          <StepCard step="4" title="Copy OAuth2 Credentials">
+            Open the <strong>OAuth2</strong> tab → copy <strong>Client ID</strong>, then click <strong>Reset Secret</strong> and copy it. You'll paste both in the form on the left.
+          </StepCard>
+          <StepCard step="5" title="Add Redirect URI">
+            In <strong>OAuth2 → Redirects</strong>, click <strong>Add Redirect</strong> and paste:
+            <div style={{
+              fontFamily: fonts.mono, fontSize: "11px", color: colors.brand.light,
+              padding: "8px 12px", marginTop: "6px",
+              backgroundColor: "rgba(96,165,250,0.06)", borderRadius: radius.sm,
+              border: `1px solid rgba(96,165,250,0.15)`, wordBreak: "break-all",
+            }}>
+              {suggestedRedirect}
+            </div>
+            <p style={{ fontSize: "10px", color: colors.text.muted, marginTop: "4px" }}>
+              Must match exactly — including https://, no trailing slash.
+            </p>
+          </StepCard>
+          <StepCard step="6" title="Set Bot Permissions">
+            Under <strong>OAuth2 → URL Generator</strong>, check <strong>bot</strong> and <strong>applications.commands</strong>. Under Bot Permissions, select <strong>Send Messages</strong>, <strong>Read Message History</strong>, <strong>Manage Nicknames</strong>.
+          </StepCard>
+        </div>
       </div>
     </div>
   );
@@ -398,7 +415,7 @@ function ZendeskSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDis
               backgroundColor: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)",
             }}>ACTIVE</span>
           </div>
-          <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px" }}><X size={16} /></button>
+          <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px", visibility: "hidden" }}><X size={16} /></button>
         </div>
         <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 24px" }}>
           Auto-reply to support tickets and provide AI suggestions to agents using your knowledge base.
@@ -823,7 +840,7 @@ function TelegramSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDi
               backgroundColor: "rgba(52,211,153,0.1)", color: "#34D399", border: "1px solid rgba(52,211,153,0.2)",
             }}>ACTIVE</span>
           </div>
-          <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px" }}><X size={16} /></button>
+          <button onClick={onCancel} style={{ ...T.btnGhost, padding: "6px", visibility: "hidden" }}><X size={16} /></button>
         </div>
         <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 24px" }}>
           Auto-reply to messages in Telegram groups and direct chats using your knowledge base.
@@ -990,14 +1007,10 @@ function TelegramSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDi
 
 export default function ConnectedAccounts() {
   const { selectedOrg } = useAuth();
+  const { provider } = useParams(); // "discord" | "telegram" | "zendesk"
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [addProvider, setAddProvider] = useState("");
-  const [addName, setAddName] = useState("");
-  const [addCreds, setAddCreds] = useState({});
   const [saving, setSaving] = useState(false);
-  const [editAccount, setEditAccount] = useState(null);
 
   const fetchAccounts = () => {
     if (!selectedOrg) return;
@@ -1010,17 +1023,19 @@ export default function ConnectedAccounts() {
 
   useEffect(() => { fetchAccounts(); }, [selectedOrg]);
 
+  // Find the existing account for this provider (one per org per provider)
+  const existingAccount = accounts.find(a => a.provider === provider) || null;
+
   const handleDiscordSave = async ({ name, credentials }) => {
     setSaving(true);
     try {
-      if (editAccount) {
-        await v2.updateAccount(selectedOrg.id, editAccount.id, { name, credentials });
+      if (existingAccount) {
+        await v2.updateAccount(selectedOrg.id, existingAccount.id, { name, credentials });
         toast.success("Discord account updated");
       } else {
         await v2.createAccount(selectedOrg.id, { provider: "discord", name, credentials });
         toast.success("Discord account connected");
       }
-      closeForm();
       fetchAccounts();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
@@ -1032,14 +1047,13 @@ export default function ConnectedAccounts() {
   const handleZendeskSave = async ({ name, credentials, metadata }) => {
     setSaving(true);
     try {
-      if (editAccount) {
-        await v2.updateAccount(selectedOrg.id, editAccount.id, { name, credentials, metadata });
+      if (existingAccount) {
+        await v2.updateAccount(selectedOrg.id, existingAccount.id, { name, credentials, metadata });
         toast.success("Zendesk account updated");
       } else {
         await v2.createAccount(selectedOrg.id, { provider: "zendesk", name, credentials, metadata });
         toast.success("Zendesk account connected");
       }
-      closeForm();
       fetchAccounts();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
@@ -1051,45 +1065,19 @@ export default function ConnectedAccounts() {
   const handleTelegramSave = async ({ name, credentials }) => {
     setSaving(true);
     try {
-      if (editAccount) {
-        await v2.updateAccount(selectedOrg.id, editAccount.id, { name, credentials });
+      if (existingAccount) {
+        await v2.updateAccount(selectedOrg.id, existingAccount.id, { name, credentials });
         toast.success("Telegram account updated");
       } else {
         await v2.createAccount(selectedOrg.id, { provider: "telegram", name, credentials });
         toast.success("Telegram account connected");
       }
-      closeForm();
       fetchAccounts();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleAdd = async () => {
-    if (!addProvider || !addName.trim()) return;
-    setSaving(true);
-    try {
-      await v2.createAccount(selectedOrg.id, {
-        provider: addProvider, name: addName.trim(), credentials: addCreds,
-      });
-      toast.success("Account connected");
-      closeForm();
-      fetchAccounts();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to add account");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const closeForm = () => {
-    setShowAdd(false);
-    setAddProvider("");
-    setAddName("");
-    setAddCreds({});
-    setEditAccount(null);
   };
 
   const handleDisconnect = async (acc) => {
@@ -1116,198 +1104,61 @@ export default function ConnectedAccounts() {
     }
   };
 
-  const handleEdit = (acc) => {
-    setEditAccount(acc);
-    setShowAdd(false);
-    setAddProvider("");
-  };
-
-  // Build a lookup: provider → first account of that type
-  const accountByProvider = {};
-  for (const acc of accounts) {
-    if (!accountByProvider[acc.provider]) {
-      accountByProvider[acc.provider] = acc;
-    }
-  }
-
-  const handleProviderClick = (provider) => {
-    const existing = accountByProvider[provider];
-    if (existing) {
-      // Open settings for the existing account
-      setEditAccount(existing);
-      setShowAdd(false);
-      setAddProvider("");
-    } else {
-      // Open new setup form
-      setAddProvider(provider);
-      setShowAdd(false);
-      setEditAccount(null);
-    }
-  };
-
   if (!selectedOrg) return (
     <div style={T.page}>
       <p style={{ ...T.sectionSub, textAlign: "center", marginTop: "60px" }}>Select an organisation first.</p>
     </div>
   );
 
-  // Discord setup panel (new or edit)
-  if (addProvider === "discord" || editAccount?.provider === "discord") {
-    return (
-      <div style={T.page} data-testid="connected-accounts-page">
-        <p style={T.overline}>Provider Accounts</p>
-        <DiscordSetupPanel
-          onSave={handleDiscordSave}
-          onCancel={closeForm}
-          saving={saving}
-          editAccount={editAccount}
-        />
+  if (loading) return (
+    <div style={T.page}>
+      <div style={{ display: "flex", justifyContent: "center", padding: "60px" }}>
+        <Loader2 size={24} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
       </div>
-    );
-  }
+    </div>
+  );
 
-  // Zendesk setup panel (new or edit)
-  if (addProvider === "zendesk" || editAccount?.provider === "zendesk") {
-    return (
-      <div style={T.page} data-testid="connected-accounts-page">
-        <p style={T.overline}>Provider Accounts</p>
-        <ZendeskSetupPanel
-          onSave={handleZendeskSave}
-          onCancel={closeForm}
-          saving={saving}
-          editAccount={editAccount}
-          orgId={selectedOrg?.id}
-          onDisconnect={handleDisconnect}
-          onReconnect={handleReconnect}
-          onRefresh={fetchAccounts}
-        />
-      </div>
-    );
-  }
+  const meta = PROVIDER_META[provider];
+  if (!meta) return (
+    <div style={T.page}>
+      <p style={{ ...T.sectionSub, textAlign: "center", marginTop: "60px" }}>Unknown provider: {provider}</p>
+    </div>
+  );
 
-  // Telegram setup panel (new or edit)
-  if (addProvider === "telegram" || editAccount?.provider === "telegram") {
-    return (
-      <div style={T.page} data-testid="connected-accounts-page">
-        <p style={T.overline}>Provider Accounts</p>
-        <TelegramSetupPanel
-          onSave={handleTelegramSave}
-          onCancel={closeForm}
-          saving={saving}
-          editAccount={editAccount}
-          orgId={selectedOrg?.id}
-          onDisconnect={handleDisconnect}
-          onReconnect={handleReconnect}
-          onRefresh={fetchAccounts}
-        />
-      </div>
-    );
-  }
-
+  // Render the provider-specific panel directly
   return (
     <div style={T.page} data-testid="connected-accounts-page">
-      <p style={T.overline}>Provider Accounts</p>
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ ...T.h1, margin: "0 0 6px" }}>Connected Accounts</h1>
-        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0 }}>
-          Each organisation has one account per provider. Click a provider to connect or manage settings.
-        </p>
-      </div>
-
-      {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: "60px" }}>
-          <Loader2 size={24} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-          {Object.entries(PROVIDER_META).map(([key, meta]) => {
-            const acc = accountByProvider[key];
-            const connected = acc?.status === "connected";
-            const disconnected = acc?.status === "disconnected";
-            const Icon = meta.icon;
-            return (
-              <button key={key} onClick={() => handleProviderClick(key)}
-                data-testid={`provider-card-${key}`}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "12px",
-                  padding: "20px", borderRadius: "14px", cursor: "pointer", textAlign: "left", width: "100%",
-                  border: `1px solid ${connected ? meta.color + "40" : colors.border.default}`,
-                  backgroundColor: connected ? meta.color + "08" : colors.bg.panel,
-                  transition: "border-color 0.2s, box-shadow 0.2s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 1px ${meta.color}30`; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = connected ? meta.color + "40" : colors.border.default; e.currentTarget.style.boxShadow = "none"; }}
-              >
-                {/* Top row: icon + status */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                  <div style={{
-                    width: "42px", height: "42px", borderRadius: "12px",
-                    backgroundColor: meta.color + "18",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon size={20} color={meta.color} />
-                  </div>
-                  {connected && (
-                    <div data-testid={`provider-connected-${key}`} style={{
-                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
-                      backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)",
-                    }}>
-                      <CheckCircle size={12} color="#34D399" />
-                      <span style={{ fontSize: "11px", fontWeight: "600", color: "#34D399", fontFamily: fonts.mono }}>Connected</span>
-                    </div>
-                  )}
-                  {disconnected && (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
-                      backgroundColor: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)",
-                    }}>
-                      <AlertCircle size={12} color="#FB923C" />
-                      <span style={{ fontSize: "11px", fontWeight: "600", color: "#FB923C", fontFamily: fonts.mono }}>Disconnected</span>
-                    </div>
-                  )}
-                  {!acc && (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px",
-                      backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`,
-                    }}>
-                      <Plus size={12} color={colors.text.muted} />
-                      <span style={{ fontSize: "11px", fontWeight: "500", color: colors.text.muted, fontFamily: fonts.mono }}>Connect</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Provider name */}
-                <div>
-                  <p style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: "0 0 3px" }}>
-                    {meta.label}
-                  </p>
-                  <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: 0, lineHeight: "1.4" }}>
-                    {key === "discord" && "Connect your Discord bot to respond in servers and channels."}
-                    {key === "telegram" && "Connect a Telegram bot for group and direct message responses."}
-                    {key === "zendesk" && "Auto-reply to tickets or provide AI suggestions for agents."}
-                  </p>
-                </div>
-
-                {/* Account info if exists */}
-                {acc && (
-                  <div style={{
-                    width: "100%", padding: "8px 12px", borderRadius: "8px",
-                    backgroundColor: colors.bg.base, border: `1px solid ${colors.border.default}`,
-                    marginTop: "-4px",
-                  }}>
-                    <p style={{ fontFamily: fonts.body, fontSize: "12px", fontWeight: "500", color: colors.text.secondary, margin: 0 }}>
-                      {acc.name}
-                    </p>
-                    <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>
-                      {acc.connection_count || 0} connection{acc.connection_count !== 1 ? "s" : ""}
-                      {acc.active_connection_count > 0 && ` · ${acc.active_connection_count} active`}
-                    </p>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {provider === "discord" && (
+        <DiscordSetupPanel
+          onSave={handleDiscordSave}
+          onCancel={() => {}}
+          saving={saving}
+          editAccount={existingAccount}
+        />
+      )}
+      {provider === "zendesk" && (
+        <ZendeskSetupPanel
+          onSave={handleZendeskSave}
+          onCancel={() => {}}
+          saving={saving}
+          editAccount={existingAccount}
+          orgId={selectedOrg?.id}
+          onDisconnect={handleDisconnect}
+          onReconnect={handleReconnect}
+          onRefresh={fetchAccounts}
+        />
+      )}
+      {provider === "telegram" && (
+        <TelegramSetupPanel
+          onSave={handleTelegramSave}
+          onCancel={() => {}}
+          saving={saving}
+          editAccount={existingAccount}
+          orgId={selectedOrg?.id}
+          onDisconnect={handleDisconnect}
+          onReconnect={handleReconnect}
+          onRefresh={fetchAccounts}
+        />
       )}
     </div>
   );

@@ -87,7 +87,7 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="organisations" element={<Organisations />} />
         <Route path="bots" element={<BotList />} />
-        <Route path="accounts" element={<ConnectedAccounts />} />
+        <Route path="accounts/:provider" element={<ConnectedAccounts />} />
         <Route path="team" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
 
         {/* Bot-scoped routes */}
