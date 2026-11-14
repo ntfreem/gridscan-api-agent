@@ -1,277 +1,316 @@
 import { useState, useEffect } from "react";
-import api from "../utils/api";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { MessageSquare, BookOpen, CheckCircle, Zap, Globe, Send, Monitor, Code2, Headphones } from "lucide-react";
+import {
+  MessageSquare, Bot, Network, BookOpen, Link2, Sparkles,
+  Zap, Globe, Send, Headphones, Code2, Loader2,
+  ArrowRight, BarChart3, Building2,
+} from "lucide-react";
 import { colors, fonts, radius, T, rowEnter, rowLeave } from "../theme";
+import v2 from "../utils/v2api";
 
-function StatCard({ title, value, icon: Icon, color }) {
-  const [hovered, setHovered] = useState(false);
+const PROVIDER_META = {
+  discord: { label: "Discord", icon: Zap, color: "#5865F2" },
+  telegram: { label: "Telegram", icon: Send, color: "#26A5E4" },
+  zendesk: { label: "Zendesk", icon: Headphones, color: "#03363D" },
+  web: { label: "Web", icon: Globe, color: "#60A5FA" },
+  api: { label: "API", icon: Code2, color: "#A78BFA" },
+};
+
+function StatCard({ label, value, sub, icon: Icon, color }) {
   return (
-    <div
-      data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}
-      style={{
-        ...T.card,
-        transition: "transform 0.25s ease, box-shadow 0.25s ease",
-        transform: hovered ? "translateY(-3px)" : "none",
-        boxShadow: hovered ? colors.shadow.cardHover : colors.shadow.card,
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <p style={T.monoLabel}>{title}</p>
-        <div style={{ width: "32px", height: "32px", borderRadius: radius.md, background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon size={16} color={color} />
+    <div data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`} style={{ ...T.card, padding: "18px 20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+        <div style={{
+          width: "30px", height: "30px", borderRadius: radius.md,
+          backgroundColor: `${color}14`, display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon size={14} color={color} />
         </div>
+        <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          {label}
+        </span>
       </div>
-      <p style={{ fontFamily: fonts.heading, fontSize: "38px", fontWeight: "700", color: colors.text.primary, margin: "6px 0 0", letterSpacing: "-1px" }}>
-        {value ?? "\u2014"}
+      <p style={{ fontFamily: fonts.heading, fontSize: "30px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.5px" }}>
+        {value ?? "—"}
       </p>
+      {sub && <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "3px 0 0" }}>{sub}</p>}
     </div>
   );
 }
 
-const PLATFORMS = [
-  { key: "web", label: "Web", icon: Globe, color: "#60A5FA" },
-  { key: "discord", label: "Discord", icon: Monitor, color: "#5865F2" },
-  { key: "telegram", label: "Telegram", icon: Send, color: "#0088CC" },
-  { key: "api", label: "API", icon: Code2, color: "#A78BFA" },
-  { key: "zendesk", label: "Zendesk", icon: Headphones, color: "#03363D" },
-];
-
-function PlatformCard({ label, icon: Icon, color, value }) {
+function PlatformBar({ label, icon: Icon, color, count, total }) {
+  const pct = total > 0 ? (count / total) * 100 : 0;
   return (
-    <div data-testid={`platform-${label.toLowerCase()}`} style={{
-      flex: 1, minWidth: "100px", padding: "14px 16px",
-      backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
-      borderRadius: "10px", textAlign: "center",
-    }}>
-      <div style={{
-        width: "32px", height: "32px", borderRadius: "10px",
-        background: `${color}14`, display: "flex", alignItems: "center",
-        justifyContent: "center", margin: "0 auto 8px",
-      }}>
-        <Icon size={15} color={color} />
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "6px 0" }}>
+      <div style={{ width: "20px", display: "flex", justifyContent: "center" }}>
+        <Icon size={13} color={color} />
       </div>
-      <p style={{ fontFamily: fonts.heading, fontSize: "28px", fontWeight: "700", color: colors.text.primary, margin: 0, letterSpacing: "-0.5px" }}>
-        {value}
-      </p>
-      <p style={{ fontFamily: fonts.body, fontSize: "11px", color, margin: "3px 0 0", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function TrendChart({ data }) {
-  if (!data || data.length === 0) return null;
-
-  const platformColors = { web: "#60A5FA", discord: "#5865F2", telegram: "#0088CC", api: "#A78BFA", zendesk: "#03363D" };
-  const maxVal = Math.max(1, ...data.map(d => Math.max(d.web || 0, d.discord || 0, d.telegram || 0, d.api || 0)));
-  const chartH = 140;
-  const barW = 8;
-  const groupGap = 28;
-
-  return (
-    <div data-testid="platform-trend-chart" style={{
-      backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
-      borderRadius: "12px", padding: "20px", marginBottom: "20px",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <p style={T.monoLabel}>Messages — Last 7 Days</p>
-        <div style={{ display: "flex", gap: "14px" }}>
-          {PLATFORMS.map(p => (
-            <div key={p.key} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: platformColors[p.key] }} />
-              <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase" }}>{p.label}</span>
-            </div>
-          ))}
-        </div>
+      <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, width: "70px" }}>{label}</span>
+      <div style={{ flex: 1, height: "6px", backgroundColor: colors.bg.panel, borderRadius: "3px", overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", backgroundColor: color, borderRadius: "3px", transition: "width 0.6s ease" }} />
       </div>
-
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", height: `${chartH + 28}px`, paddingTop: "8px" }}>
-        {data.map((d, i) => {
-          const bars = PLATFORMS.map(p => ({ key: p.key, val: d[p.key] || 0, color: platformColors[p.key] }));
-          return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: `${chartH}px` }}>
-                {bars.map(b => (
-                  <div key={b.key} title={`${b.key}: ${b.val}`} style={{
-                    width: `${barW}px`, borderRadius: "3px 3px 0 0",
-                    height: `${Math.max(2, (b.val / maxVal) * chartH)}px`,
-                    backgroundColor: b.val > 0 ? b.color : `${b.color}20`,
-                    transition: "height 0.4s ease",
-                  }} />
-                ))}
-              </div>
-              <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>{d.date}</span>
-            </div>
-          );
-        })}
-      </div>
+      <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.primary, fontWeight: "600", minWidth: "32px", textAlign: "right" }}>
+        {count}
+      </span>
     </div>
   );
 }
 
 function PlatformBadge({ platform }) {
-  const map = {
-    discord: { bg: "rgba(88,101,242,0.12)", text: "#5865F2" },
-    telegram: { bg: "rgba(0,136,204,0.12)", text: "#0088CC" },
-    web: { bg: "rgba(59,130,246,0.12)", text: colors.brand.primary },
-    api: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA" },
-    zendesk: { bg: "rgba(3,54,61,0.12)", text: "#03363D" },
-  };
-  const c = map[platform] || map.web;
+  const meta = PROVIDER_META[platform] || PROVIDER_META.web;
   return (
     <span style={{
-      display: "inline-block", padding: "2px 8px", borderRadius: radius.sm,
-      fontSize: "11px", fontFamily: fonts.mono,
-      textTransform: "uppercase", letterSpacing: "0.05em",
-      backgroundColor: c.bg, color: c.text,
-    }}>{platform}</span>
+      display: "inline-flex", alignItems: "center", gap: "4px",
+      padding: "2px 8px", borderRadius: radius.sm,
+      fontSize: "10px", fontFamily: fonts.mono, fontWeight: "600",
+      textTransform: "uppercase", letterSpacing: "0.04em",
+      backgroundColor: `${meta.color}12`, color: meta.color,
+    }}>
+      <meta.icon size={9} /> {meta.label}
+    </span>
   );
 }
 
 export default function Dashboard() {
-  const [overview, setOverview] = useState(null);
-  const [conversations, setConversations] = useState([]);
-  const [trendData, setTrendData] = useState([]);
+  const { selectedOrg, user } = useAuth();
+  const navigate = useNavigate();
+  const orgId = selectedOrg?.id;
+
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { selectedInstance, user } = useAuth();
-  const instanceId = selectedInstance?.id;
 
   useEffect(() => {
-    if (!selectedInstance) { setLoading(false); return; }
+    if (!orgId) { setLoading(false); return; }
     setLoading(true);
-    Promise.all([
-      api.get(`/analytics/overview`),
-      api.get(`/conversations?limit=6`),
-      api.get(`/analytics/daily-by-platform`),
-    ]).then(([ov, convs, trend]) => {
-      setOverview(ov.data);
-      setConversations(convs.data.conversations || []);
-      setTrendData(trend.data || []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, [selectedInstance]);
+    v2.orgOverview(orgId)
+      .then(res => setData(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [orgId]);
 
   if (loading) {
     return (
-      <div style={{ ...T.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ fontFamily: fonts.mono, color: colors.text.secondary, fontSize: "13px" }}>Loading...</p>
+      <div style={{ ...T.page, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: "100px" }}>
+        <Loader2 size={20} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
       </div>
     );
   }
 
-  if (!selectedInstance) {
+  if (!selectedOrg) {
     return (
-      <div style={{ ...T.page, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
-        <p style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px" }}>
-          No workspace selected
+      <div style={{ ...T.page, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", paddingTop: "80px" }}>
+        <Building2 size={36} color={colors.border.default} style={{ marginBottom: "12px" }} />
+        <p style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary, margin: "0 0 6px" }}>
+          No organisation selected
         </p>
-        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary }}>
-          {user?.role === "superadmin"
-            ? "Create an instance from the Instances page, then select it from the sidebar."
-            : "Contact your admin to get access to a workspace."}
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary }}>
+          Select an organisation from the sidebar to see its dashboard.
         </p>
       </div>
     );
   }
 
-  const pb = overview?.platform_breakdown || {};
+  if (!data) {
+    return (
+      <div style={{ ...T.page, textAlign: "center", paddingTop: "80px" }}>
+        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.muted }}>
+          Failed to load overview data.
+        </p>
+      </div>
+    );
+  }
+
+  const pb = data.platform_breakdown || {};
+  const totalConvs = data.total_conversations || 0;
 
   return (
-    <div style={T.page}>
-      <p style={T.overline}>Overview</p>
-      <h1 style={T.h1}>Dashboard</h1>
+    <div style={T.page} data-testid="org-overview-page">
+      <p style={T.overline}>{data.org?.name || "Organisation"}</p>
+      <h1 style={{ ...T.h1, marginBottom: "24px" }}>Overview</h1>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "24px" }}>
-        <StatCard title="Conversations" value={overview?.total_conversations ?? 0} icon={MessageSquare} color={colors.brand.blue} />
-        <StatCard title="Total Messages" value={overview?.total_messages ?? 0} icon={Zap} color={colors.brand.success} />
-        <StatCard title="Knowledge Sources" value={overview?.knowledge_sources ?? 0} icon={BookOpen} color={colors.text.secondary} />
-        <StatCard title="Training Examples" value={overview?.approved_for_training ?? 0} icon={CheckCircle} color={colors.brand.success} />
+      {/* Top Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+        <StatCard label="Bots" value={data.bots} icon={Bot} color={colors.brand.light} />
+        <StatCard label="Connections" value={data.connections} sub={`${data.active_connections} active`} icon={Network} color={colors.brand.success} />
+        <StatCard label="Conversations" value={data.total_conversations} icon={MessageSquare} color="#60A5FA" />
+        <StatCard label="Messages" value={data.total_messages} icon={BarChart3} color={colors.brand.warning} />
+        <StatCard label="Knowledge" value={data.knowledge_sources} icon={BookOpen} color="#34D399" />
+        <StatCard label="Suggestions" value={data.suggestions} sub={`${data.pending_suggestions} pending`} icon={Sparkles} color="#A78BFA" />
       </div>
 
-      {/* Platform Breakdown Cards */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-        {PLATFORMS.map(p => (
-          <PlatformCard key={p.key} label={p.label} icon={p.icon} color={p.color} value={pb[p.key] ?? 0} />
-        ))}
-      </div>
+      {/* Two-column layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
 
-      {/* Trend Chart */}
-      <TrendChart data={trendData} />
+        {/* Conversations by Platform */}
+        <div style={T.card}>
+          <p style={{ ...T.monoLabel, marginBottom: "14px" }}>Conversations by Platform</p>
+          {Object.keys(PROVIDER_META).map(key => {
+            const meta = PROVIDER_META[key];
+            const count = pb[key] || 0;
+            if (count === 0 && !["discord", "telegram", "zendesk", "web"].includes(key)) return null;
+            return (
+              <PlatformBar key={key} label={meta.label} icon={meta.icon} color={meta.color}
+                count={count} total={totalConvs} />
+            );
+          })}
+          {totalConvs === 0 && (
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, textAlign: "center", padding: "12px" }}>
+              No conversations yet
+            </p>
+          )}
+        </div>
 
-      {/* Quick Actions */}
-      <div style={{ ...T.card, marginBottom: "24px" }}>
-        <p style={{ ...T.monoLabel, marginBottom: "14px" }}>Quick Actions</p>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <a href="/admin/knowledge" data-testid="quick-add-knowledge" style={{
-            display: "inline-block", padding: "9px 18px", backgroundColor: colors.brand.blue,
-            color: colors.text.primary, borderRadius: "10px", fontSize: "13px",
-            fontFamily: fonts.body, fontWeight: "500", textDecoration: "none",
-            border: `1px solid rgba(96, 165, 250, 0.3)`,
-          }}>Add Knowledge Source</a>
-          <a href={`/chat${instanceId ? `?instance=${instanceId}` : ""}`} target="_blank" rel="noopener noreferrer" data-testid="quick-test-chat" style={{
-            display: "inline-block", padding: "9px 18px", backgroundColor: colors.bg.panel,
-            border: `1px solid ${colors.border.default}`, color: colors.text.primary, borderRadius: "10px",
-            fontSize: "13px", fontFamily: fonts.body, fontWeight: "500", textDecoration: "none",
-          }}>Test Chat Demo</a>
-          <a href="/admin/telegram" data-testid="quick-telegram" style={{
-            display: "inline-block", padding: "9px 18px", backgroundColor: "rgba(0,136,204,0.08)",
-            border: `1px solid rgba(0,136,204,0.2)`, color: "#0088CC", borderRadius: "10px",
-            fontSize: "13px", fontFamily: fonts.body, fontWeight: "500", textDecoration: "none",
-          }}>Connect Telegram</a>
+        {/* Connections by Provider */}
+        <div style={T.card}>
+          <p style={{ ...T.monoLabel, marginBottom: "14px" }}>Connections by Provider</p>
+          {Object.entries(data.provider_breakdown || {}).map(([prov, stats]) => {
+            const meta = PROVIDER_META[prov] || PROVIDER_META.web;
+            return (
+              <div key={prov} style={{
+                display: "flex", alignItems: "center", gap: "10px", padding: "8px 0",
+                borderBottom: `1px solid ${colors.border.faint}`,
+              }}>
+                <meta.icon size={14} color={meta.color} />
+                <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.primary, flex: 1 }}>
+                  {meta.label}
+                </span>
+                <span style={{
+                  fontFamily: fonts.mono, fontSize: "10px", color: colors.brand.success,
+                  padding: "2px 8px", borderRadius: radius.full,
+                  backgroundColor: "rgba(52,211,153,0.08)",
+                }}>
+                  {stats.active} active
+                </span>
+                {stats.total - stats.active > 0 && (
+                  <span style={{
+                    fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted,
+                    padding: "2px 8px", borderRadius: radius.full,
+                    backgroundColor: "rgba(148,163,184,0.08)",
+                  }}>
+                    {stats.total - stats.active} paused
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {Object.keys(data.provider_breakdown || {}).length === 0 && (
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, textAlign: "center", padding: "12px" }}>
+              No connections yet
+            </p>
+          )}
+
+          {/* Mode breakdown mini */}
+          {Object.keys(data.mode_breakdown || {}).length > 0 && (
+            <>
+              <p style={{ ...T.monoLabel, marginTop: "16px", marginBottom: "8px" }}>By Response Mode</p>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {Object.entries(data.mode_breakdown).map(([mode, count]) => (
+                  <span key={mode} style={{
+                    fontFamily: fonts.mono, fontSize: "10px", color: colors.text.secondary,
+                    padding: "4px 10px", borderRadius: radius.full,
+                    backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.muted}`,
+                  }}>
+                    {mode.replace("_", " ")} <span style={{ fontWeight: "600", color: colors.text.primary }}>{count}</span>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Bot Summaries */}
+      {data.bot_summaries?.length > 0 && (
+        <div style={{ ...T.card, marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <p style={T.monoLabel}>Bots</p>
+            <button onClick={() => navigate("/admin/bots")}
+              style={{ ...T.btnGhost, fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" }}>
+              View all <ArrowRight size={11} />
+            </button>
+          </div>
+          <div style={{ display: "grid", gap: "6px" }}>
+            {data.bot_summaries.map(b => (
+              <div key={b.id}
+                style={{
+                  display: "flex", alignItems: "center", gap: "12px",
+                  padding: "10px 14px", borderRadius: radius.md,
+                  backgroundColor: colors.bg.panel, cursor: "pointer",
+                  transition: "background-color 0.15s",
+                }}
+                onClick={() => navigate(`/admin/bots/${b.id}`)}
+                onMouseEnter={rowEnter} onMouseLeave={rowLeave}
+                data-testid={`bot-summary-${b.id}`}
+              >
+                <Bot size={14} color={colors.brand.light} />
+                <span style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: "600", color: colors.text.primary, flex: 1 }}>
+                  {b.name}
+                </span>
+                <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                  {b.active_connections} routes
+                </span>
+                <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                  {b.conversations} convos
+                </span>
+                <span style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted }}>
+                  {b.knowledge_sources} KB
+                </span>
+                <ArrowRight size={12} color={colors.text.muted} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Conversations */}
-      <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden" }}>
-        <div style={{ padding: "18px 20px", borderBottom: `1px solid ${colors.border.default}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <p style={{ fontFamily: fonts.heading, fontSize: "15px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>Recent Conversations</p>
-          <a href="/admin/conversations" style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.brand.cyan, textDecoration: "none" }}>View all</a>
+      <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: radius.lg, overflow: "hidden" }}>
+        <div style={{
+          padding: "16px 20px", borderBottom: `1px solid ${colors.border.default}`,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+            Recent Conversations
+          </p>
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${colors.border.subtle}` }}>
-              {["Session ID", "Platform", "Messages", "Date", "Status"].map(h => (
-                <th key={h} style={T.th}>{h}</th>
+        {data.recent_conversations?.length > 0 ? (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${colors.border.subtle}` }}>
+                {["Bot", "Session", "Platform", "Messages", "Date"].map(h => (
+                  <th key={h} style={T.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.recent_conversations.map((conv, i) => (
+                <tr key={conv.session_id || i}
+                  style={{ borderBottom: `1px solid ${colors.border.faint}`, transition: "background-color 0.15s" }}
+                  onMouseEnter={rowEnter} onMouseLeave={rowLeave}
+                >
+                  <td style={{ ...T.td, fontFamily: fonts.body, fontSize: "12px", fontWeight: "500" }}>
+                    {conv.bot_name}
+                  </td>
+                  <td style={{ ...T.td, fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>
+                    {conv.session_id?.slice(0, 16)}...
+                  </td>
+                  <td style={T.td}><PlatformBadge platform={conv.platform} /></td>
+                  <td style={{ ...T.td, fontFamily: fonts.mono, fontSize: "12px" }}>{conv.message_count}</td>
+                  <td style={{ ...T.td, color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.mono }}>
+                    {conv.updated_at ? new Date(conv.updated_at).toLocaleDateString() : "—"}
+                  </td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {conversations.length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ padding: "48px 20px", textAlign: "center", color: colors.text.secondary, fontFamily: fonts.body, fontSize: "14px" }}>
-                  No conversations yet — <a href={`/chat${instanceId ? `?instance=${instanceId}` : ""}`} target="_blank" rel="noopener noreferrer" style={{ color: colors.brand.cyan }}>start a chat demo</a>
-                </td>
-              </tr>
-            ) : conversations.map((conv) => (
-              <tr key={conv.session_id}
-                style={{ borderBottom: `1px solid ${colors.border.faint}`, transition: "background-color 0.2s ease", cursor: "pointer" }}
-                onMouseEnter={rowEnter}
-                onMouseLeave={rowLeave}
-                onClick={() => window.location.href = "/admin/conversations"}
-                data-testid="dashboard-conversation-row"
-              >
-                <td style={{ ...T.td, fontFamily: fonts.mono, fontSize: "12px", color: colors.text.secondary }}>
-                  {conv.session_id?.slice(0, 14)}...
-                </td>
-                <td style={T.td}><PlatformBadge platform={conv.platform} /></td>
-                <td style={T.td}>{conv.messages?.length ?? 0}</td>
-                <td style={{ ...T.td, color: colors.text.secondary, fontSize: "12px" }}>
-                  {conv.created_at ? new Date(conv.created_at).toLocaleDateString() : "\u2014"}
-                </td>
-                <td style={T.td}>
-                  {conv.is_approved_for_training
-                    ? <span style={{ color: colors.brand.success, fontFamily: fonts.mono, fontSize: "11px" }}>APPROVED</span>
-                    : <span style={{ color: colors.text.muted, fontFamily: fonts.mono, fontSize: "11px" }}>PENDING</span>
-                  }
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ padding: "40px", textAlign: "center" }}>
+            <MessageSquare size={28} color={colors.border.default} style={{ margin: "0 auto 8px" }} />
+            <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted }}>
+              No conversations yet across this organisation's bots.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

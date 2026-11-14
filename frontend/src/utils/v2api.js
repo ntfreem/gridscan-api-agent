@@ -15,6 +15,7 @@ const v2 = {
   // Orgs
   listOrgs: () => axios.get(`${BASE}/v2/orgs`, { headers: headers() }),
   getOrg: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
+  orgOverview: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/overview`, { headers: headers() }),
   getOrgMembers: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/members`, { headers: headers() }),
 
   // Bots
