@@ -123,6 +123,14 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### Admin User Management (Done — Nov 2026)
+- [x] Admin can invite users with extended details: first_name, last_name, username, org/bot assignments
+- [x] InviteAccept page pre-fills name and username from invitation token
+- [x] Admin can reset any user's password from Team page
+- [x] Login bypass for V2 invited users (no legacy instance requirement)
+- [x] Users.js: token read from localStorage to avoid AuthContext race condition
+- [x] Tested: 100% pass — 14/14 backend, all frontend features (iteration_73.json)
+
 ### Earlier Completed Work
 - Zendesk OAuth, ZAF sidebar app, Analytics, Admin roles
 - User email invitations, Landing page, Self-hosting docs

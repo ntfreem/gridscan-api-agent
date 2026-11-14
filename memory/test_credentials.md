@@ -1,14 +1,18 @@
 # Test Credentials
 
 ## Admin Account
-- **Username/Email**: `administrator` / `admin@bridgebot.tech`
-- **Password**: `Admin@123`
+- **Username**: administrator
+- **Password**: Admin@123
+- **Email**: admin@bridgebot.tech
 - **Role**: superadmin
 
-## Test Users (created during testing)
-- **testuser@example.com** / `testuser` — password: `Test@1234` (role: user)
-- **newuser@example.com** / `newuser` — password: `NewUser@123` (role: user, created via invite)
+## Test User (created via invite flow)
+- **Username**: johndoe
+- **Password**: Reset@456 (was reset by admin)
+- **Email**: johndoe@example.com
+- **Role**: user
 
-## Instance
-- **ID**: `88bfae82-2533-4235-968d-b3298fd57073`
-- **Name**: API Tester
+## Login Notes
+- Login endpoint: POST /api/auth/login
+- Field name: `email_or_username` (accepts either email or username)
+- Response field: `token` (not `access_token`)

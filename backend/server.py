@@ -2555,7 +2555,10 @@ async def login(body: UserLogin, response: Response):
         instances = await db.bot_instances.find(
             {"assigned_user_ids": user["id"]}, {"_id": 0, "id": 1, "name": 1}
         ).to_list(100)
-        if not instances:
+        # V2 invited users bypass the legacy instance check
+        is_invited_user = bool(user.get("invited_by"))
+        has_v2_access = bool(user.get("org_ids") or user.get("bot_ids"))
+        if not instances and not is_invited_user and not has_v2_access:
             raise HTTPException(
                 status_code=403,
                 detail="No instances assigned to your account. Contact your admin."
@@ -2633,8 +2636,18 @@ async def list_all_users(current_user: dict = Depends(require_admin)):
     for inst in instances:
         for uid in inst.get("assigned_user_ids", []):
             user_instance_map.setdefault(uid, []).append({"id": inst["id"], "name": inst["name"]})
+    # Fetch orgs and bots for V2 assignments
+    orgs = await db.organisations.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    org_map = {o["id"]: o["name"] for o in orgs}
+    bots = await db.bots.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+    bot_map = {b["id"]: b["name"] for b in bots}
     for user in users:
         user["assigned_instances"] = user_instance_map.get(user["id"], [])
+        # Resolve org/bot names
+        user_org_ids = user.get("org_ids", [])
+        user_bot_ids = user.get("bot_ids", [])
+        user["assigned_orgs"] = [{"id": oid, "name": org_map.get(oid, oid)} for oid in user_org_ids]
+        user["assigned_bots"] = [{"id": bid, "name": bot_map.get(bid, bid)} for bid in user_bot_ids]
     return users
 @api_router.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
@@ -2680,10 +2693,32 @@ class InviteUserBody(BaseModel):
     email: str
     role: str = "user"
     instance_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    org_ids: Optional[List[str]] = None
+    bot_ids: Optional[List[str]] = None
 
 class AcceptInviteBody(BaseModel):
     username: str
     password: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+class AdminResetPasswordBody(BaseModel):
+    new_password: str
+
+@api_router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_password(user_id: str, body: AdminResetPasswordBody, current_user: dict = Depends(require_admin)):
+    """Admin can force-reset another user's password."""
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    hashed_pw = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one({"id": user_id}, {"$set": {"hashed_password": hashed_pw}})
+    return {"success": True, "message": f"Password reset for {user.get('email', '')}"}
 
 async def send_invitation_email(to_email: str, invite_token: str, role: str, inviter_name: str):
     """Send invitation email with sign-up link via Resend."""
@@ -2763,6 +2798,11 @@ async def invite_user(body: InviteUserBody, current_user: dict = Depends(require
         "email": email,
         "role": body.role,
         "instance_id": body.instance_id or None,
+        "first_name": (body.first_name or "").strip(),
+        "last_name": (body.last_name or "").strip(),
+        "username": (body.username or "").strip().lower() or None,
+        "org_ids": body.org_ids or [],
+        "bot_ids": body.bot_ids or [],
         "invited_by": current_user["id"],
         "invited_by_email": current_user.get("email", ""),
         "status": "pending",
@@ -2809,6 +2849,9 @@ async def get_invite_details(token: str):
         "email": invite["email"],
         "role": invite["role"],
         "invited_by_email": invite.get("invited_by_email", ""),
+        "first_name": invite.get("first_name", ""),
+        "last_name": invite.get("last_name", ""),
+        "username": invite.get("username", ""),
     }
 
 @api_router.post("/invite/{token}/accept")
@@ -2841,14 +2884,21 @@ async def accept_invite(token: str, body: AcceptInviteBody):
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
+    first_name = (body.first_name or invite.get("first_name", "")).strip()
+    last_name = (body.last_name or invite.get("last_name", "")).strip()
+
     await db.users.insert_one({
         "id": user_id,
         "email": invite["email"],
         "username": username,
+        "first_name": first_name,
+        "last_name": last_name,
         "hashed_password": hashed_pw,
         "is_verified": True,  # Pre-verified since admin invited them
         "verification_code": None,
         "role": invite["role"],
+        "org_ids": invite.get("org_ids", []),
+        "bot_ids": invite.get("bot_ids", []),
         "created_at": now,
         "invited_by": invite.get("invited_by", ""),
     })
@@ -2858,6 +2908,13 @@ async def accept_invite(token: str, body: AcceptInviteBody):
         await db.bot_instances.update_one(
             {"id": invite["instance_id"]},
             {"$addToSet": {"assigned_user_ids": user_id}}
+        )
+
+    # Assign to V2 organisations
+    for oid in invite.get("org_ids", []):
+        await db.organisations.update_one(
+            {"id": oid},
+            {"$addToSet": {"member_ids": user_id}}
         )
 
     # Mark invitation as accepted

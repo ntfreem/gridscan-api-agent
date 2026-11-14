@@ -11,6 +11,8 @@ export default function InviteAccept() {
   const [invite, setInvite] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,6 +24,9 @@ export default function InviteAccept() {
       try {
         const res = await api.get(`/invite/${token}`);
         setInvite(res.data);
+        if (res.data.first_name) setFirstName(res.data.first_name);
+        if (res.data.last_name) setLastName(res.data.last_name);
+        if (res.data.username) setUsername(res.data.username);
       } catch (e) {
         setError(e.response?.data?.detail || "Invalid or expired invitation");
       } finally {
@@ -47,7 +52,12 @@ export default function InviteAccept() {
     }
     setSubmitting(true);
     try {
-      await api.post(`/invite/${token}/accept`, { username: username.trim(), password });
+      await api.post(`/invite/${token}/accept`, {
+        username: username.trim(),
+        password,
+        first_name: firstName.trim() || undefined,
+        last_name: lastName.trim() || undefined,
+      });
       setAccepted(true);
       toast.success("Account created!");
     } catch (e) {
@@ -139,6 +149,22 @@ export default function InviteAccept() {
             <label style={T.label}>Email</label>
             <input readOnly value={invite.email} data-testid="invite-email-field"
               style={{ ...T.input, marginBottom: "14px", color: colors.text.muted, backgroundColor: colors.bg.surface }} />
+
+            {/* Name row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+              <div>
+                <label style={T.label}>First Name</label>
+                <input value={firstName} onChange={e => setFirstName(e.target.value)}
+                  placeholder="John" autoComplete="given-name" data-testid="invite-first-name-input"
+                  style={{ ...T.input, width: "100%" }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+              <div>
+                <label style={T.label}>Last Name</label>
+                <input value={lastName} onChange={e => setLastName(e.target.value)}
+                  placeholder="Doe" autoComplete="family-name" data-testid="invite-last-name-input"
+                  style={{ ...T.input, width: "100%" }} onFocus={onFocus} onBlur={onBlur} />
+              </div>
+            </div>
 
             <label style={T.label}>Username</label>
             <input value={username} onChange={e => setUsername(e.target.value)}
