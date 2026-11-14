@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2, Github, Check } from "lucide-react";
+import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2, Github, Check, Zap } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
+import ApiIntegrations from "./ApiIntegrations";
 
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText, github: Github };
 const typeColor = { faq: colors.brand.blue, url: colors.brand.success, document: colors.text.secondary, github: "rgba(139,92,246,0.9)" };
@@ -848,6 +849,7 @@ export default function KnowledgeBase() {
     { id: "url", label: "URL Scraper", icon: Globe },
     { id: "github", label: "GitHub Crawler", icon: Github },
     { id: "document", label: "Upload Document", icon: FileText },
+    { id: "api", label: "API Scraper", icon: Zap },
   ];
 
   return (
@@ -1384,7 +1386,8 @@ export default function KnowledgeBase() {
         </div>
       )}
 
-      {/* Sources List */}
+      {/* Sources List — hidden when API Scraper tab is active */}
+      {activeTab !== "api" && (
       <div style={{ backgroundColor: colors.bg.surface, border: `1px solid ${colors.border.default}`, borderRadius: "10px", overflow: "hidden", marginTop: "24px" }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${colors.border.default}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1773,6 +1776,12 @@ export default function KnowledgeBase() {
           </div>
         )}
       </div>
+      )}
+
+      {/* API Scraper Tab */}
+      {activeTab === "api" && (
+        <ApiIntegrations />
+      )}
 
       {/* Edit Modal */}
       {editing && (
