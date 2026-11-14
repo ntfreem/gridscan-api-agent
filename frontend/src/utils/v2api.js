@@ -35,6 +35,7 @@ const v2 = {
   updateAccount: (orgId, accId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, data, { headers: headers() }),
   disconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/disconnect`, {}, { headers: headers() }),
   reconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/reconnect`, {}, { headers: headers() }),
+  testAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/test`, {}, { headers: headers() }),
 
   // Connections
   listConnections: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, { headers: headers() }),

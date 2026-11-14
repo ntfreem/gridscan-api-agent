@@ -193,3 +193,89 @@ async def reconnect_account(org_id: str, account_id: str, request: Request):
         {"$set": {"status": "connected", "updated_at": h._now()}}
     )
     return {"ok": True}
+
+
+@router.post("/{org_id}/accounts/{account_id}/test")
+async def test_account(org_id: str, account_id: str, request: Request):
+    """Test connectivity for a connected account (provider-specific)."""
+    import aiohttp
+    user, org, account = await h.require_account_access(request, account_id)
+    provider = account.get("provider")
+    creds = account.get("credentials", {})
+
+    if provider == "zendesk":
+        subdomain = creds.get("subdomain")
+        if not subdomain:
+            raise HTTPException(400, "No subdomain configured")
+        auth_type = creds.get("auth_type", "oauth")
+        headers = {"Content-Type": "application/json"}
+        if auth_type == "oauth":
+            token = creds.get("oauth_access_token")
+            if not token:
+                raise HTTPException(400, "No OAuth token stored. Reconnect via OAuth.")
+            headers["Authorization"] = f"Bearer {token}"
+        else:
+            email = creds.get("user_email", "")
+            api_token = creds.get("api_token", "")
+            if not api_token:
+                raise HTTPException(400, "No API token configured")
+            import base64
+            b64 = base64.b64encode(f"{email}/token:{api_token}".encode()).decode()
+            headers["Authorization"] = f"Basic {b64}"
+
+        url = f"https://{subdomain}.zendesk.com/api/v2/users/me.json"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        u = data.get("user", {})
+                        return {
+                            "ok": True,
+                            "subdomain": subdomain,
+                            "user_name": u.get("name", "Unknown"),
+                            "user_email": u.get("email", ""),
+                            "user_role": u.get("role", ""),
+                            "auth_type": auth_type,
+                        }
+                    else:
+                        body = await resp.text()
+                        raise HTTPException(400, f"Zendesk returned {resp.status}: {body[:200]}")
+        except aiohttp.ClientError as e:
+            raise HTTPException(400, f"Connection failed: {str(e)}")
+
+    elif provider == "discord":
+        token = creds.get("bot_token")
+        if not token:
+            raise HTTPException(400, "No bot token configured")
+        url = "https://discord.com/api/v10/users/@me"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers={"Authorization": f"Bot {token}"}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return {"ok": True, "username": data.get("username"), "id": data.get("id")}
+                    else:
+                        raise HTTPException(400, f"Discord returned {resp.status}")
+        except aiohttp.ClientError as e:
+            raise HTTPException(400, f"Connection failed: {str(e)}")
+
+    elif provider == "telegram":
+        token = creds.get("bot_token")
+        if not token:
+            raise HTTPException(400, "No bot token configured")
+        url = f"https://api.telegram.org/bot{token}/getMe"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    data = await resp.json()
+                    if data.get("ok"):
+                        r = data.get("result", {})
+                        return {"ok": True, "username": r.get("username"), "first_name": r.get("first_name")}
+                    else:
+                        raise HTTPException(400, f"Telegram error: {data.get('description', 'Unknown')}")
+        except aiohttp.ClientError as e:
+            raise HTTPException(400, f"Connection failed: {str(e)}")
+
+    else:
+        raise HTTPException(400, f"Test not supported for provider: {provider}")

@@ -97,6 +97,7 @@ Organisation
 
 ### UI/UX Polish (Done — Nov 2026)
 - [x] Discord guided setup panel in ConnectedAccounts.js (matches DiscordAppSetup.js design)
+- [x] Zendesk guided setup & settings panel in ConnectedAccounts.js (matches ZendeskSettings.js design — Connection card, Integration Status, Response Mode toggles)
 - [x] Organisation management page with CRUD
 - [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
 - [x] API scraper merged into Knowledge Base tab
