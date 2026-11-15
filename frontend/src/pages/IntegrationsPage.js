@@ -94,8 +94,16 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
   const [inviting, setInviting] = useState(false);
   const pollRef = useRef(null);
 
-  // Invite URL from account credentials
-  const clientId = account?.credentials_masked?.application_id || account?.credentials_masked?.client_id || account?.credentials_display?.client_id || "";
+  // Global Discord app config (platform-level credentials)
+  const [globalDiscordConfig, setGlobalDiscordConfig] = useState(null);
+  useEffect(() => {
+    api.get("/discord/app-config").then(r => setGlobalDiscordConfig(r.data)).catch(() => {});
+  }, []);
+  const hasGlobalConfig = !!(globalDiscordConfig?.client_id);
+  const hasOrgAccount = !!accounts.find(a => a.provider === "discord");
+
+  // Invite URL from account credentials OR global config
+  const clientId = account?.credentials_masked?.application_id || account?.credentials_masked?.client_id || account?.credentials_display?.client_id || globalDiscordConfig?.client_id || "";
   const inviteUrl = clientId
     ? `https://discord.com/oauth2/authorize?client_id=${clientId}&scope=bot+applications.commands&permissions=2147483648`
     : null;
@@ -169,9 +177,29 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
     }
   };
 
-  const handleCreate = () => {
-    const discordAccount = accounts.find(a => a.provider === "discord");
-    if (!discordAccount) { toast.error("Set up a Discord account in Discord App Setup first."); return; }
+  const handleCreate = async () => {
+    let discordAccount = accounts.find(a => a.provider === "discord");
+    // Auto-create per-org Discord account from global config if needed
+    if (!discordAccount && hasGlobalConfig) {
+      try {
+        const res = await v2.createAccount(orgId, {
+          provider: "discord",
+          name: "Discord (Platform)",
+          credentials: {
+            client_id: globalDiscordConfig.client_id,
+            client_secret: globalDiscordConfig.client_secret,
+            redirect_uri: globalDiscordConfig.redirect_uri,
+            bot_token: globalDiscordConfig.bot_token,
+          },
+        });
+        discordAccount = res.data;
+        onRefresh();
+      } catch (e) {
+        toast.error(e.response?.data?.detail || "Failed to link Discord to this organisation.");
+        return;
+      }
+    }
+    if (!discordAccount) { toast.error("Set up Discord credentials in Discord App Setup first."); return; }
     onCreateConnection({
       account_id: discordAccount.id,
       name: `Discord — ${botName || "Bot"}`,
@@ -242,7 +270,7 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
             <strong style={{ color: colors.text.primary }}>Discord App Setup</strong> · Manage global app credentials and view setup guide
           </span>
         </div>
-        <a href="/admin/accounts/discord" style={{
+        <a href="/admin/discord-app-setup" style={{
           display: "flex", alignItems: "center", gap: "4px",
           fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.brand.light, textDecoration: "none",
         }}>
@@ -298,10 +326,19 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
               </div>
             )}
 
-            {!isConnected && !accounts.find(a => a.provider === "discord") && (
+            {!isConnected && !hasOrgAccount && !hasGlobalConfig && (
               <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.default}`, marginBottom: "16px" }}>
                 <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0 }}>
-                  Discord OAuth is not configured. Open <a href="/admin/accounts/discord" style={{ color: colors.brand.light }}>Discord App Setup</a> to configure credentials.
+                  Discord is not configured. Open <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a> to configure credentials.
+                </p>
+              </div>
+            )}
+
+            {!isConnected && !hasOrgAccount && hasGlobalConfig && (
+              <div style={{ padding: "14px", backgroundColor: "rgba(52,211,153,0.06)", borderRadius: "10px", border: `1px solid rgba(52,211,153,0.15)`, marginBottom: "16px" }}>
+                <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>
+                  <CheckCircle size={12} style={{ verticalAlign: "middle", marginRight: "6px" }} />
+                  Discord App is configured platform-wide. Invite the bot to a server and create a connection below.
                 </p>
               </div>
             )}
@@ -352,14 +389,14 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
                   </div>
                   <p style={{ fontFamily: fonts.body, fontSize: "10px", color: colors.text.muted, margin: "10px 0 0", lineHeight: "1.5" }}>
                     Anyone with this link can invite the bot. The new server auto-links to this instance. In mobile, visit{" "}
-                    <a href="/admin/accounts/discord" style={{ color: colors.brand.light, textDecoration: "none" }}>Discord App Setup</a>.
+                    <a href="/admin/discord-app-setup" style={{ color: colors.brand.light, textDecoration: "none" }}>Discord App Setup</a>.
                   </p>
                 </>
               ) : (
                 <div style={{ padding: "10px 14px", borderRadius: "8px", backgroundColor: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)" }}>
                   <p style={{ fontFamily: fonts.body, fontSize: "11px", color: "#FBBF24", margin: 0 }}>
                     <AlertCircle size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: "6px" }} />
-                    Add an Application ID in <a href="/admin/accounts/discord" style={{ color: colors.brand.light }}>Discord App Setup</a> to generate the invite link.
+                    Add an Application ID in <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a> to generate the invite link.
                   </p>
                 </div>
               )}
@@ -392,8 +429,8 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
             ))}
           </div>
 
-          {/* Create connection (when not connected) */}
-          {!isConnected && accounts.find(a => a.provider === "discord") && (
+          {/* Create connection (when not connected and Discord is configured either per-org or globally) */}
+          {!isConnected && (hasOrgAccount || hasGlobalConfig) && (
             <div style={cardStyle}>
               <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 12px" }}>Response Mode</p>
               <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
