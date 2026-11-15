@@ -123,6 +123,16 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### Bot/Org/User Deletion & Instance Scoping Fix (Done — Nov 2026)
+- [x] Fixed: selectOrg resets selectedInstance (prevents cross-org data leaking)
+- [x] Fixed: selectBot creates synthetic instance for V2 bots without legacy_instance_id
+- [x] Fixed: New bots get their own empty KB and default settings (no inheritance)
+- [x] Fixed: Creating a bot auto-selects it and navigates to its overview (no refresh needed)
+- [x] Delete org: cascades to bots, connections, accounts, templates
+- [x] Delete bot: removes from list immediately
+- [x] Delete user: already existed on Team page
+- [x] Tested: 100% pass — 8/8 backend, all frontend (iteration_76.json)
+
 ### V2 Bot Instance Scoping Fix (Done — Nov 2026)
 - [x] AuthContext: selectBot creates synthetic instance for V2 bots without legacy_instance_id
 - [x] Backend: _verify_instance_access now accepts V2 bot IDs (not just V1 instances)

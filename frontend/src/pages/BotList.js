@@ -49,7 +49,10 @@ export default function BotList() {
       setBots(prev => [...prev, res.data]);
       setNewName("");
       setShowCreate(false);
-      refreshBots();
+      await refreshBots();
+      // Auto-select and navigate to the new bot
+      selectBot(res.data);
+      navigate(`/admin/bots/${res.data.id}`);
       toast.success(`Bot "${res.data.name}" created`);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to create bot");
@@ -75,6 +78,23 @@ export default function BotList() {
       toast.error(err.response?.data?.detail || "Failed to clone bot");
     } finally {
       setCloning(null);
+    }
+  };
+
+  const [deletingBot, setDeletingBot] = useState(null);
+  const handleDeleteBot = async (e, bot) => {
+    e.stopPropagation();
+    if (!confirm(`Delete bot "${bot.name}"? This cannot be undone.`)) return;
+    setDeletingBot(bot.id);
+    try {
+      await v2.deleteBot(selectedOrg.id, bot.id);
+      setBots(prev => prev.filter(b => b.id !== bot.id));
+      refreshBots();
+      toast.success(`Bot "${bot.name}" deleted`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to delete bot");
+    } finally {
+      setDeletingBot(null);
     }
   };
 
@@ -247,7 +267,7 @@ export default function BotList() {
                         </span>
                       </div>
                     )}
-                    <div style={{ marginLeft: "auto" }}>
+                    <div style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
                       <button
                         onClick={(e) => handleClone(e, bot)}
                         disabled={cloning === bot.id}
@@ -265,6 +285,23 @@ export default function BotList() {
                       >
                         {cloning === bot.id ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Copy size={11} />}
                         Clone
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteBot(e, bot)}
+                        disabled={deletingBot === bot.id}
+                        data-testid={`delete-bot-${bot.id}`}
+                        title="Delete this bot"
+                        style={{
+                          background: "none", border: `1px solid ${colors.border.default}`,
+                          borderRadius: radius.sm, padding: "4px 8px", cursor: "pointer",
+                          display: "flex", alignItems: "center",
+                          color: colors.brand.error, fontSize: "11px", fontFamily: fonts.body,
+                          opacity: 0.6, transition: "opacity 0.15s, border-color 0.15s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.borderColor = colors.brand.error; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = "0.6"; e.currentTarget.style.borderColor = colors.border.default; }}
+                      >
+                        {deletingBot === bot.id ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={11} />}
                       </button>
                     </div>
                   </div>
@@ -384,7 +421,7 @@ export default function BotList() {
                       title="Delete template"
                       style={{
                         ...T.btnGhost, padding: "7px 10px",
-                        color: deletingTpl === tpl.id ? colors.text.muted : colors.status.error,
+                        color: deletingTpl === tpl.id ? colors.text.muted : colors.brand.error,
                         opacity: deletingTpl === tpl.id ? 0.5 : 0.7,
                       }}
                     >

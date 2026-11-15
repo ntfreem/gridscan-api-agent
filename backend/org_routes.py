@@ -2,7 +2,7 @@
 Organisation routes — /api/v2/orgs
 CRUD for organisations, membership management.
 """
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -85,6 +85,24 @@ async def update_org(org_id: str, body: OrgUpdate, request: Request):
     if body.description is not None:
         update["description"] = body.description.strip()
     await h._db.organisations.update_one({"id": org_id}, {"$set": update})
+    return {"ok": True}
+
+
+@router.delete("/{org_id}")
+async def delete_org(org_id: str, request: Request):
+    """Delete an organisation and all its bots, connections, templates."""
+    user = await h._authed_user(request)
+    org = await h._db.organisations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(404, "Organisation not found")
+    if user.get("role") != "superadmin" and org.get("owner_id") != user["id"]:
+        raise HTTPException(403, "Only the org owner or superadmin can delete an organisation")
+    # Remove related data
+    await h._db.bots.delete_many({"org_id": org_id})
+    await h._db.connections.delete_many({"org_id": org_id})
+    await h._db.connected_accounts.delete_many({"org_id": org_id})
+    await h._db.bot_templates.delete_many({"org_id": org_id})
+    await h._db.organisations.delete_one({"id": org_id})
     return {"ok": True}
 
 

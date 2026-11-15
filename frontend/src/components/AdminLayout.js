@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
   BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle,
   SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket, Menu, X,
-  Building2, Bot, Link2, Network, Layers, Play, Key,
+  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2,
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useRef, useEffect } from "react";
@@ -273,7 +273,7 @@ export default function AdminLayout() {
   const {
     user, logout,
     orgs, selectedOrg, selectOrg,
-    bots, selectedBot, selectBot,
+    bots, selectedBot, selectBot, refreshOrgs,
     selectedInstance,
   } = useAuth();
   const navigate = useNavigate();
@@ -340,17 +340,48 @@ export default function AdminLayout() {
           {/* Organisation */}
           <SectionLabel icon={Building2} label="Organisation" />
           {orgs.length > 0 && (
-            <div style={{ padding: "0 4px 6px" }}>
-              <CompactSelector
-                label="Organisation"
-                value={selectedOrg?.name}
-                items={orgs}
-                onSelect={(org) => { selectOrg(org); navigate("/admin"); }}
-                open={orgDropOpen}
-                setOpen={(v) => { setOrgDropOpen(v); setBotDropOpen(false); }}
-                testId="org-switcher"
-                icon={Building2}
-              />
+            <div style={{ padding: "0 4px 6px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ flex: 1 }}>
+                <CompactSelector
+                  label="Organisation"
+                  value={selectedOrg?.name}
+                  items={orgs}
+                  onSelect={(org) => { selectOrg(org); navigate("/admin"); }}
+                  open={orgDropOpen}
+                  setOpen={(v) => { setOrgDropOpen(v); setBotDropOpen(false); }}
+                  testId="org-switcher"
+                  icon={Building2}
+                />
+              </div>
+              {selectedOrg && orgs.length > 1 && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete "${selectedOrg.name}" and all its bots?`)) return;
+                    try {
+                      const v2 = (await import("@/utils/v2api")).default;
+                      await v2.deleteOrg(selectedOrg.id);
+                      await refreshOrgs();
+                      const { toast } = await import("sonner");
+                      toast.success("Organisation deleted");
+                      navigate("/admin");
+                    } catch (err) {
+                      const { toast } = await import("sonner");
+                      toast.error(err.response?.data?.detail || "Failed to delete");
+                    }
+                  }}
+                  data-testid="delete-org-btn"
+                  title="Delete this organisation"
+                  style={{
+                    background: "none", border: "none", padding: "4px",
+                    cursor: "pointer", color: colors.text.muted, opacity: 0.5,
+                    transition: "opacity 0.15s, color 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = colors.brand.error; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = "0.5"; e.currentTarget.style.color = colors.text.muted; }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
             </div>
           )}
           <SideNavLink to="/admin" icon={LayoutDashboard} label="Overview" end onClick={closeMobile} />

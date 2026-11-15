@@ -189,9 +189,12 @@ export function AuthProvider({ children }) {
   const selectOrg = useCallback((org) => {
     setSelectedOrg(org);
     localStorage.setItem("bf_org_id", org.id);
-    // Reset bot selection when org changes
+    // Reset bot AND instance selection when org changes
     setSelectedBot(null);
+    setSelectedInstance(null);
     localStorage.removeItem("bf_bot_id");
+    localStorage.removeItem("bf_instance_id");
+    localStorage.removeItem("bf_instance");
   }, []);
 
   const selectBot = useCallback((bot) => {
@@ -267,7 +270,24 @@ export function AuthProvider({ children }) {
       setOrgs(fetchedOrgs);
       if (selectedOrg) {
         const updated = fetchedOrgs.find(o => o.id === selectedOrg.id);
-        if (updated) setSelectedOrg(updated);
+        if (updated) {
+          setSelectedOrg(updated);
+        } else {
+          // Selected org was deleted — pick the first remaining or clear
+          const fallback = fetchedOrgs.length > 0 ? fetchedOrgs[0] : null;
+          setSelectedOrg(fallback);
+          if (fallback) {
+            localStorage.setItem("bf_org_id", fallback.id);
+          } else {
+            localStorage.removeItem("bf_org_id");
+          }
+          // Reset bot/instance since org changed
+          setSelectedBot(null);
+          setSelectedInstance(null);
+          localStorage.removeItem("bf_bot_id");
+          localStorage.removeItem("bf_instance_id");
+          localStorage.removeItem("bf_instance");
+        }
       }
     } catch {}
   }, [selectedOrg]);

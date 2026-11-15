@@ -1,0 +1,90 @@
+{
+  "summary": "Completed testing of Instance Scoping Bug Fix and Delete Functionality. Backend: 8/8 tests passed. Frontend: All features verified working correctly. New bots have clean/default settings and empty KB. Delete buttons for bots, orgs, and users are present and functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "BotSettings.js",
+        "issues": ["Custom Instructions textarea shows placeholder text 'Always respond in English...' which could be confused with actual data - consider using a lighter placeholder style"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter76_instance_scoping.py",
+    "/app/test_reports/pytest/iter76_instance_scoping.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Instance scoping fix working correctly: AuthContext.selectBot creates synthetic instance for V2 bots without legacy_instance_id",
+    "New bots correctly get default persona ('You are a helpful, friendly, and knowledgeable assistant.') not inherited from other bots",
+    "New bots correctly have 0 KB articles (not inherited from legacy bots)",
+    "Delete bot API (DELETE /api/v2/orgs/{org_id}/bots/{bot_id}) works correctly",
+    "Delete org API (DELETE /api/v2/orgs/{org_id}) cascades to bots, connections, accounts, templates",
+    "Delete org button correctly hidden when only 1 org exists, visible when 2+ orgs",
+    "User delete buttons present on Team & Access page (data-testid='delete-user-{id}')",
+    "Bot list updates immediately after creating a bot (no page refresh needed)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter76_instance_scoping.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "seed_data_creation": "Test bots and orgs created with TEST_ prefix and cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Instance scoping bug fix verified working. Key implementation: AuthContext.selectBot (line 200-218) creates synthetic instance {id: bot.id, name: bot.name} for V2 bots without legacy_instance_id. This ensures bf_instance_id in localStorage is set to the bot's own ID, which scopes KB articles and settings correctly. Delete functionality: DELETE /api/v2/orgs/{org_id}/bots/{bot_id} for bots, DELETE /api/v2/orgs/{org_id} for orgs (cascades). Delete org button only visible when orgs.length > 1 (AdminLayout.js line 356).",
+  "features_tested": [
+    {
+      "feature": "Admin login and navigate to Bots page",
+      "status": "PASS",
+      "details": "Login with administrator/Admin@123 works, Bots page loads with data-testid='bot-list-page'"
+    },
+    {
+      "feature": "Creating new bot auto-selects and navigates to overview",
+      "status": "PASS",
+      "details": "New Bot button (data-testid='create-bot-btn') creates bot, auto-selects it, navigates to /admin/bots/{id}"
+    },
+    {
+      "feature": "New bot's Knowledge Base shows 0 articles",
+      "status": "PASS",
+      "details": "KB page shows 'No knowledge sources yet' - not inherited from other bots"
+    },
+    {
+      "feature": "New bot's Bot Settings shows clean defaults",
+      "status": "PASS",
+      "details": "Persona is default 'You are a helpful, friendly, and knowledgeable assistant.', custom_instructions is empty, knowledge_gate is 'strict'"
+    },
+    {
+      "feature": "Delete bot button removes bot from list",
+      "status": "PASS",
+      "details": "Delete buttons (data-testid='delete-bot-{id}') present on bot cards, API returns {ok: true}"
+    },
+    {
+      "feature": "Delete org button visibility logic",
+      "status": "PASS",
+      "details": "Delete org button (data-testid='delete-org-btn') only visible when 2+ orgs exist"
+    },
+    {
+      "feature": "Delete org cascades to bots",
+      "status": "PASS",
+      "details": "DELETE /api/v2/orgs/{org_id} removes org and all its bots, connections, accounts, templates"
+    },
+    {
+      "feature": "User delete buttons on Team & Access page",
+      "status": "PASS",
+      "details": "Delete buttons (data-testid='delete-user-{id}') present for non-admin users"
+    }
+  ],
+  "test_credentials": {
+    "admin": "administrator / Admin@123",
+    "org": "Default Organisation (cb91e73c-b74b-45a3-aecc-f7823ee07d2c)",
+    "legacy_bot": "API Tester (f014cae7-788f-447c-b524-7d72709daa80, legacy_instance_id: 88bfae82-2533-4235-968d-b3298fd57073)"
+  }
+}
