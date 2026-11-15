@@ -386,7 +386,7 @@ export default function AdminLayout() {
           )}
           <SideNavLink to="/admin" icon={LayoutDashboard} label="Overview" end onClick={closeMobile} />
           <SideNavLink to="/admin/bots" icon={Bot} label="Bots" onClick={closeMobile} />
-          <SideNavLink to="/admin/accounts/discord" icon={Zap} label="Discord App Setup" onClick={closeMobile} />
+          <SideNavLink to="/admin/discord-app-setup" icon={Zap} label="Discord App Setup" onClick={closeMobile} />
 
           {/* Divider */}
           <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
