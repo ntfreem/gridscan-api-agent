@@ -43,6 +43,7 @@ const v2 = {
   // Accounts
   listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers() }),
   createAccount: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts`, data, { headers: headers() }),
+  deleteAccount: (orgId, accountId) => axios.delete(`${BASE}/v2/orgs/${orgId}/accounts/${accountId}`, { headers: headers() }),
   getAccount: (orgId, accId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, { headers: headers() }),
   updateAccount: (orgId, accId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, data, { headers: headers() }),
   disconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/disconnect`, {}, { headers: headers() }),

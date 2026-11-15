@@ -96,11 +96,16 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
   // Global Discord app config (platform-level credentials)
   const [globalDiscordConfig, setGlobalDiscordConfig] = useState(null);
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customCreds, setCustomCreds] = useState({ client_id: "", client_secret: "", redirect_uri: "", bot_token: "" });
+  const [savingCustom, setSavingCustom] = useState(false);
   useEffect(() => {
     api.get("/discord/app-config").then(r => setGlobalDiscordConfig(r.data)).catch(() => {});
   }, []);
   const hasGlobalConfig = !!(globalDiscordConfig?.client_id);
-  const hasOrgAccount = !!accounts.find(a => a.provider === "discord");
+  const discordAccount = accounts.find(a => a.provider === "discord");
+  const hasOrgAccount = !!discordAccount;
+  const accountSource = discordAccount?.metadata?.source || (discordAccount?.name?.includes("Platform") ? "platform" : "custom");
 
   // Invite URL from account credentials OR global config
   const clientId = account?.credentials_masked?.application_id || account?.credentials_masked?.client_id || account?.credentials_display?.client_id || globalDiscordConfig?.client_id || "";
@@ -178,9 +183,9 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
   };
 
   const handleCreate = async () => {
-    let discordAccount = accounts.find(a => a.provider === "discord");
+    let da = accounts.find(a => a.provider === "discord");
     // Auto-create per-org Discord account from global config if needed
-    if (!discordAccount && hasGlobalConfig) {
+    if (!da && hasGlobalConfig) {
       try {
         const res = await v2.createAccount(orgId, {
           provider: "discord",
@@ -191,21 +196,72 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
             redirect_uri: globalDiscordConfig.redirect_uri,
             bot_token: globalDiscordConfig.bot_token,
           },
+          metadata: { source: "platform" },
         });
-        discordAccount = res.data;
+        da = res.data;
         onRefresh();
       } catch (e) {
-        toast.error(e.response?.data?.detail || "Failed to link Discord to this organisation.");
+        toast.error(e.response?.data?.detail || "Failed to link platform Discord.");
         return;
       }
     }
-    if (!discordAccount) { toast.error("Set up Discord credentials in Discord App Setup first."); return; }
+    if (!da) { toast.error("Set up Discord credentials first."); return; }
     onCreateConnection({
-      account_id: discordAccount.id,
+      account_id: da.id,
       name: `Discord — ${botName || "Bot"}`,
       response_mode: addMode,
       destination: { listen_mode: listenMode },
     });
+  };
+
+  const handleSaveCustom = async () => {
+    if (!customCreds.client_id || !customCreds.bot_token) {
+      toast.error("Client ID and Bot Token are required"); return;
+    }
+    setSavingCustom(true);
+    try {
+      // Delete existing platform account if it exists
+      if (hasOrgAccount && accountSource === "platform") {
+        try { await v2.deleteAccount(orgId, discordAccount.id); } catch {}
+      }
+      await v2.createAccount(orgId, {
+        provider: "discord",
+        name: "Discord (Custom)",
+        credentials: {
+          client_id: customCreds.client_id.trim(),
+          client_secret: customCreds.client_secret.trim(),
+          redirect_uri: customCreds.redirect_uri.trim(),
+          bot_token: customCreds.bot_token.trim(),
+        },
+        metadata: { source: "custom" },
+      });
+      toast.success("Custom Discord credentials saved");
+      setShowCustomForm(false);
+      onRefresh();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save custom credentials");
+    } finally { setSavingCustom(false); }
+  };
+
+  const handleRevertToPlatform = async () => {
+    if (!hasGlobalConfig) { toast.error("Platform Discord is not configured"); return; }
+    if (!window.confirm("Revert to platform Discord? This removes your custom credentials.")) return;
+    try {
+      if (discordAccount) await v2.deleteAccount(orgId, discordAccount.id);
+      await v2.createAccount(orgId, {
+        provider: "discord",
+        name: "Discord (Platform)",
+        credentials: {
+          client_id: globalDiscordConfig.client_id,
+          client_secret: globalDiscordConfig.client_secret,
+          redirect_uri: globalDiscordConfig.redirect_uri,
+          bot_token: globalDiscordConfig.bot_token,
+        },
+        metadata: { source: "platform" },
+      });
+      toast.success("Reverted to platform Discord");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to revert"); }
   };
 
   const handleSaveConfig = async () => {
@@ -258,7 +314,7 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
 
   return (
     <div data-testid="discord-detail-view">
-      {/* Banner — link to Discord App Setup */}
+      {/* Banner — Discord Connection Source */}
       <div data-testid="discord-app-setup-banner" style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 18px", borderRadius: "12px", marginBottom: "20px",
@@ -267,16 +323,79 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <Settings size={16} color={colors.text.muted} />
           <span style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary }}>
-            <strong style={{ color: colors.text.primary }}>Discord App Setup</strong> · Manage global app credentials and view setup guide
+            {hasOrgAccount && accountSource === "custom" ? (
+              <><strong style={{ color: "#F59E0B" }}>Custom Discord App</strong> · This org uses its own Discord credentials</>
+            ) : hasOrgAccount && accountSource === "platform" ? (
+              <><strong style={{ color: "#34D399" }}>Platform Discord</strong> · Using shared platform credentials</>
+            ) : hasGlobalConfig ? (
+              <><strong style={{ color: colors.text.primary }}>Platform Discord Available</strong> · Connect below or use custom credentials</>
+            ) : (
+              <><strong style={{ color: colors.text.primary }}>Discord App Setup</strong> · No platform Discord configured</>
+            )}
           </span>
         </div>
-        <a href="/admin/discord-app-setup" style={{
-          display: "flex", alignItems: "center", gap: "4px",
-          fontFamily: fonts.body, fontSize: "12px", fontWeight: "600", color: colors.brand.light, textDecoration: "none",
-        }}>
-          Open <ChevronRight size={14} />
-        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {hasOrgAccount && accountSource === "custom" && hasGlobalConfig && (
+            <button onClick={handleRevertToPlatform} style={{
+              display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px",
+              border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+              color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.body, cursor: "pointer",
+            }}>
+              Revert to Platform
+            </button>
+          )}
+          {hasOrgAccount && accountSource === "platform" && (
+            <button onClick={() => setShowCustomForm(true)} style={{
+              display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px",
+              border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+              color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.body, cursor: "pointer",
+            }}>
+              Use Custom App
+            </button>
+          )}
+          {!hasOrgAccount && hasGlobalConfig && (
+            <button onClick={() => setShowCustomForm(!showCustomForm)} style={{
+              display: "flex", alignItems: "center", gap: "4px", padding: "5px 10px", borderRadius: "6px",
+              border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.base,
+              color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.body, cursor: "pointer",
+            }}>
+              {showCustomForm ? "Use Platform" : "Use Custom App"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Custom credentials form (expandable) */}
+      {showCustomForm && (
+        <div style={{ ...cardStyle, marginBottom: "20px", borderColor: "#F59E0B30" }}>
+          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>Custom Discord App Credentials</p>
+          <p style={{ fontFamily: fonts.body, fontSize: "11px", color: colors.text.muted, margin: "0 0 16px" }}>Enter your own Discord application credentials for this organisation.</p>
+          {[
+            { key: "client_id", label: "Client ID", placeholder: "Application → General Information" },
+            { key: "client_secret", label: "Client Secret", placeholder: "Application → General Information" },
+            { key: "redirect_uri", label: "Redirect URI", placeholder: "https://yourdomain.com/discord/invited" },
+            { key: "bot_token", label: "Bot Token", placeholder: "Application → Bot → Reset Token" },
+          ].map(f => (
+            <div key={f.key} style={{ marginBottom: "12px" }}>
+              <label style={T.label}>{f.label}</label>
+              <input value={customCreds[f.key]} onChange={e => setCustomCreds(p => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder} style={T.input} type={f.key.includes("secret") || f.key.includes("token") ? "password" : "text"} />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={handleSaveCustom} disabled={savingCustom} style={{ ...T.btnPrimary, flex: 1, justifyContent: "center" }}>
+              {savingCustom ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />} Save Custom Credentials
+            </button>
+            <button onClick={() => setShowCustomForm(false)} style={{
+              padding: "10px 20px", borderRadius: "10px", border: `1px solid ${colors.border.default}`,
+              backgroundColor: colors.bg.base, color: colors.text.secondary, fontSize: "12px",
+              fontFamily: fonts.body, cursor: "pointer",
+            }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
         {/* ═══ Left column ═══ */}
@@ -326,19 +445,19 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
               </div>
             )}
 
-            {!isConnected && !hasOrgAccount && !hasGlobalConfig && (
+            {!isConnected && !hasOrgAccount && !hasGlobalConfig && !showCustomForm && (
               <div style={{ padding: "14px", backgroundColor: colors.bg.base, borderRadius: "10px", border: `1px solid ${colors.border.default}`, marginBottom: "16px" }}>
                 <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0 }}>
-                  Discord is not configured. Open <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Discord App Setup</a> to configure credentials.
+                  No Discord app configured. Ask a platform admin to set up the <a href="/admin/discord-app-setup" style={{ color: colors.brand.light }}>Platform Discord App</a>, or click "Use Custom App" above to add your own credentials.
                 </p>
               </div>
             )}
 
-            {!isConnected && !hasOrgAccount && hasGlobalConfig && (
+            {!isConnected && !hasOrgAccount && hasGlobalConfig && !showCustomForm && (
               <div style={{ padding: "14px", backgroundColor: "rgba(52,211,153,0.06)", borderRadius: "10px", border: `1px solid rgba(52,211,153,0.15)`, marginBottom: "16px" }}>
                 <p style={{ fontFamily: fonts.body, fontSize: "12px", color: "#34D399", margin: 0 }}>
                   <CheckCircle size={12} style={{ verticalAlign: "middle", marginRight: "6px" }} />
-                  Discord App is configured platform-wide. Invite the bot to a server and create a connection below.
+                  Platform Discord is ready. Invite the bot to a server and connect below.
                 </p>
               </div>
             )}

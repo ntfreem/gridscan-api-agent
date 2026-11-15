@@ -279,3 +279,20 @@ async def test_account(org_id: str, account_id: str, request: Request):
 
     else:
         raise HTTPException(400, f"Test not supported for provider: {provider}")
+
+
+
+@router.delete("/{org_id}/accounts/{account_id}")
+async def delete_account(org_id: str, account_id: str, request: Request):
+    """Delete a connected account. Fails if it has active connections."""
+    user = await h.require_admin(request)
+    org = await h.require_org(request, org_id)
+    account = await h._db.connected_accounts.find_one({"id": account_id, "org_id": org_id})
+    if not account:
+        raise HTTPException(404, "Account not found")
+    # Check for active connections using this account
+    active_conns = await h._db.connections.count_documents({"account_id": account_id, "enabled": True})
+    if active_conns > 0:
+        raise HTTPException(400, f"Cannot delete: {active_conns} active connection(s) use this account. Disconnect them first.")
+    await h._db.connected_accounts.delete_one({"id": account_id})
+    return {"ok": True}
