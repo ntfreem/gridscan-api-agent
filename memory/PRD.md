@@ -123,6 +123,11 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### V2 Bot Instance Scoping Fix (Done — Nov 2026)
+- [x] AuthContext: selectBot creates synthetic instance for V2 bots without legacy_instance_id
+- [x] Backend: _verify_instance_access now accepts V2 bot IDs (not just V1 instances)
+- [x] New bots get isolated KB, conversations, and settings scope — no inheritance from other bots
+
 ### Bot Templates (Done — Nov 2026)
 - [x] `bot_templates` MongoDB collection
 - [x] Save bot as template: POST /v2/orgs/{org_id}/bots/{bot_id}/save-as-template

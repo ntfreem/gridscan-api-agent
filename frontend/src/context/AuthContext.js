@@ -205,6 +205,12 @@ export function AuthProvider({ children }) {
         localStorage.setItem("bf_instance", JSON.stringify(inst));
         localStorage.setItem("bf_instance_id", inst.id);
       }
+    } else {
+      // V2-only bot: use bot's own ID as instance scope
+      const synth = { id: bot.id, name: bot.name };
+      setSelectedInstance(synth);
+      localStorage.setItem("bf_instance", JSON.stringify(synth));
+      localStorage.setItem("bf_instance_id", bot.id);
     }
   }, [instances]);
 

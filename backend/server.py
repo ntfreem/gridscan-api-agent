@@ -351,12 +351,17 @@ async def _verify_instance_access(x_instance_id: Optional[str], current_user: di
         raise HTTPException(status_code=400, detail="X-Instance-ID header required")
     if current_user["role"] == "superadmin":
         return x_instance_id
+    # Check V1 instances first
     instance = await db.bot_instances.find_one({"id": x_instance_id}, {"_id": 0})
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    if current_user["id"] not in instance.get("assigned_user_ids", []):
-        raise HTTPException(status_code=403, detail="Access denied to this instance")
-    return x_instance_id
+    if instance:
+        if current_user["id"] not in instance.get("assigned_user_ids", []):
+            raise HTTPException(status_code=403, detail="Access denied to this instance")
+        return x_instance_id
+    # Check V2 bots (for new bots without legacy instance)
+    v2_bot = await db.bots.find_one({"id": x_instance_id}, {"_id": 0})
+    if v2_bot:
+        return x_instance_id
+    raise HTTPException(status_code=404, detail="Instance not found")
 async def get_instance_access(
     x_instance_id: Optional[str] = Header(None, alias="X-Instance-ID"),
     current_user: dict = Depends(get_current_user)
