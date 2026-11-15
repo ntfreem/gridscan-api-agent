@@ -2398,6 +2398,18 @@ async def startup_event():
         for col in [db.bot_config, db.knowledge_sources, db.conversations, db.discord_config]:
             await col.update_many({"instance_id": {"$exists": False}}, {"$set": {"instance_id": migrate_id}})
 
+    # ── Run V2 migration if V1 data exists but V2 is empty ──
+    v1_count = await db.bot_instances.count_documents({})
+    v2_count = await db.organisations.count_documents({})
+    if v1_count > 0 and v2_count == 0:
+        try:
+            from migrate_v2 import migrate
+            logger.info(f"V1 data found ({v1_count} instances) with no V2 orgs — running migration...")
+            result = await migrate()
+            logger.info(f"V2 migration complete: {result}")
+        except Exception as e:
+            logger.error(f"V2 migration failed: {e}")
+
     # Start shared Discord bot (one client, routes to all instances by guild)
     global _shared_discord_task
     app_creds = await get_discord_credentials()
