@@ -28,6 +28,12 @@ const v2 = {
   getBotSettings: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, { headers: headers() }),
   updateBotSettings: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, data, { headers: headers() }),
   cloneBot: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/clone`, {}, { headers: headers() }),
+  saveAsTemplate: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/save-as-template`, data || {}, { headers: headers() }),
+
+  // Templates
+  listTemplates: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/templates`, { headers: headers() }),
+  createBotFromTemplate: (orgId, templateId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/templates/${templateId}/create-bot`, data || {}, { headers: headers() }),
+  deleteTemplate: (orgId, templateId) => axios.delete(`${BASE}/v2/orgs/${orgId}/templates/${templateId}`, { headers: headers() }),
 
   // Accounts
   listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers() }),

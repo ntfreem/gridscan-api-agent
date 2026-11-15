@@ -216,3 +216,101 @@ async def update_bot_settings(org_id: str, bot_id: str, body: BotSettingsUpdate,
     if len(update) > 1:  # more than just updated_at
         await h._db.bots.update_one({"id": bot_id}, {"$set": update})
     return {"ok": True}
+
+
+# ── Template fields to snapshot ──
+_TEMPLATE_FIELDS = [
+    "persona", "custom_instructions", "tone_instructions",
+    "manual_tone_examples", "knowledge_gate", "knowledge_gate_pct",
+    "fallback_message", "acknowledgment_replies", "llm_config",
+]
+
+
+# ── Template endpoints ──
+
+@router.post("/{org_id}/bots/{bot_id}/save-as-template")
+async def save_bot_as_template(org_id: str, bot_id: str, request: Request):
+    """Snapshot a bot's config into a reusable template."""
+    user, org, bot = await h.require_bot_access(request, bot_id)
+    body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    template_name = (body.get("name") or f"{bot['name']} Template").strip()
+    description = (body.get("description") or "").strip()
+
+    now = h._now()
+    template = {
+        "id": h._uuid(),
+        "org_id": org_id,
+        "name": template_name,
+        "description": description,
+        "source_bot_id": bot_id,
+        "source_bot_name": bot.get("name", ""),
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    for field in _TEMPLATE_FIELDS:
+        template[field] = bot.get(field, "" if isinstance(bot.get(field, ""), str) else bot.get(field))
+
+    await h._db.bot_templates.insert_one(template)
+    template.pop("_id", None)
+    return template
+
+
+@router.get("/{org_id}/templates")
+async def list_templates(org_id: str, request: Request):
+    """List all saved bot templates in the organisation."""
+    user, org = await h.require_org_member(request)
+    templates = await h._db.bot_templates.find(
+        {"org_id": org_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"templates": templates}
+
+
+@router.post("/{org_id}/templates/{template_id}/create-bot")
+async def create_bot_from_template(org_id: str, template_id: str, request: Request):
+    """Create a new bot from a saved template."""
+    user, org = await h.require_org_member(request)
+    template = await h._db.bot_templates.find_one({"id": template_id, "org_id": org_id})
+    if not template:
+        raise HTTPException(404, "Template not found")
+
+    body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+    bot_name = (body.get("name") or f"{template['name']}").strip()
+
+    now = h._now()
+    bot = {
+        "id": h._uuid(),
+        "org_id": org_id,
+        "name": bot_name,
+        "description": template.get("description", ""),
+        "created_by": user["id"],
+        "created_from_template": template_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    for field in _TEMPLATE_FIELDS:
+        bot[field] = template.get(field, "" if field not in ("manual_tone_examples", "acknowledgment_replies", "llm_config") else template.get(field))
+
+    # Ensure defaults for complex fields
+    if not bot.get("manual_tone_examples"):
+        bot["manual_tone_examples"] = []
+    if not bot.get("acknowledgment_replies"):
+        bot["acknowledgment_replies"] = {}
+    if not bot.get("llm_config"):
+        bot["llm_config"] = {"provider": "emergent", "model": None}
+
+    await h._db.bots.insert_one(bot)
+    bot.pop("_id", None)
+    bot["connection_count"] = 0
+    bot["active_connection_count"] = 0
+    return bot
+
+
+@router.delete("/{org_id}/templates/{template_id}")
+async def delete_template(org_id: str, template_id: str, request: Request):
+    """Delete a bot template."""
+    user, org = await h.require_org_member(request)
+    result = await h._db.bot_templates.delete_one({"id": template_id, "org_id": org_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Template not found")
+    return {"ok": True}

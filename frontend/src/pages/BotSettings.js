@@ -3,7 +3,7 @@ import api from "../utils/api";
 import v2 from "../utils/v2api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight, Upload, Image as ImageIcon, RefreshCw } from "lucide-react";
+import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight, Upload, Image as ImageIcon, RefreshCw, BookmarkPlus } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
@@ -15,6 +15,7 @@ export default function BotSettings() {
   const isV2 = !!(botId && orgId);
   const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", knowledge_gate_pct: 0 });
   const [saving, setSaving] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [approvedCount, setApprovedCount] = useState(0);
   const [newEx, setNewEx] = useState({ label: "", user_msg: "", bot_msg: "" });
@@ -182,6 +183,19 @@ export default function BotSettings() {
       toast.success("Settings saved");
     } catch { toast.error("Failed to save settings"); }
     finally { setSaving(false); }
+  };
+
+  const saveAsTemplate = async () => {
+    if (!isV2) { toast.error("Templates are only available for V2 bots"); return; }
+    const name = prompt("Template name:", `${config.name || "Bot"} Template`);
+    if (!name) return;
+    setSavingTemplate(true);
+    try {
+      await v2.saveAsTemplate(orgId, botId, { name: name.trim(), description: "" });
+      toast.success(`Template "${name.trim()}" saved`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to save template");
+    } finally { setSavingTemplate(false); }
   };
 
   const addExample = () => {
@@ -796,11 +810,17 @@ curl -N -X POST ${window.location.origin}/api/v1/chat/stream \\
             </div>
           )}
 
-          <div style={{ display: "flex", gap: "12px" }}>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             <button onClick={save} disabled={saving} data-testid="save-settings-btn"
               style={{ ...T.btnPrimary, opacity: saving ? 0.6 : 1 }}>
               <Save size={13} /> {saving ? "Saving..." : "Save All Settings"}
             </button>
+            {isV2 && (
+              <button onClick={saveAsTemplate} disabled={savingTemplate} data-testid="save-as-template-btn"
+                style={{ ...T.btnSecondary, opacity: savingTemplate ? 0.6 : 1 }}>
+                <BookmarkPlus size={13} /> {savingTemplate ? "Saving..." : "Save as Template"}
+              </button>
+            )}
             <button onClick={() => setShowPreview(!showPreview)} data-testid="toggle-preview-btn"
               style={T.btnSecondary}>
               {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}

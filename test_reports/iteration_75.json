@@ -1,0 +1,87 @@
+{
+  "summary": "Completed testing of Bot Templates feature. Backend: 12/12 tests passed. Frontend: All UI elements verified. Templates CRUD operations working correctly. Pruned V1 endpoints return 404 as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "BotList.js",
+        "issues": ["Minor: React warning about nested <button> elements in bot cards (button inside button for Clone action)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter75_bot_templates.py",
+    "/app/test_reports/pytest/iter75_bot_templates.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Bot Templates feature correctly implemented with all CRUD operations",
+    "Template correctly copies all config fields: persona, custom_instructions, tone_instructions, manual_tone_examples, knowledge_gate, knowledge_gate_pct, fallback_message, acknowledgment_replies, llm_config",
+    "Bots created from templates correctly inherit all settings and start with 0 connections",
+    "Pruned V1 endpoints (api-test, llm-config/test, assign-user, reply-defaults) correctly return 404",
+    "Frontend has proper data-testid attributes: tab-bots, tab-templates, save-as-template-btn, use-template-{id}, delete-template-{id}, template-card-{id}"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter75_bot_templates.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "seed_data_creation": "Test templates and bots created with TEST_ prefix and cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bot Templates feature fully tested. Key endpoints: POST /api/v2/orgs/{org_id}/bots/{bot_id}/save-as-template, GET /api/v2/orgs/{org_id}/templates, POST /api/v2/orgs/{org_id}/templates/{template_id}/create-bot, DELETE /api/v2/orgs/{org_id}/templates/{template_id}. Frontend has Bots/Templates tabs on /admin/bots page. Save as Template button is on Bot Settings page at bottom. Org ID: cb91e73c-b74b-45a3-aecc-f7823ee07d2c. Bot ID: f014cae7-788f-447c-b524-7d72709daa80.",
+  "features_tested": [
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/bots/{bot_id}/save-as-template creates a template",
+      "status": "PASS",
+      "details": "Template created with all bot config fields: persona, knowledge_gate, tone_instructions, llm_config"
+    },
+    {
+      "feature": "GET /api/v2/orgs/{org_id}/templates returns list of templates",
+      "status": "PASS",
+      "details": "Returns templates array with all expected fields"
+    },
+    {
+      "feature": "POST /api/v2/orgs/{org_id}/templates/{template_id}/create-bot creates bot from template",
+      "status": "PASS",
+      "details": "New bot inherits all settings from template, starts with 0 connections"
+    },
+    {
+      "feature": "DELETE /api/v2/orgs/{org_id}/templates/{template_id} removes template",
+      "status": "PASS",
+      "details": "Template deleted successfully, returns 404 for nonexistent templates"
+    },
+    {
+      "feature": "Pruned V1 endpoints return 404",
+      "status": "PASS",
+      "details": "POST /api/admin/api-test, POST /api/admin/instances/{id}/llm-config/test, POST /api/admin/instances/{id}/assign-user, GET /api/admin/instances/{id}/reply-defaults all return 404"
+    },
+    {
+      "feature": "Bots page has Bots and Templates tabs",
+      "status": "PASS",
+      "details": "data-testid='tab-bots' and data-testid='tab-templates' present and functional"
+    },
+    {
+      "feature": "Templates tab shows empty state when no templates",
+      "status": "PASS",
+      "details": "Shows 'No templates yet' message with helpful instructions"
+    },
+    {
+      "feature": "Bot Settings page has Save as Template button",
+      "status": "PASS",
+      "details": "data-testid='save-as-template-btn' present and visible at bottom of page"
+    }
+  ],
+  "test_credentials": {
+    "admin": "administrator / Admin@123",
+    "org": "Default Organisation (cb91e73c-b74b-45a3-aecc-f7823ee07d2c)",
+    "bot": "API Tester (f014cae7-788f-447c-b524-7d72709daa80)"
+  }
+}

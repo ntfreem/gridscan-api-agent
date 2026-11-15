@@ -123,6 +123,16 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### Bot Templates (Done — Nov 2026)
+- [x] `bot_templates` MongoDB collection
+- [x] Save bot as template: POST /v2/orgs/{org_id}/bots/{bot_id}/save-as-template
+- [x] List templates: GET /v2/orgs/{org_id}/templates
+- [x] Create bot from template: POST /v2/orgs/{org_id}/templates/{template_id}/create-bot
+- [x] Delete template: DELETE /v2/orgs/{org_id}/templates/{template_id}
+- [x] "Save as Template" button on Bot Settings page
+- [x] Templates tab on Bots page with Use Template and Delete buttons
+- [x] Tested: 100% pass — 12/12 backend, all frontend (iteration_75.json)
+
 ### V1 Endpoint Pruning (Done — Nov 2026)
 - [x] Removed 5 orphaned V1 endpoints with zero callers: api-test, llm-config/test, assign-user, unassign-user, reply-defaults (GET+PUT)
 - [x] Removed unused AssignUser Pydantic model
