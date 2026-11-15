@@ -1214,7 +1214,7 @@ function ZendeskDetail({ connection, account, onToggle, onCreateConnection, acco
                 <div>
                   <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: "0 0 4px" }}>Agent Assist</p>
                   <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.secondary, margin: 0, lineHeight: "1.5" }}>
-                    Sends AI suggestions for agents to review via the Zendesk sidebar app.
+                    Sends a summary of the ticket and a suggested reply as an internal note anytime a ticket is submitted as open.
                   </p>
                 </div>
               </div>
