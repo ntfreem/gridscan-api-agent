@@ -1098,11 +1098,28 @@ async def _process_zendesk_ticket(instance_id: str, ticket_id: str, event: dict)
                     {"$set": {"action_taken": "auto_reply_failed", "error": str(exc)}},
                 )
         elif cfg.get("agent_assist_enabled"):
-            await _db.zendesk_suggestions.update_one(
-                {"instance_id": instance_id, "ticket_id": ticket_id},
-                {"$set": {"action_taken": "agent_assist"}},
-            )
-            logger.info("Zendesk suggestion stored for ticket %s (instance %s)", ticket_id, instance_id[:12])
+            # Post AI summary + suggested reply as an internal note
+            try:
+                internal_note_body = (
+                    f"[BitBot Pro — AI Agent Assist]\n\n"
+                    f"**Ticket Summary:** {subject}\n\n"
+                    f"**Suggested Reply:**\n{ai_response}"
+                )
+                await _zendesk_request(
+                    cfg, "PUT", f"/tickets/{ticket_id}.json",
+                    {"ticket": {"comment": {"body": internal_note_body, "public": False}, "tags": ["ai_agent_assist", "bitbotpro"]}},
+                )
+                await _db.zendesk_suggestions.update_one(
+                    {"instance_id": instance_id, "ticket_id": ticket_id},
+                    {"$set": {"action_taken": "agent_assist"}},
+                )
+                logger.info("Zendesk agent assist internal note posted for ticket %s (instance %s)", ticket_id, instance_id[:12])
+            except Exception as exc:
+                logger.error("Failed to post Zendesk agent assist note for ticket %s: %s", ticket_id, exc)
+                await _db.zendesk_suggestions.update_one(
+                    {"instance_id": instance_id, "ticket_id": ticket_id},
+                    {"$set": {"action_taken": "agent_assist_failed", "error": str(exc)}},
+                )
 
     except Exception as exc:
         logger.error("Zendesk ticket processing error (instance=%s, ticket=%s): %s", instance_id, ticket_id, exc, exc_info=True)
@@ -1184,20 +1201,25 @@ async def _process_zendesk_v2_connection(
             logger.error("[V2 ZENDESK] auto-reply failed for ticket %s: %s", ticket_id, exc)
             suggestion_doc["action_taken"] = "auto_reply_failed"
             suggestion_doc["error"] = str(exc)
-    elif response_mode == "internal_note":
-        # Post internal note
+    elif response_mode in ("internal_note", "agent_assist"):
+        # Post AI summary + suggested reply as an internal note
         try:
+            internal_note_body = (
+                f"[BitBot Pro — AI Agent Assist]\n\n"
+                f"**Ticket Summary:** {subject}\n\n"
+                f"**Suggested Reply:**\n{ai_response}"
+            )
             sem = _webhook_router.get_account_semaphore(connection["account_id"])
             async with sem:
                 await _zendesk_request(
                     cfg, "PUT", f"/tickets/{ticket_id}.json",
-                    {"ticket": {"comment": {"body": f"[BitBot Pro AI Suggestion]\n\n{ai_response}", "public": False}}},
+                    {"ticket": {"comment": {"body": internal_note_body, "public": False}, "tags": ["ai_agent_assist", "bitbotpro"]}},
                 )
-            suggestion_doc["action_taken"] = "internal_note"
-            logger.info("[V2 ZENDESK] internal note posted for ticket %s (conn=%s)", ticket_id, conn_id[:12])
+            suggestion_doc["action_taken"] = response_mode
+            logger.info("[V2 ZENDESK] agent assist note posted for ticket %s (conn=%s)", ticket_id, conn_id[:12])
         except Exception as exc:
-            logger.error("[V2 ZENDESK] internal note failed: %s", exc)
-            suggestion_doc["action_taken"] = "internal_note_failed"
+            logger.error("[V2 ZENDESK] agent assist note failed: %s", exc)
+            suggestion_doc["action_taken"] = f"{response_mode}_failed"
     else:
         # agent_assist / sidebar_only — store only
         suggestion_doc["action_taken"] = response_mode
