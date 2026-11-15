@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
 import api from "../utils/api";
+import v2 from "../utils/v2api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight, Upload, Image as ImageIcon, RefreshCw } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
-  const { selectedInstance } = useAuth();
+  const { selectedOrg, selectedBot, selectedInstance } = useAuth();
+  // V2 bots use selectedBot; legacy bots fall back to selectedInstance
+  const botId = selectedBot?.id;
+  const orgId = selectedOrg?.id;
   const instanceId = selectedInstance?.id;
+  const isV2 = !!(botId && orgId);
   const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", knowledge_gate_pct: 0 });
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -47,13 +52,14 @@ export default function BotSettings() {
   const [discordSyncing, setDiscordSyncing] = useState(false);
 
   useEffect(() => {
-    if (!instanceId) return;
-    api.get(`/admin/instances/${instanceId}/llm-config`).then(r => {
+    const cfgId = instanceId || botId;
+    if (!cfgId) return;
+    api.get(`/admin/instances/${cfgId}/llm-config`).then(r => {
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
     }).catch(() => {});
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
     api.get(`/admin/api-keys`).then(r => setApiKeys(r.data || [])).catch(() => {});
-  }, [instanceId]);
+  }, [instanceId, botId]);
 
   const saveLlm = async () => {
     const payload = {
@@ -122,28 +128,57 @@ export default function BotSettings() {
   };
 
   useEffect(() => {
-    api.get(`/admin/bot-config`).then(r => {
-      if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0) });
-    }).catch(() => {});
+    // V2 bot: load from V2 settings endpoint
+    if (isV2) {
+      v2.getBotSettings(orgId, botId).then(r => {
+        if (r.data) setConfig({
+          name: r.data.name || "",
+          persona: r.data.persona || "",
+          custom_instructions: r.data.custom_instructions || "",
+          tone_instructions: r.data.tone_instructions || "",
+          manual_tone_examples: r.data.manual_tone_examples || [],
+          knowledge_gate: r.data.knowledge_gate || "strict",
+          knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0),
+        });
+      }).catch(() => {});
+    } else {
+      // Legacy V1 fallback
+      api.get(`/admin/bot-config`).then(r => {
+        if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0) });
+      }).catch(() => {});
+    }
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
     // Probe for bot logo
-    if (instanceId) {
+    const logoId = instanceId || botId;
+    if (logoId) {
       const img = new Image();
-      img.onload = () => setLogoUrl(`/api/bot-logo/${instanceId}?t=${Date.now()}`);
+      img.onload = () => setLogoUrl(`/api/bot-logo/${logoId}?t=${Date.now()}`);
       img.onerror = () => setLogoUrl(null);
-      img.src = `/api/bot-logo/${instanceId}?t=${Date.now()}`;
+      img.src = `/api/bot-logo/${logoId}?t=${Date.now()}`;
     }
-  }, [instanceId]);
+  }, [isV2, orgId, botId, instanceId]);
 
   const save = async () => {
     if (!config.name.trim()) { toast.error("Bot name is required"); return; }
     if (!config.persona.trim()) { toast.error("Persona description is required"); return; }
     setSaving(true);
     try {
-      const payload = { ...config };
-      // Don't send empty api_key_value (preserve existing key on server)
-      if (!payload.api_key_value) delete payload.api_key_value;
-      await api.put(`/admin/bot-config`, payload);
+      if (isV2) {
+        await v2.updateBotSettings(orgId, botId, {
+          persona: config.persona,
+          custom_instructions: config.custom_instructions,
+          tone_instructions: config.tone_instructions,
+          manual_tone_examples: config.manual_tone_examples,
+          knowledge_gate: config.knowledge_gate,
+          knowledge_gate_pct: config.knowledge_gate_pct,
+        });
+        // Also update bot name via the bot endpoint
+        await v2.updateBot(orgId, botId, { name: config.name.trim() });
+      } else {
+        const payload = { ...config };
+        if (!payload.api_key_value) delete payload.api_key_value;
+        await api.put(`/admin/bot-config`, payload);
+      }
       toast.success("Settings saved");
     } catch { toast.error("Failed to save settings"); }
     finally { setSaving(false); }
@@ -213,12 +248,12 @@ export default function BotSettings() {
       <p style={T.overline}>Configuration</p>
       <h1 style={T.h1}>Bot Settings</h1>
 
-      {!instanceId ? (
+      {!isV2 && !instanceId ? (
         <div data-testid="no-instance-empty-state" style={{ ...T.card, marginTop: "20px", textAlign: "center", padding: "40px 24px" }}>
           <Cpu size={28} color={colors.text.muted} style={{ margin: "0 auto 12px" }} />
-          <p style={{ ...T.sectionTitle, margin: "0 0 6px" }}>Select a workspace first</p>
+          <p style={{ ...T.sectionTitle, margin: "0 0 6px" }}>Select a bot first</p>
           <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: 0, maxWidth: "440px", marginLeft: "auto", marginRight: "auto" }}>
-            Use the workspace switcher in the sidebar to pick the bot instance you want to configure. Each instance has its own identity, knowledge base, and LLM provider.
+            Use the bot switcher in the sidebar to pick the bot you want to configure. Each bot has its own identity, knowledge base, and LLM provider.
           </p>
         </div>
       ) : (

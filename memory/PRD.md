@@ -123,6 +123,15 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### Bot Settings V2 Migration (Done — Nov 2026)
+- [x] BotSettings.js now loads/saves from V2 bot-specific API instead of shared V1 bot_config
+- [x] New bots start with clean defaults (no property inheritance from other bots)
+- [x] Sidebar label renamed from "Behaviour" to "Bot Settings"
+
+### Zendesk Agent Assist Fix (Done — Nov 2026)
+- [x] V1 and V2 agent_assist paths now post internal notes to Zendesk (ticket summary + suggested reply)
+- [x] Description updated to match actual behavior
+
 ### Admin User Management (Done — Nov 2026)
 - [x] Admin can invite users with extended details: first_name, last_name, username, org/bot assignments
 - [x] InviteAccept page pre-fills name and username from invitation token
