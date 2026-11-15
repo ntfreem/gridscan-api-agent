@@ -314,3 +314,131 @@ async def delete_template(org_id: str, template_id: str, request: Request):
     if result.deleted_count == 0:
         raise HTTPException(404, "Template not found")
     return {"ok": True}
+
+
+
+# ── LLM Config management (V2 replacement for /admin/instances/{id}/llm-config) ──
+
+import re as _re
+
+_llm_refs: dict = {}
+
+def init_llm_config(*, allowed_anthropic: dict, allowed_openai: dict,
+                    default_models: dict, llm_sessions: dict, llm_history: dict,
+                    call_claude_fn, resolve_bot_config_fn):
+    """Called from server.py startup to inject runtime dependencies."""
+    _llm_refs.update({
+        "allowed_anthropic": allowed_anthropic,
+        "allowed_openai": allowed_openai,
+        "defaults": default_models,
+        "sessions": llm_sessions,
+        "history": llm_history,
+        "call_claude": call_claude_fn,
+        "resolve_bot_config": resolve_bot_config_fn,
+    })
+
+
+class LLMConfigUpdate(BaseModel):
+    provider: str  # "emergent" | "anthropic" | "ollama" | "openai"
+    model: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    ollama_base_url: Optional[str] = None
+
+
+@router.get("/{org_id}/bots/{bot_id}/llm-config")
+async def get_bot_llm_config(org_id: str, bot_id: str, request: Request):
+    """Return per-bot LLM provider settings. Secret values are masked."""
+    user, org, bot = await h.require_bot_access(request, bot_id)
+    cfg = bot.get("llm_config") or {}
+    provider = cfg.get("provider") or "emergent"
+    anthropic_key = cfg.get("anthropic_api_key") or ""
+    openai_key = cfg.get("openai_api_key") or ""
+    refs = _llm_refs
+    return {
+        "provider": provider,
+        "model": cfg.get("model") or "",
+        "anthropic_api_key_set": bool(anthropic_key),
+        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
+        "openai_api_key_set": bool(openai_key),
+        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
+        "ollama_base_url": cfg.get("ollama_base_url") or "",
+        "allowed_anthropic_models": list(refs.get("allowed_anthropic", {}).keys()),
+        "allowed_openai_models": list(refs.get("allowed_openai", {}).keys()),
+        "default_models": refs.get("defaults", {}),
+    }
+
+
+@router.put("/{org_id}/bots/{bot_id}/llm-config")
+async def put_bot_llm_config(org_id: str, bot_id: str, body: LLMConfigUpdate, request: Request):
+    """Save per-bot LLM provider. Empty API key fields preserve existing stored keys."""
+    user, org, bot = await h.require_bot_access(request, bot_id)
+    refs = _llm_refs
+    provider = (body.provider or "").lower()
+    if provider not in ("emergent", "anthropic", "ollama", "openai"):
+        raise HTTPException(400, "provider must be one of: emergent, anthropic, ollama, openai")
+    existing = bot.get("llm_config") or {}
+    model = (body.model or "").strip() or None
+    if model and _re.match(r"^(sk-|bbk_)", model, _re.IGNORECASE):
+        raise HTTPException(400, "Model must be a model name, not an API key.")
+    allowed_anthropic = refs.get("allowed_anthropic", {})
+    allowed_openai = refs.get("allowed_openai", {})
+    if provider == "anthropic" and model and model not in allowed_anthropic:
+        raise HTTPException(400, f"Anthropic model must be one of: {list(allowed_anthropic.keys())}")
+    if provider == "openai" and model and model not in allowed_openai:
+        raise HTTPException(400, f"OpenAI model must be one of: {list(allowed_openai.keys())}")
+    new_cfg = {
+        "provider": provider,
+        "model": model,
+        "anthropic_api_key": (body.anthropic_api_key.strip() if body.anthropic_api_key else None) or existing.get("anthropic_api_key"),
+        "openai_api_key": (body.openai_api_key.strip() if body.openai_api_key else None) or existing.get("openai_api_key"),
+        "ollama_base_url": (body.ollama_base_url or "").strip() or None,
+    }
+    await h._db.bots.update_one(
+        {"id": bot_id},
+        {"$set": {"llm_config": new_cfg, "updated_at": h._now()}}
+    )
+    # Clear cached LLM sessions for this bot
+    sessions = refs.get("sessions", {})
+    history = refs.get("history", {})
+    for k in list(sessions.keys()):
+        if f"_{bot_id}_" in k:
+            sessions.pop(k, None)
+    for k in list(history.keys()):
+        if f"_{bot_id}_" in k:
+            history.pop(k, None)
+    anthropic_key = new_cfg.get("anthropic_api_key") or ""
+    openai_key = new_cfg.get("openai_api_key") or ""
+    return {
+        "success": True,
+        "provider": provider,
+        "model": model or "",
+        "anthropic_api_key_set": bool(anthropic_key),
+        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
+        "openai_api_key_set": bool(openai_key),
+        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
+        "ollama_base_url": new_cfg.get("ollama_base_url") or "",
+    }
+
+
+@router.post("/{org_id}/bots/{bot_id}/llm-config/test")
+async def test_bot_llm_config(org_id: str, bot_id: str, request: Request):
+    """Ping the configured LLM provider with a test message."""
+    user, org, bot = await h.require_bot_access(request, bot_id)
+    refs = _llm_refs
+    call_claude = refs.get("call_claude")
+    resolve_bot_config = refs.get("resolve_bot_config")
+    if not call_claude or not resolve_bot_config:
+        raise HTTPException(500, "LLM test not initialised")
+    try:
+        bot_config = await resolve_bot_config(bot_id)
+        resp = await call_claude(
+            f"llm_test_{bot_id}",
+            "Say 'pong' and nothing else.",
+            "You are a test bot. Reply with exactly 'pong'.",
+            instance_id=bot_id,
+            platform="test",
+        )
+        return {"success": True, "response": resp}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

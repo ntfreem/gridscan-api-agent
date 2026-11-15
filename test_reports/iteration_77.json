@@ -1,0 +1,136 @@
+{
+  "summary": "V1 Cleanup Testing Complete - All V1 endpoints removed, V2 APIs working correctly. Backend: 17/17 tests passed. Frontend: All features verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter77_v1_cleanup.py",
+    "/app/test_reports/pytest/iter77_v1_cleanup.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "V1 endpoints successfully removed: /admin/instances, /admin/bot-config, /admin/instances/{id}/llm-config, /v1/chat, /v1/chat/stream all return 404",
+    "Public /api/bot-info/{bot_id} endpoint works correctly without authentication - returns bot name and persona",
+    "V2 LLM config endpoints working: GET/PUT /api/v2/orgs/{org_id}/bots/{bot_id}/llm-config and POST .../test",
+    "V2 bot settings endpoints working: GET/PUT /api/v2/orgs/{org_id}/bots/{bot_id}/settings",
+    "Frontend BotSettings.js correctly uses v2.getLlmConfig, v2.putLlmConfig, v2.testLlmConfig, v2.getBotSettings, v2.updateBotSettings",
+    "Frontend ChatPage.js and ChatWidget.js correctly use /api/bot-info/{id} instead of removed /admin/bot-config",
+    "Frontend KnowledgeBase.js correctly uses v2.listBots for sharing modal",
+    "Save as Template button visible and functional on Bot Settings page",
+    "All sidebar navigation links present and clickable"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter77_v1_cleanup.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "seed_data_creation": "Test template created and cleaned up during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "V1 cleanup complete. All legacy V1 endpoints removed. Frontend now exclusively uses V2 APIs. Key endpoints: GET /api/v2/orgs returns 'organisations' (not 'orgs'). V2 API endpoints require X-Org-ID header. Public /api/bot-info/{bot_id} endpoint available for ChatPage/ChatWidget without auth.",
+  "features_tested": [
+    {
+      "feature": "Admin login with administrator/Admin@123",
+      "status": "PASS",
+      "details": "Login returns token + instances (now from V2 bots collection)"
+    },
+    {
+      "feature": "V1 endpoints removed - /admin/instances",
+      "status": "PASS",
+      "details": "GET /api/admin/instances returns 404"
+    },
+    {
+      "feature": "V1 endpoints removed - /admin/bot-config",
+      "status": "PASS",
+      "details": "GET /api/admin/bot-config returns 404"
+    },
+    {
+      "feature": "V1 endpoints removed - /v1/chat",
+      "status": "PASS",
+      "details": "POST /api/v1/chat returns 404"
+    },
+    {
+      "feature": "V1 endpoints removed - /v1/chat/stream",
+      "status": "PASS",
+      "details": "POST /api/v1/chat/stream returns 404"
+    },
+    {
+      "feature": "Public bot-info endpoint",
+      "status": "PASS",
+      "details": "GET /api/bot-info/{bot_id} returns name and persona without auth"
+    },
+    {
+      "feature": "V2 LLM config GET",
+      "status": "PASS",
+      "details": "GET /api/v2/orgs/{org_id}/bots/{bot_id}/llm-config returns provider, model, allowed_models"
+    },
+    {
+      "feature": "V2 LLM config PUT",
+      "status": "PASS",
+      "details": "PUT /api/v2/orgs/{org_id}/bots/{bot_id}/llm-config saves provider/model changes"
+    },
+    {
+      "feature": "V2 LLM config test",
+      "status": "PASS",
+      "details": "POST /api/v2/orgs/{org_id}/bots/{bot_id}/llm-config/test pings LLM"
+    },
+    {
+      "feature": "V2 bot settings GET",
+      "status": "PASS",
+      "details": "GET /api/v2/orgs/{org_id}/bots/{bot_id}/settings returns full settings"
+    },
+    {
+      "feature": "V2 bot settings PUT",
+      "status": "PASS",
+      "details": "PUT /api/v2/orgs/{org_id}/bots/{bot_id}/settings saves and persists changes"
+    },
+    {
+      "feature": "Save as Template",
+      "status": "PASS",
+      "details": "POST /api/v2/orgs/{org_id}/bots/{bot_id}/save-as-template creates template"
+    },
+    {
+      "feature": "Bot Settings page loads",
+      "status": "PASS",
+      "details": "Identity, Persona, Tone Training, Custom Instructions, LLM Provider all visible"
+    },
+    {
+      "feature": "Knowledge Base page loads",
+      "status": "PASS",
+      "details": "FAQ, URL Scraper, GitHub Crawler, Upload Document, API Scraper tabs visible"
+    },
+    {
+      "feature": "Bots page loads",
+      "status": "PASS",
+      "details": "Shows bot list with clone and delete actions"
+    },
+    {
+      "feature": "Chat page loads with bot-info",
+      "status": "PASS",
+      "details": "/chat?instance={bot_id} displays bot name from /api/bot-info"
+    },
+    {
+      "feature": "Bot Settings save button",
+      "status": "PASS",
+      "details": "User can change persona text and save without errors"
+    },
+    {
+      "feature": "Sidebar navigation",
+      "status": "PASS",
+      "details": "All links clickable: Overview, Bots, Discord App Setup, Bot Settings, Knowledge Base, Integrations, Conversations, Suggestions, Organisations, Team & Access, Analytics, API Key Usage"
+    }
+  ],
+  "test_credentials": {
+    "admin": "administrator / Admin@123",
+    "org": "Default Organisation (cb91e73c-b74b-45a3-aecc-f7823ee07d2c)",
+    "bot": "API Tester (f014cae7-788f-447c-b524-7d72709daa80)"
+  }
+}

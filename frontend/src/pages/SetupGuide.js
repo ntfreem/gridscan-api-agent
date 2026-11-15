@@ -21,7 +21,7 @@ const STEPS = [
     desc: "A bot instance is your workspace. Give it a name and an optional description, then you're ready to teach it.",
     color: "#60A5FA",
     actionLabel: "Go to Bot Instances",
-    actionPath: "/admin/instances",
+    actionPath: "/admin/bots",
     tip: "Each instance is independent — great for separating products, teams, or clients.",
   },
   {

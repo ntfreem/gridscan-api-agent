@@ -22,7 +22,7 @@ import contextvars
 import time as _time
 import requests as _requests
 
-# Context variable to track which API key initiated a request (set in /v1/chat endpoints)
+# Context variable to track which API key initiated a request
 _current_api_key_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar('api_key_id', default=None)
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -240,30 +240,6 @@ class ResetPasswordBody(BaseModel):
     email: str
     code: str
     new_password: str
-
-class BotInstanceCreate(BaseModel):
-    name: str
-    description: Optional[str] = ""
-
-class BotConfigUpdate(BaseModel):
-    name: Optional[str] = None
-    persona: Optional[str] = None
-    custom_instructions: Optional[str] = None
-    tone_instructions: Optional[str] = None
-    manual_tone_examples: Optional[List[dict]] = None
-    knowledge_gate: Optional[str] = None  # "strict" | "flexible" (legacy) OR "0"-"100" percentage
-    knowledge_gate_pct: Optional[int] = None  # 0-100 percentage (preferred over knowledge_gate)
-    api_query_enabled: Optional[bool] = None
-    api_base_url: Optional[str] = None
-    api_key_header: Optional[str] = None
-    api_key_value: Optional[str] = None
-class LLMProviderConfig(BaseModel):
-    """Per-instance LLM provider settings. Stored on bot_instances.llm_config."""
-    provider: str  # "emergent" | "anthropic" | "ollama" | "openai"
-    model: Optional[str] = None
-    anthropic_api_key: Optional[str] = None  # only used when provider == "anthropic"
-    openai_api_key: Optional[str] = None     # only used when provider == "openai"
-    ollama_base_url: Optional[str] = None    # only used when provider == "ollama"; defaults to OLLAMA_BASE_URL env
 
 class FAQEntry(BaseModel):
     title: str
@@ -1133,7 +1109,18 @@ async def _ai_rephrase(primary_text: str, session_id: str, instance_id: str) -> 
         logger.warning(f"AI rephrase failed: {e}")
         return ""
 async def _resolve_llm_config(instance_id: str) -> dict:
-    """Read the per-instance LLM provider config. Falls back to {provider: 'emergent'} when absent."""
+    """Read per-bot/instance LLM provider config. V2 bots checked first, then V1 fallback."""
+    # V2-first: check bots collection
+    v2_bot = await db.bots.find_one({"id": instance_id}, {"llm_config": 1})
+    if not v2_bot:
+        v2_bot = await db.bots.find_one({"legacy_instance_id": instance_id}, {"llm_config": 1})
+    if v2_bot:
+        cfg = v2_bot.get("llm_config") or {}
+        if isinstance(cfg, dict) and cfg.get("provider"):
+            cfg = dict(cfg)
+            cfg.setdefault("provider", "emergent")
+            return cfg
+    # V1 fallback
     inst = await db.bot_instances.find_one({"id": instance_id}, {"llm_config": 1}) or {}
     cfg = inst.get("llm_config") or {}
     if not isinstance(cfg, dict) or not cfg.get("provider"):
@@ -2442,6 +2429,22 @@ async def startup_event():
 
     # Initialise Zendesk routes
     _init_zendesk()
+
+    # Initialise V2 LLM config endpoints (deferred — call_claude must exist first)
+    bot_routes.init_llm_config(
+        allowed_anthropic=ALLOWED_ANTHROPIC_MODELS,
+        allowed_openai=ALLOWED_OPENAI_MODELS,
+        default_models={
+            "emergent": DEFAULT_EMERGENT_MODEL,
+            "anthropic": DEFAULT_ANTHROPIC_MODEL,
+            "openai": DEFAULT_OPENAI_MODEL,
+            "ollama": DEFAULT_OLLAMA_MODEL,
+        },
+        llm_sessions=llm_sessions,
+        llm_history=llm_history,
+        call_claude_fn=call_claude,
+        resolve_bot_config_fn=resolve_bot_config,
+    )
     await db.zendesk_config.create_index([("instance_id", 1)], unique=True)
     await db.zendesk_config.create_index([("sidebar_api_key", 1)], sparse=True)
     await db.zendesk_suggestions.create_index([("instance_id", 1), ("ticket_id", 1)], unique=True)
@@ -2564,20 +2567,9 @@ async def login(body: UserLogin, response: Response):
         max_age=JWT_EXPIRY_DAYS * 24 * 60 * 60,
         path="/",
     )
-    if user["role"] == "superadmin":
-        instances = await db.bot_instances.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
-    else:
-        instances = await db.bot_instances.find(
-            {"assigned_user_ids": user["id"]}, {"_id": 0, "id": 1, "name": 1}
-        ).to_list(100)
-        # V2 invited users bypass the legacy instance check
-        is_invited_user = bool(user.get("invited_by"))
-        has_v2_access = bool(user.get("org_ids") or user.get("bot_ids"))
-        if not instances and not is_invited_user and not has_v2_access:
-            raise HTTPException(
-                status_code=403,
-                detail="No instances assigned to your account. Contact your admin."
-            )
+    # Return V2 bots instead of legacy V1 instances
+    v2_bots = await db.bots.find({}, {"_id": 0, "id": 1, "name": 1, "org_id": 1}).to_list(100)
+    instances = [{"id": b["id"], "name": b.get("name", "")} for b in v2_bots]
     return {
         "token": token,  # Kept for curl/API client use — frontend uses cookie
         "user": {"id": user["id"], "email": user["email"], "role": user["role"], "username": user.get("username", "")},
@@ -2627,12 +2619,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if current_user["role"] == "superadmin":
-        instances = await db.bot_instances.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
-    else:
-        instances = await db.bot_instances.find(
-            {"assigned_user_ids": current_user["id"]}, {"_id": 0, "id": 1, "name": 1}
-        ).to_list(100)
+    # Return V2 bots instead of legacy V1 instances
+    v2_bots = await db.bots.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    instances = [{"id": b["id"], "name": b.get("name", "")} for b in v2_bots]
     return {**user, "instances": instances}
 # ==================== INSTANCE MANAGEMENT (SUPERADMIN) ====================
 
@@ -2940,149 +2929,6 @@ async def accept_invite(token: str, body: AcceptInviteBody):
 
     return {"success": True, "message": "Account created! You can now log in.", "email": invite["email"]}
 
-@api_router.get("/admin/instances")
-async def list_instances(current_user: dict = Depends(require_admin)):
-    instances = await db.bot_instances.find({}, {"_id": 0}).to_list(100)
-    # Batch user lookup — single query instead of N+1
-    all_user_ids = set()
-    for inst in instances:
-        all_user_ids.update(inst.get("assigned_user_ids", []))
-    if all_user_ids:
-        users_list = await db.users.find(
-            {"id": {"$in": list(all_user_ids)}},
-            {"_id": 0, "id": 1, "email": 1, "is_verified": 1}
-        ).to_list(1000)
-        user_map = {u["id"]: u for u in users_list}
-    else:
-        user_map = {}
-    for inst in instances:
-        inst["assigned_users"] = [
-            user_map[uid] for uid in inst.get("assigned_user_ids", []) if uid in user_map
-        ]
-    return instances
-@api_router.post("/admin/instances")
-async def create_instance(body: BotInstanceCreate, current_user: dict = Depends(require_admin)):
-    instance_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    instance = {
-        "id": instance_id,
-        "name": body.name,
-        "description": body.description or "",
-        "created_by": current_user["email"],
-        "assigned_user_ids": [],
-        "created_at": now
-    }
-    await db.bot_instances.insert_one(instance)
-    instance.pop("_id", None)
-    await db.bot_config.insert_one({
-        "instance_id": instance_id,
-        "name": body.name,
-        "persona": "You are a helpful, friendly, and knowledgeable assistant. Provide clear, accurate answers based on available information. Be concise but thorough.",
-        "custom_instructions": "",
-        "tone_instructions": "",
-        "manual_tone_examples": [],
-        "created_at": now
-    })
-    return instance
-@api_router.put("/admin/instances/{instance_id}")
-async def update_instance(instance_id: str, body: BotInstanceCreate, current_user: dict = Depends(require_admin)):
-    result = await db.bot_instances.update_one(
-        {"id": instance_id},
-        {"$set": {"name": body.name, "description": body.description or "",
-                  "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    return {"success": True}
-@api_router.delete("/admin/instances/{instance_id}")
-async def delete_instance(instance_id: str, current_user: dict = Depends(require_admin)):
-    result = await db.bot_instances.delete_one({"id": instance_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    for col in [db.bot_config, db.knowledge_sources, db.conversations, db.discord_config]:
-        await col.delete_many({"instance_id": instance_id})
-    return {"success": True}
-# ── Per-instance LLM provider configuration ─────────────────────────────────────
-
-@api_router.get("/admin/instances/{instance_id}/llm-config")
-async def get_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
-    """Return the per-instance LLM provider settings. Secret values are masked."""
-    inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0, "llm_config": 1})
-    if inst is None:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    cfg = inst.get("llm_config") or {}
-    provider = cfg.get("provider") or "emergent"
-    anthropic_key = cfg.get("anthropic_api_key") or ""
-    openai_key = cfg.get("openai_api_key") or ""
-    return {
-        "provider": provider,
-        "model": cfg.get("model") or "",
-        "anthropic_api_key_set": bool(anthropic_key),
-        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
-        "openai_api_key_set": bool(openai_key),
-        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
-        "ollama_base_url": cfg.get("ollama_base_url") or "",
-        "allowed_anthropic_models": list(ALLOWED_ANTHROPIC_MODELS.keys()),
-        "allowed_openai_models": list(ALLOWED_OPENAI_MODELS.keys()),
-        "default_models": {
-            "emergent": DEFAULT_EMERGENT_MODEL,
-            "anthropic": DEFAULT_ANTHROPIC_MODEL,
-            "openai": DEFAULT_OPENAI_MODEL,
-            "ollama": DEFAULT_OLLAMA_MODEL,
-        },
-    }
-@api_router.put("/admin/instances/{instance_id}/llm-config")
-async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, current_user: dict = Depends(require_admin)):
-    """Save per-instance LLM provider. When `anthropic_api_key` is empty in the body, the existing
-    stored key is preserved (lets admins update other fields without re-pasting the secret)."""
-    inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0, "llm_config": 1})
-    if inst is None:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    provider = (body.provider or "").lower()
-    if provider not in ("emergent", "anthropic", "ollama", "openai"):
-        raise HTTPException(status_code=400, detail="provider must be one of: emergent, anthropic, ollama, openai")
-    existing = inst.get("llm_config") or {}
-    model = (body.model or "").strip() or None
-    # Reject API keys accidentally pasted into the Model field (sk-, bbk_, etc.)
-    if model and re.match(r"^(sk-|bbk_)", model, re.IGNORECASE):
-        raise HTTPException(status_code=400, detail="Model must be a model name (e.g. claude-sonnet-4-5), not an API key.")
-    if provider == "anthropic" and model and model not in ALLOWED_ANTHROPIC_MODELS:
-        raise HTTPException(status_code=400, detail=f"Anthropic model must be one of: {list(ALLOWED_ANTHROPIC_MODELS.keys())}")
-    if provider == "openai" and model and model not in ALLOWED_OPENAI_MODELS:
-        raise HTTPException(status_code=400, detail=f"OpenAI model must be one of: {list(ALLOWED_OPENAI_MODELS.keys())}")
-    new_cfg = {
-        "provider": provider,
-        "model": model,
-        # Preserve existing key when caller omits it (so admins can update model without re-pasting the secret)
-        "anthropic_api_key": (body.anthropic_api_key.strip() if body.anthropic_api_key else None) or existing.get("anthropic_api_key"),
-        "openai_api_key": (body.openai_api_key.strip() if body.openai_api_key else None) or existing.get("openai_api_key"),
-        "ollama_base_url": (body.ollama_base_url or "").strip() or None,
-    }
-    await db.bot_instances.update_one(
-        {"id": instance_id},
-        {"$set": {"llm_config": new_cfg, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    # Clear any cached LLM sessions for this instance — provider change invalidates them
-    for k in list(llm_sessions.keys()):
-        if f"_{instance_id}_" in k:
-            llm_sessions.pop(k, None)
-    for k in list(llm_history.keys()):
-        if f"_{instance_id}_" in k:
-            llm_history.pop(k, None)
-    logger.info(f"[LLM] instance={instance_id} provider={provider} model={model}")
-    # Return the saved config (masked) for consistency
-    anthropic_key = new_cfg.get("anthropic_api_key") or ""
-    openai_key = new_cfg.get("openai_api_key") or ""
-    return {
-        "success": True,
-        "provider": provider,
-        "model": model or "",
-        "anthropic_api_key_set": bool(anthropic_key),
-        "anthropic_api_key_preview": (anthropic_key[:7] + "…" + anthropic_key[-4:]) if len(anthropic_key) > 12 else "",
-        "openai_api_key_set": bool(openai_key),
-        "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
-        "ollama_base_url": new_cfg.get("ollama_base_url") or "",
-    }
 # ==================== UNIFIED API QUERY ENGINE ====================
 
 import api_integrations as _api_mod
@@ -3220,13 +3066,24 @@ async def _try_api_query(user_message: str, bot_config: dict, knowledge_context:
 
 async def _resolve_chat_instance(provided_id: Optional[str]) -> str:
     """Resolve instance_id for public chat endpoints.
-    Falls back to the first known instance when none is provided."""
+    V2 bots checked first, then V1 fallback."""
     if provided_id and provided_id != "default":
         return provided_id
+    # V2-first
+    first_bot = await db.bots.find_one({}, {"id": 1})
+    if first_bot:
+        return first_bot["id"]
+    # V1 fallback
     first = await db.bot_instances.find_one({}, {"id": 1})
     if first:
         return first["id"]
     return provided_id or "default"
+
+@api_router.get("/bot-info/{bot_id}")
+async def get_bot_info(bot_id: str):
+    """Public: return basic bot info (name, persona) for display purposes."""
+    config = await resolve_bot_config(bot_id)
+    return {"name": config.get("name", "Assistant"), "persona": config.get("persona", "")}
 
 @api_router.post("/chat/send")
 async def send_chat_message(body: ChatMessage):
@@ -3274,63 +3131,8 @@ async def stream_chat_message(body: ChatMessage):
 async def get_chat_history(session_id: str):
     conv = await db.conversations.find_one({"session_id": session_id}, {"_id": 0})
     return conv or {"messages": [], "session_id": session_id}
-# ==================== BOT CONFIG (PROTECTED) ====================
 
-@api_router.get("/admin/bot-config")
-async def get_bot_config(instance_id: str = Depends(get_instance_access)):
-    config = await resolve_bot_config(instance_id)
-    if not config:
-        return {}
-    # Mask sensitive API key value
-    if config.get("api_key_value"):
-        config["api_key_value_set"] = True
-        config["api_key_value"] = ""
-    return config
-@api_router.put("/admin/bot-config")
-async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(get_instance_access)):
-    update_data = {}
-    for k, v in body.dict().items():
-        if v is not None:
-            update_data[k] = v
-    # Don't overwrite saved API key with empty string
-    if "api_key_value" in update_data and not update_data["api_key_value"].strip():
-        del update_data["api_key_value"]
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields provided")
-    # Knowledge gate: accept pct (0-100) or legacy string values
-    if "knowledge_gate_pct" in update_data:
-        pct = update_data.pop("knowledge_gate_pct")
-        if not (0 <= pct <= 100):
-            raise HTTPException(status_code=422, detail="knowledge_gate_pct must be 0-100")
-        update_data["knowledge_gate_pct"] = pct
-        # Keep legacy field in sync for backward compat
-        update_data["knowledge_gate"] = "strict" if pct <= 20 else "flexible"
-    elif "knowledge_gate" in update_data:
-        val = update_data["knowledge_gate"]
-        # Accept legacy string or numeric string
-        if val in ("strict", "flexible"):
-            update_data["knowledge_gate_pct"] = 0 if val == "strict" else 100
-        elif val.isdigit() and 0 <= int(val) <= 100:
-            update_data["knowledge_gate_pct"] = int(val)
-            update_data["knowledge_gate"] = "strict" if int(val) <= 20 else "flexible"
-        else:
-            raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict', 'flexible', or 0-100")
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
-    # Dual-write: sync relevant fields to V2 bots collection
-    v2_sync = {k: v for k, v in update_data.items() if k in _V2_CONFIG_FIELDS}
-    if v2_sync:
-        v2_sync["updated_at"] = update_data["updated_at"]
-        await db.bots.update_one({"legacy_instance_id": instance_id}, {"$set": v2_sync})
-        await db.bots.update_one({"id": instance_id, "legacy_instance_id": {"$exists": False}}, {"$set": v2_sync})
-    # Mask api_key_value in response
-    config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
-    if config and config.get("api_key_value"):
-        config["api_key_value_set"] = True
-        config["api_key_value"] = ""
-    return config
-
-# ==================== EXTERNAL API (PUBLIC — authenticated via bbk_ keys) ====================
+# ==================== API KEY MANAGEMENT (PROTECTED) ====================
 
 def _generate_api_key() -> str:
     """Generate a bbk_ prefixed API key."""
@@ -3345,7 +3147,10 @@ async def create_api_key(body: dict, current_user: dict = Depends(require_admin)
         raise HTTPException(status_code=400, detail="instance_id is required")
     inst = await db.bot_instances.find_one({"id": instance_id})
     if not inst:
-        raise HTTPException(status_code=404, detail="Instance not found")
+        # Also check V2 bots collection
+        inst = await db.bots.find_one({"id": instance_id})
+    if not inst:
+        raise HTTPException(status_code=404, detail="Bot not found")
     key = _generate_api_key()
 
     key_hash = hashlib.sha256(key.encode()).hexdigest()
@@ -3918,28 +3723,6 @@ async def integration_usage_detail(
     }
 
 
-async def _authenticate_api_key(request: Request) -> dict:
-    """Validate a bbk_ API key from the Authorization header. Returns {instance_id, key_id}."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer bbk_"):
-        raise HTTPException(status_code=401, detail="Invalid API key. Must be a Bearer bbk_... token.")
-    key = auth.replace("Bearer ", "").strip()
-
-    key_hash = hashlib.sha256(key.encode()).hexdigest()
-    doc = await db.api_keys.find_one({"key_hash": key_hash})
-    if not doc:
-        raise HTTPException(status_code=401, detail="Invalid API key.")
-    if not doc.get("is_active", True):
-        raise HTTPException(status_code=403, detail="API key is disabled.")
-    # Update usage stats
-    await db.api_keys.update_one(
-        {"key_hash": key_hash},
-        {"$set": {"last_used_at": datetime.now(timezone.utc).isoformat()}, "$inc": {"usage_count": 1}}
-    )
-    return {"instance_id": doc["instance_id"], "key_id": doc["id"]}
-class ExternalChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = None
 
 class EmbedConfigUpdate(BaseModel):
     custom_css_url: Optional[str] = None
@@ -4251,60 +4034,6 @@ async def serve_embed_script(request: Request, instance: str = "", mode: str = "
 }})();
 """
     return FastResponse(content=script.strip(), media_type="application/javascript")
-
-@api_router.post("/v1/chat")
-async def external_chat(body: ExternalChatRequest, request: Request):
-    """Public chat endpoint authenticated via bbk_ API key.
-    Send messages to a bot instance's knowledge base and get AI responses."""
-    auth_info = await _authenticate_api_key(request)
-    instance_id = auth_info["instance_id"]
-    _current_api_key_id.set(auth_info["key_id"])
-    session_id = body.session_id or str(uuid.uuid4())
-
-    bot_config = await resolve_bot_config(instance_id)
-    knowledge = await search_knowledge(body.message, instance_id)
-
-    has_api_integrations = await db.api_integrations.count_documents(
-        {"instance_id": instance_id, "enabled": True}
-    ) > 0
-
-    if knowledge == "__NO_KB__" and not has_api_integrations:
-        response = "I don't have any knowledge base configured yet."
-    else:
-        # Unified KB + API reasoning
-        api_result = await _try_api_query(body.message, bot_config, knowledge, instance_id, session_id)
-        api_context = ""
-        api_sources = []
-        if api_result:
-            api_context, api_sources = api_result
-        tone = await get_tone_examples_text(instance_id, bot_config)
-        gate = bot_config.get("knowledge_gate", "strict")
-        system_prompt = build_system_prompt(bot_config, knowledge, tone, knowledge_gate=gate,
-                                           api_context=api_context, api_sources=api_sources,
-                                           has_api_integrations=has_api_integrations)
-        response = await call_claude(session_id, body.message, system_prompt,
-                                    instance_id=instance_id, platform="api")
-
-    await save_conversation(session_id, body.message, response, platform="api", instance_id=instance_id)
-    _current_api_key_id.set(None)
-    return {
-        "response": response,
-        "session_id": session_id,
-        "instance_id": instance_id,
-    }
-
-@api_router.post("/v1/chat/stream")
-async def external_chat_stream(body: ExternalChatRequest, request: Request):
-    """Streaming version of /v1/chat. Authenticated via bbk_ API key. Returns SSE."""
-    auth_info = await _authenticate_api_key(request)
-    instance_id = auth_info["instance_id"]
-    _current_api_key_id.set(auth_info["key_id"])
-    session_id = body.session_id or str(uuid.uuid4())
-    return StreamingResponse(
-        stream_chat_response(session_id, body.message, instance_id, platform="api"),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 # ==================== KNOWLEDGE SOURCES (PROTECTED) ====================
 

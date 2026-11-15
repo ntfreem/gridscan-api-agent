@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
+import v2 from "../utils/v2api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loader2, ChevronUp, ChevronDown, ChevronRight, ArrowUpCircle, Pencil, X, Save, Lock, Tag, Calendar, Layers, Filter, Eye, Network, RefreshCw, FolderOpen, FolderClosed, Download, Upload, Share2, Github, Check, Zap } from "lucide-react";
@@ -252,7 +253,7 @@ function EditModal({ source, onClose, onSaved }) {
 }
 
 export default function KnowledgeBase() {
-  const { selectedInstance } = useAuth();
+  const { selectedInstance, selectedOrg } = useAuth();
   const navigate = useNavigate();
   const instanceId = selectedInstance?.id;
   const [activeTab, setActiveTab] = useState("faq");
@@ -351,16 +352,19 @@ export default function KnowledgeBase() {
 
   const openShareModal = async () => {
     try {
-      const res = await api.get("/admin/instances");
-      const others = res.data.filter(i => i.id !== instanceId);
+      const orgId = selectedOrg?.id;
+      if (!orgId) { toast.error("No organisation selected"); return; }
+      const res = await v2.listBots(orgId);
+      const bots = res.data?.bots || [];
+      const others = bots.filter(b => b.id !== instanceId);
       if (others.length === 0) {
-        toast.error("No other bot instances to share with. Create another instance first.");
+        toast.error("No other bots to share with. Create another bot first.");
         return;
       }
       setAllInstances(others);
       setShareTarget(others[0]?.id || "");
       setShowShareModal(true);
-    } catch { toast.error("Failed to load instances"); }
+    } catch { toast.error("Failed to load bots"); }
   };
 
   const handleShare = async () => {

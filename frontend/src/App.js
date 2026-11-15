@@ -18,7 +18,6 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import VerifyEmail from "@/pages/VerifyEmail";
 import InstanceSelect from "@/pages/InstanceSelect";
-import Instances from "@/pages/Instances";
 import Users from "@/pages/Users";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -120,7 +119,6 @@ function AppRoutes() {
         <Route path="zendesk" element={<ZendeskSettings />} />
         <Route path="changelog" element={<ChangelogPage />} />
         <Route path="setup-guide" element={<SetupGuide />} />
-        <Route path="instances" element={<AdminOnlyRoute><Instances /></AdminOnlyRoute>} />
         <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
       </Route>
 

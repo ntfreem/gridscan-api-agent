@@ -31,6 +31,9 @@ const v2 = {
   deleteOrg: (orgId) => axios.delete(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
   cloneBot: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/clone`, {}, { headers: headers() }),
   saveAsTemplate: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/save-as-template`, data || {}, { headers: headers() }),
+  getLlmConfig: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, { headers: headers() }),
+  putLlmConfig: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, data, { headers: headers() }),
+  testLlmConfig: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config/test`, {}, { headers: headers() }),
 
   // Templates
   listTemplates: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/templates`, { headers: headers() }),

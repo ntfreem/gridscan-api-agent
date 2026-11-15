@@ -7,12 +7,9 @@ import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function BotSettings() {
-  const { selectedOrg, selectedBot, selectedInstance } = useAuth();
-  // V2 bots use selectedBot; legacy bots fall back to selectedInstance
+  const { selectedOrg, selectedBot } = useAuth();
   const botId = selectedBot?.id;
   const orgId = selectedOrg?.id;
-  const instanceId = selectedInstance?.id;
-  const isV2 = !!(botId && orgId);
   const [config, setConfig] = useState({ name: "", persona: "", custom_instructions: "", tone_instructions: "", manual_tone_examples: [], knowledge_gate: "strict", knowledge_gate_pct: 0 });
   const [saving, setSaving] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -53,30 +50,28 @@ export default function BotSettings() {
   const [discordSyncing, setDiscordSyncing] = useState(false);
 
   useEffect(() => {
-    const cfgId = instanceId || botId;
-    if (!cfgId) return;
-    api.get(`/admin/instances/${cfgId}/llm-config`).then(r => {
+    if (!botId || !orgId) return;
+    v2.getLlmConfig(orgId, botId).then(r => {
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
     }).catch(() => {});
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
     api.get(`/admin/api-keys`).then(r => setApiKeys(r.data || [])).catch(() => {});
-  }, [instanceId, botId]);
+  }, [orgId, botId]);
 
   const saveLlm = async () => {
+    if (!orgId || !botId) return;
     const payload = {
       provider: llm.provider,
       model: llm.model || null,
-      // Send key only if the admin typed a new one; backend preserves existing on empty
       anthropic_api_key: llm.anthropic_api_key.trim() || null,
       openai_api_key: llm.openai_api_key.trim() || null,
       ollama_base_url: llm.ollama_base_url || null,
     };
     setLlmSaving(true); setLlmTestResult(null);
     try {
-      await api.put(`/admin/instances/${instanceId}/llm-config`, payload);
+      await v2.putLlmConfig(orgId, botId, payload);
       toast.success(`Provider saved: ${llm.provider}`);
-      // Reload to refresh masked key preview
-      const r = await api.get(`/admin/instances/${instanceId}/llm-config`);
+      const r = await v2.getLlmConfig(orgId, botId);
       if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save LLM config");
@@ -84,9 +79,10 @@ export default function BotSettings() {
   };
 
   const testLlm = async () => {
+    if (!orgId || !botId) return;
     setLlmTesting(true); setLlmTestResult(null);
     try {
-      const r = await api.post(`/admin/instances/${instanceId}/llm-config/test`);
+      const r = await v2.testLlmConfig(orgId, botId);
       setLlmTestResult(r.data);
       if (r.data?.success) toast.success(`Ping ok → ${r.data.response?.slice(0, 60)}`);
       else toast.error(`Ping failed: ${r.data?.error?.slice(0, 80)}`);
@@ -100,7 +96,7 @@ export default function BotSettings() {
   const createApiKey = async () => {
     setCreatingKey(true);
     try {
-      const r = await api.post(`/admin/api-keys`, { instance_id: instanceId, label: newKeyLabel.trim() });
+      const r = await api.post(`/admin/api-keys`, { instance_id: botId, label: newKeyLabel.trim() });
       setNewKeyRevealed(r.data.key);
       setNewKeyLabel("");
       api.get(`/admin/api-keys`).then(r2 => setApiKeys(r2.data || [])).catch(() => {});
@@ -129,64 +125,50 @@ export default function BotSettings() {
   };
 
   useEffect(() => {
-    // V2 bot: load from V2 settings endpoint
-    if (isV2) {
-      v2.getBotSettings(orgId, botId).then(r => {
-        if (r.data) setConfig({
-          name: r.data.name || "",
-          persona: r.data.persona || "",
-          custom_instructions: r.data.custom_instructions || "",
-          tone_instructions: r.data.tone_instructions || "",
-          manual_tone_examples: r.data.manual_tone_examples || [],
-          knowledge_gate: r.data.knowledge_gate || "strict",
-          knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0),
-        });
-      }).catch(() => {});
-    } else {
-      // Legacy V1 fallback
-      api.get(`/admin/bot-config`).then(r => {
-        if (r.data) setConfig({ name: r.data.name || "", persona: r.data.persona || "", custom_instructions: r.data.custom_instructions || "", tone_instructions: r.data.tone_instructions || "", manual_tone_examples: r.data.manual_tone_examples || [], knowledge_gate: r.data.knowledge_gate || "strict", knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0) });
-      }).catch(() => {});
-    }
+    if (!orgId || !botId) return;
+    v2.getBotSettings(orgId, botId).then(r => {
+      if (r.data) setConfig({
+        name: r.data.name || "",
+        persona: r.data.persona || "",
+        custom_instructions: r.data.custom_instructions || "",
+        tone_instructions: r.data.tone_instructions || "",
+        manual_tone_examples: r.data.manual_tone_examples || [],
+        knowledge_gate: r.data.knowledge_gate || "strict",
+        knowledge_gate_pct: r.data.knowledge_gate_pct ?? (r.data.knowledge_gate === "flexible" ? 100 : 0),
+      });
+    }).catch(() => {});
     api.get(`/analytics/overview`).then(r => setApprovedCount(r.data?.approved_for_training ?? 0)).catch(() => {});
     // Probe for bot logo
-    const logoId = instanceId || botId;
-    if (logoId) {
+    if (botId) {
       const img = new Image();
-      img.onload = () => setLogoUrl(`/api/bot-logo/${logoId}?t=${Date.now()}`);
+      img.onload = () => setLogoUrl(`/api/bot-logo/${botId}?t=${Date.now()}`);
       img.onerror = () => setLogoUrl(null);
-      img.src = `/api/bot-logo/${logoId}?t=${Date.now()}`;
+      img.src = `/api/bot-logo/${botId}?t=${Date.now()}`;
     }
-  }, [isV2, orgId, botId, instanceId]);
+  }, [orgId, botId]);
 
   const save = async () => {
     if (!config.name.trim()) { toast.error("Bot name is required"); return; }
     if (!config.persona.trim()) { toast.error("Persona description is required"); return; }
+    if (!orgId || !botId) { toast.error("No bot selected"); return; }
     setSaving(true);
     try {
-      if (isV2) {
-        await v2.updateBotSettings(orgId, botId, {
-          persona: config.persona,
-          custom_instructions: config.custom_instructions,
-          tone_instructions: config.tone_instructions,
-          manual_tone_examples: config.manual_tone_examples,
-          knowledge_gate: config.knowledge_gate,
-          knowledge_gate_pct: config.knowledge_gate_pct,
-        });
-        // Also update bot name via the bot endpoint
-        await v2.updateBot(orgId, botId, { name: config.name.trim() });
-      } else {
-        const payload = { ...config };
-        if (!payload.api_key_value) delete payload.api_key_value;
-        await api.put(`/admin/bot-config`, payload);
-      }
+      await v2.updateBotSettings(orgId, botId, {
+        persona: config.persona,
+        custom_instructions: config.custom_instructions,
+        tone_instructions: config.tone_instructions,
+        manual_tone_examples: config.manual_tone_examples,
+        knowledge_gate: config.knowledge_gate,
+        knowledge_gate_pct: config.knowledge_gate_pct,
+      });
+      await v2.updateBot(orgId, botId, { name: config.name.trim() });
       toast.success("Settings saved");
     } catch { toast.error("Failed to save settings"); }
     finally { setSaving(false); }
   };
 
   const saveAsTemplate = async () => {
-    if (!isV2) { toast.error("Templates are only available for V2 bots"); return; }
+    if (!orgId || !botId) { toast.error("Templates are only available for V2 bots"); return; }
     const name = prompt("Template name:", `${config.name || "Bot"} Template`);
     if (!name) return;
     setSavingTemplate(true);
@@ -223,7 +205,7 @@ export default function BotSettings() {
       const form = new FormData();
       form.append("file", file);
       await api.post("/admin/bot-logo", form, { headers: { "Content-Type": "multipart/form-data" } });
-      setLogoUrl(`/api/bot-logo/${instanceId}?t=${Date.now()}`);
+      setLogoUrl(`/api/bot-logo/${botId}?t=${Date.now()}`);
       toast.success("Logo uploaded");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Upload failed");
@@ -262,7 +244,7 @@ export default function BotSettings() {
       <p style={T.overline}>Configuration</p>
       <h1 style={T.h1}>Bot Settings</h1>
 
-      {!isV2 && !instanceId ? (
+      {!orgId || !botId ? (
         <div data-testid="no-instance-empty-state" style={{ ...T.card, marginTop: "20px", textAlign: "center", padding: "40px 24px" }}>
           <Cpu size={28} color={colors.text.muted} style={{ margin: "0 auto 12px" }} />
           <p style={{ ...T.sectionTitle, margin: "0 0 6px" }}>Select a bot first</p>
@@ -815,7 +797,7 @@ curl -N -X POST ${window.location.origin}/api/v1/chat/stream \\
               style={{ ...T.btnPrimary, opacity: saving ? 0.6 : 1 }}>
               <Save size={13} /> {saving ? "Saving..." : "Save All Settings"}
             </button>
-            {isV2 && (
+            {orgId && botId && (
               <button onClick={saveAsTemplate} disabled={savingTemplate} data-testid="save-as-template-btn"
                 style={{ ...T.btnSecondary, opacity: savingTemplate ? 0.6 : 1 }}>
                 <BookmarkPlus size={13} /> {savingTemplate ? "Saving..." : "Save as Template"}

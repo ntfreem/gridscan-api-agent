@@ -43,8 +43,8 @@ export default function ChatPage() {
   const instanceId = searchParams.get("instance");
 
   useEffect(() => {
-    const cfgParams = instanceId ? `?instance_id=${instanceId}` : "";
-    axios.get(`${API}/admin/bot-config${cfgParams}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
+    const id = instanceId || "default";
+    axios.get(`${API}/bot-info/${id}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
     const savedSession = localStorage.getItem(`bf_chat_${instanceId || "default"}`);
     if (savedSession) {
       setSessionId(savedSession);

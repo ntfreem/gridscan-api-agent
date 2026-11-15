@@ -5,9 +5,9 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 
 ## Core Architecture
 - **Frontend**: React SPA with neon electric blue theme
-- **Backend**: FastAPI (Python) with 170 paths / 190+ operations (v1 legacy + v2 multi-tenant)
+- **Backend**: FastAPI (Python) — fully V2 multi-tenant API
 - **Database**: MongoDB Atlas (29 collections)
-- **Channels**: Web Chat, Discord, Telegram, Zendesk, External API (v1)
+- **Channels**: Web Chat, Discord, Telegram, Zendesk
 - **LLM**: Claude/OpenAI via Emergent Universal Key
 - **Storage**: Emergent Object Storage
 - **Email**: Emergent Managed Resend
@@ -189,6 +189,23 @@ Organisation
 - [x] Users.js: token read from localStorage to avoid AuthContext race condition
 - [x] Tested: 100% pass — 14/14 backend, all frontend features (iteration_73.json)
 
+### Full V1 Endpoint Cleanup (Done — Nov 2026)
+- [x] Removed ALL V1 instance CRUD endpoints: GET/POST/PUT/DELETE /admin/instances
+- [x] Removed V1 LLM config endpoints: GET/PUT /admin/instances/{id}/llm-config
+- [x] Removed V1 bot-config endpoints: GET/PUT /admin/bot-config
+- [x] Removed V1 external chat endpoints: POST /v1/chat, POST /v1/chat/stream
+- [x] Removed dead models: BotInstanceCreate, BotConfigUpdate, LLMProviderConfig, ExternalChatRequest
+- [x] Removed _authenticate_api_key helper (only used by /v1/chat)
+- [x] Added V2 LLM config endpoints: GET/PUT/POST-test at /v2/orgs/{org_id}/bots/{bot_id}/llm-config
+- [x] Added public /bot-info/{bot_id} endpoint for ChatPage/ChatWidget
+- [x] Updated _resolve_llm_config() and _resolve_chat_instance() to V2-first
+- [x] Updated auth/login and auth/me to return V2 bots instead of V1 instances
+- [x] Updated BotSettings.js: exclusively uses V2 APIs (v2.getLlmConfig, v2.putLlmConfig, v2.testLlmConfig)
+- [x] Updated ChatPage.js and ChatWidget.js: uses /bot-info/{id} instead of /admin/bot-config
+- [x] Updated KnowledgeBase.js: uses v2.listBots for sharing modal instead of /admin/instances
+- [x] Removed Instances page from App.js routes
+- [x] Tested: 100% pass — 17/17 backend, all frontend (iteration_77.json)
+
 ### Earlier Completed Work
 - Zendesk OAuth, ZAF sidebar app, Analytics, Admin roles
 - User email invitations, Landing page, Self-hosting docs
@@ -199,9 +216,8 @@ Organisation
 ### Backlog
 - P0: GitHub Export — push to GitHub and use Claude Code for self-hosting migration (DO NOT remove Emergent dependencies until user instructs)
 - P1: WhatsApp integration (use integration_playbook_expert_v2)
-- P2: Backend refactor — server.py modularization, extract v1 routes into separate modules
+- P2: Backend refactor — server.py modularization, extract remaining routes into separate modules
 - P2: APP_MODE env splitting (worker vs api)
-- P2: Legacy v1 endpoint cleanup (after V2 fully operational)
 
 ## Production URLs
 - Production: `https://bitbotpro.io`

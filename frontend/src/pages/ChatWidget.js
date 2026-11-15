@@ -114,9 +114,8 @@ export default function ChatWidget() {
   }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    axios.get(`${API}/admin/bot-config`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
-    // Probe for bot logo
     const iid = instanceId || "default";
+    axios.get(`${API}/bot-info/${iid}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
     const img = new Image();
     img.onload = () => setLogoUrl(`${API}/bot-logo/${iid}`);
     img.onerror = () => setLogoUrl(null);
