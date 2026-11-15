@@ -123,6 +123,17 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### V1 Endpoint Pruning (Done — Nov 2026)
+- [x] Removed 5 orphaned V1 endpoints with zero callers: api-test, llm-config/test, assign-user, unassign-user, reply-defaults (GET+PUT)
+- [x] Removed unused AssignUser Pydantic model
+- [x] All remaining V1 endpoints verified as still having active callers
+
+### Bot Cloning (Done — Nov 2026)
+- [x] POST /v2/orgs/{org_id}/bots/{bot_id}/clone endpoint — copies persona, instructions, tone, knowledge gate, LLM config
+- [x] Clone starts with 0 connections/knowledge (clean slate), name appended with "(Copy)"
+- [x] Clone button on each bot card in BotList.js with loading state
+- [x] v2api.js cloneBot() function added
+
 ### V1→V2 Runtime Migration (Done — Nov 2026)
 - [x] Created `resolve_bot_config()` helper — V2-first with V1-fallback for all bot config reads
 - [x] Migrated all 12+ `db.bot_config.find_one()` reads in server.py to use resolver

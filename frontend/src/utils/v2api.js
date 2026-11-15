@@ -27,6 +27,7 @@ const v2 = {
   updateBot: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, data, { headers: headers() }),
   getBotSettings: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, { headers: headers() }),
   updateBotSettings: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, data, { headers: headers() }),
+  cloneBot: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/clone`, {}, { headers: headers() }),
 
   // Accounts
   listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers() }),

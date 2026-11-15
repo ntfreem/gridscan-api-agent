@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Bot, Plus, Network, Loader2, Zap } from "lucide-react";
+import { Bot, Plus, Network, Loader2, Zap, Copy } from "lucide-react";
 import { colors, fonts, radius, T } from "@/theme";
 import { toast } from "sonner";
 import v2 from "@/utils/v2api";
@@ -12,6 +12,7 @@ export default function BotList() {
   const [bots, setBots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [cloning, setCloning] = useState(null);
   const [newName, setNewName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
@@ -44,6 +45,21 @@ export default function BotList() {
   const openBot = (bot) => {
     selectBot(bot);
     navigate(`/admin/bots/${bot.id}`);
+  };
+
+  const handleClone = async (e, bot) => {
+    e.stopPropagation();
+    setCloning(bot.id);
+    try {
+      const res = await v2.cloneBot(selectedOrg.id, bot.id);
+      setBots(prev => [...prev, res.data]);
+      refreshBots();
+      toast.success(`Cloned "${bot.name}" → "${res.data.name}"`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to clone bot");
+    } finally {
+      setCloning(null);
+    }
   };
 
   if (!selectedOrg) return (
@@ -134,7 +150,7 @@ export default function BotList() {
                   )}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "16px" }}>
+              <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                   <Network size={12} color={colors.text.muted} />
                   <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary }}>
@@ -149,6 +165,26 @@ export default function BotList() {
                     </span>
                   </div>
                 )}
+                <div style={{ marginLeft: "auto" }}>
+                  <button
+                    onClick={(e) => handleClone(e, bot)}
+                    disabled={cloning === bot.id}
+                    data-testid={`clone-bot-${bot.id}`}
+                    title="Clone this bot"
+                    style={{
+                      background: "none", border: `1px solid ${colors.border.default}`,
+                      borderRadius: radius.sm, padding: "4px 10px", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "5px",
+                      color: colors.text.secondary, fontSize: "11px", fontFamily: fonts.body,
+                      transition: "border-color 0.15s, color 0.15s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = colors.brand.primary; e.currentTarget.style.color = colors.brand.light; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border.default; e.currentTarget.style.color = colors.text.secondary; }}
+                  >
+                    {cloning === bot.id ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Copy size={11} />}
+                    Clone
+                  </button>
+                </div>
               </div>
             </button>
           ))}

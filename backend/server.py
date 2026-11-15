@@ -245,9 +245,6 @@ class BotInstanceCreate(BaseModel):
     name: str
     description: Optional[str] = ""
 
-class AssignUser(BaseModel):
-    user_email: str
-
 class BotConfigUpdate(BaseModel):
     name: Optional[str] = None
     persona: Optional[str] = None
@@ -464,37 +461,6 @@ async def resolve_bot_config(instance_id: str) -> dict:
 
 
 
-@api_router.post("/admin/api-test")
-async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
-    """Admin tool to test an API endpoint directly. Returns raw JSON response."""
-    bot_config = await resolve_bot_config(instance_id)
-    if not bot_config.get("api_query_enabled"):
-        raise HTTPException(status_code=400, detail="Live API queries are not enabled for this instance")
-    base_url = (bot_config.get("api_base_url") or "").strip().rstrip("/")
-    api_key_header = (bot_config.get("api_key_header") or "").strip()
-    api_key_value = (bot_config.get("api_key_value") or "").strip()
-    if not base_url:
-        raise HTTPException(status_code=400, detail="API base URL is not configured")
-
-    path = (body.get("path") or "").strip()
-    if not path.startswith("/api/"):
-        path = f"/api/{path.lstrip('/')}"
-
-    full_url = f"{base_url}{path}"
-    headers = {"Accept": "application/json"}
-    if api_key_header and api_key_value:
-        headers[api_key_header] = api_key_value
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get(full_url, headers=headers)
-        try:
-            data = resp.json()
-        except Exception:
-            data = resp.text[:5000]
-        return {"status": resp.status_code, "url": full_url, "data": data}
-    except Exception as e:
-        return {"status": 0, "url": full_url, "error": str(e)}
 
 
 # ==================== KNOWLEDGE / TONE HELPERS ====================
@@ -3112,84 +3078,6 @@ async def put_instance_llm_config(instance_id: str, body: LLMProviderConfig, cur
         "openai_api_key_preview": (openai_key[:7] + "…" + openai_key[-4:]) if len(openai_key) > 12 else "",
         "ollama_base_url": new_cfg.get("ollama_base_url") or "",
     }
-@api_router.post("/admin/instances/{instance_id}/llm-config/test")
-async def test_instance_llm_config(instance_id: str, current_user: dict = Depends(require_admin)):
-    """Send a one-shot 'ping' through the configured provider to verify credentials work."""
-    try:
-        out = await call_claude(
-            session_id=f"healthcheck_{datetime.now(timezone.utc).timestamp()}",
-            user_message="Reply with exactly the word: pong",
-            system_prompt="You are a health check responder. Reply with exactly one word: pong",
-            instance_id=instance_id,
-            platform="healthcheck",
-        )
-        return {"success": True, "response": (out or "").strip()[:200]}
-    except HTTPException as e:
-        return {"success": False, "error": str(e.detail), "status_code": e.status_code}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-@api_router.get("/admin/instances/{instance_id}/reply-defaults")
-async def get_reply_defaults(instance_id: str, current_user: dict = Depends(require_admin)):
-    """Return the instance-level acknowledgment replies and fallback message."""
-    inst = await db.bot_instances.find_one({"id": instance_id}, {"acknowledgment_replies": 1, "fallback_message": 1}) or {}
-    ack_raw = inst.get("acknowledgment_replies")
-    fallback = inst.get("fallback_message")
-    # Migrate from scripted_mode if instance-level values are missing
-    needs_discord_fallback = (
-        (not isinstance(ack_raw, list) or not any(isinstance(x, str) and x.strip() for x in ack_raw))
-        or (not isinstance(fallback, str) or not fallback.strip())
-    )
-    if needs_discord_fallback:
-        dc = await db.discord_config.find_one({"instance_id": instance_id}) or {}
-        sm = dc.get("scripted_mode") if isinstance(dc.get("scripted_mode"), dict) else {}
-        if not isinstance(ack_raw, list) or not any(isinstance(x, str) and x.strip() for x in ack_raw):
-            sm_acks = (sm or {}).get("acknowledgment_replies")
-            ack_raw = sm_acks if isinstance(sm_acks, list) and any(isinstance(x, str) and x.strip() for x in sm_acks) else list(DEFAULT_ACK_REPLIES)
-        if not isinstance(fallback, str) or not fallback.strip():
-            fallback = (sm or {}).get("fallback_message") or ""
-    return {
-        "acknowledgment_replies": ack_raw,
-        "fallback_message": fallback,
-    }
-@api_router.put("/admin/instances/{instance_id}/reply-defaults")
-async def update_reply_defaults(instance_id: str, body: dict, current_user: dict = Depends(require_admin)):
-    """Save instance-level acknowledgment replies and fallback message."""
-    inst = await db.bot_instances.find_one({"id": instance_id})
-    if not inst:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    update_fields = {}
-    if "acknowledgment_replies" in body:
-        acks = body["acknowledgment_replies"]
-        if isinstance(acks, list):
-            update_fields["acknowledgment_replies"] = [a for a in acks if isinstance(a, str)]
-    if "fallback_message" in body:
-        update_fields["fallback_message"] = str(body["fallback_message"] or "")
-    if update_fields:
-        update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.bot_instances.update_one({"id": instance_id}, {"$set": update_fields})
-    return {"success": True}
-@api_router.post("/admin/instances/{instance_id}/assign-user")
-async def assign_user(instance_id: str, body: AssignUser, current_user: dict = Depends(require_admin)):
-    instance = await db.bot_instances.find_one({"id": instance_id})
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    user = await db.users.find_one({"email": body.user_email.lower()})
-    if not user:
-        raise HTTPException(status_code=404, detail=f"User '{body.user_email}' not found. They must register first.")
-    await db.bot_instances.update_one(
-        {"id": instance_id},
-        {"$addToSet": {"assigned_user_ids": user["id"]}}
-    )
-    return {"success": True, "user": {"id": user["id"], "email": user["email"]}}
-@api_router.delete("/admin/instances/{instance_id}/unassign-user/{user_id}")
-async def unassign_user(instance_id: str, user_id: str, current_user: dict = Depends(require_admin)):
-    result = await db.bot_instances.update_one(
-        {"id": instance_id},
-        {"$pull": {"assigned_user_ids": user_id}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    return {"success": True}
 # ==================== UNIFIED API QUERY ENGINE ====================
 
 import api_integrations as _api_mod

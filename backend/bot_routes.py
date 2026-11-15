@@ -98,6 +98,37 @@ async def create_bot(org_id: str, body: BotCreate, request: Request):
     return bot
 
 
+@router.post("/{org_id}/bots/{bot_id}/clone")
+async def clone_bot(org_id: str, bot_id: str, request: Request):
+    """Clone a bot's settings into a new bot (no connections/knowledge/conversations)."""
+    user, org, source = await h.require_bot_access(request, bot_id)
+    now = h._now()
+    clone = {
+        "id": h._uuid(),
+        "org_id": org_id,
+        "name": f"{source['name']} (Copy)",
+        "description": source.get("description", ""),
+        "persona": source.get("persona", ""),
+        "custom_instructions": source.get("custom_instructions", ""),
+        "tone_instructions": source.get("tone_instructions", ""),
+        "manual_tone_examples": source.get("manual_tone_examples", []),
+        "knowledge_gate": source.get("knowledge_gate", "strict"),
+        "knowledge_gate_pct": source.get("knowledge_gate_pct", 50),
+        "fallback_message": source.get("fallback_message", ""),
+        "acknowledgment_replies": source.get("acknowledgment_replies", {}),
+        "llm_config": source.get("llm_config", {"provider": "emergent", "model": None}),
+        "created_by": user["id"],
+        "cloned_from": bot_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await h._db.bots.insert_one(clone)
+    clone.pop("_id", None)
+    clone["connection_count"] = 0
+    clone["active_connection_count"] = 0
+    return clone
+
+
 @router.get("/{org_id}/bots/{bot_id}")
 async def get_bot(org_id: str, bot_id: str, request: Request):
     """Get bot details including connection summary."""
