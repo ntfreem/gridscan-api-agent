@@ -123,6 +123,19 @@ Organisation
 - [x] OpenAPI 3.1 spec export (openapi.json)
 - [x] Updated README.md for GitHub export
 
+### V1→V2 Runtime Migration (Done — Nov 2026)
+- [x] Created `resolve_bot_config()` helper — V2-first with V1-fallback for all bot config reads
+- [x] Migrated all 12+ `db.bot_config.find_one()` reads in server.py to use resolver
+- [x] Migrated Zendesk routes to use injected resolver
+- [x] V1 `PUT /admin/bot-config` dual-writes to V2 `bots` collection
+- [x] Webhook router already had V2 merge logic (unchanged)
+- [x] V2 auto-migration runs on startup (production safe)
+- [x] Tested: 100% pass — 10/10 backend, 8/8 frontend (iteration_74.json)
+
+### Org Cleanup (Done — Nov 2026)
+- [x] Removed 3 empty test orgs: TEST_Org_v2_API ×2, Test New Org
+- [x] Only Default Organisation remains with 2 bots, 1 connection
+
 ### Bot Settings V2 Migration (Done — Nov 2026)
 - [x] BotSettings.js now loads/saves from V2 bot-specific API instead of shared V1 bot_config
 - [x] New bots start with clean defaults (no property inheritance from other bots)

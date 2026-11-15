@@ -31,18 +31,19 @@ _save_conversation = None
 _get_tone_examples_text = None
 _try_api_query = None
 _webhook_router = None
+_resolve_bot_config = None
 
 
 def init_zendesk_routes(
     db, get_instance_access_dep,
     search_knowledge_fn, build_system_prompt_fn, call_claude_fn,
     save_conversation_fn, get_tone_examples_text_fn, try_api_query_fn,
-    webhook_router_mod=None,
+    webhook_router_mod=None, resolve_bot_config_fn=None,
 ):
     global _db, _get_instance_access
     global _search_knowledge, _build_system_prompt, _call_claude
     global _save_conversation, _get_tone_examples_text, _try_api_query
-    global _webhook_router
+    global _webhook_router, _resolve_bot_config
     _db = db
     _get_instance_access = get_instance_access_dep
     _search_knowledge = search_knowledge_fn
@@ -52,6 +53,7 @@ def init_zendesk_routes(
     _get_tone_examples_text = get_tone_examples_text_fn
     _try_api_query = try_api_query_fn
     _webhook_router = webhook_router_mod
+    _resolve_bot_config = resolve_bot_config_fn
 
 
 # ────────────────── Constants ──────────────────
@@ -759,7 +761,7 @@ async def sidebar_generate_suggestion(body: SidebarGenerateRequest, request: Req
 
     # ── Run AI pipeline (reuse existing infrastructure) ──
     session_id = f"zd_sidebar_{ticket_id}_{instance_id}"
-    bot_config = await _db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_config = await _resolve_bot_config(instance_id) if _resolve_bot_config else (await _db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {})
     knowledge = await _search_knowledge(user_query, instance_id)
 
     has_api_integrations = await _db.api_integrations.count_documents(
@@ -1035,7 +1037,7 @@ async def _process_zendesk_ticket(instance_id: str, ticket_id: str, event: dict)
 
         # ── V1 Fallback ──
         session_id = f"zd_{ticket_id}_{instance_id}"
-        bot_config = await _db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+        bot_config = await _resolve_bot_config(instance_id) if _resolve_bot_config else (await _db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {})
         knowledge = await _search_knowledge(user_query, instance_id)
 
         has_api_integrations = await _db.api_integrations.count_documents(

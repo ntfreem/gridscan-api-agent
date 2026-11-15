@@ -1,0 +1,82 @@
+{
+  "summary": "Completed testing of V2 Migration Runtime features. Backend: 10/10 tests passed. Frontend: All 8 features tested and working correctly. V2-first with V1-fallback config resolution working. Dual-write from V1 to V2 verified. Only Default Organisation remains after cleanup.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter74_v2_migration.py",
+    "/app/test_reports/pytest/iter74_v2_migration.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "resolve_bot_config() at server.py:443 correctly implements V2-first with V1-fallback pattern",
+    "Dual-write in PUT /admin/bot-config at server.py:3427-3432 correctly syncs V1 changes to V2 bots collection",
+    "Zendesk routes correctly use injected _resolve_bot_config function for V1 webhook handlers",
+    "BotSettings.js correctly uses V2 API (v2.getBotSettings/updateBotSettings) for V2 bots with V1 fallback"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter74_v2_migration.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all 8 features tested and working)"
+  },
+  "seed_data_creation": "No new seed data created - used existing API Tester bot with V1 instance ID 88bfae82-2533-4235-968d-b3298fd57073",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "V2 Migration Runtime fully tested. Key findings: 1) resolve_bot_config() correctly merges V2 data over V1 for all bot config reads. 2) V1 PUT /admin/bot-config dual-writes to V2 bots collection. 3) Only 1 org (Default Organisation) remains after cleanup. 4) All integrations (Discord, Telegram, Zendesk, Web Chat) load correctly. 5) Bot Settings page loads correct V2 bot-specific settings. V1 Instance ID for API Tester: 88bfae82-2533-4235-968d-b3298fd57073. V2 Bot ID: f014cae7-788f-447c-b524-7d72709daa80. Org ID: cb91e73c-b74b-45a3-aecc-f7823ee07d2c.",
+  "features_tested": [
+    {
+      "feature": "Admin login with administrator / Admin@123",
+      "status": "PASS",
+      "details": "Admin can log in and see dashboard with org data (Default Organisation)"
+    },
+    {
+      "feature": "GET /api/admin/bot-config with X-Instance-ID returns V2-merged config",
+      "status": "PASS",
+      "details": "Bot config returns name='API Tester' and persona from V2-merged config"
+    },
+    {
+      "feature": "POST /api/chat/send returns valid AI response using bot persona",
+      "status": "PASS",
+      "details": "Chat endpoint returns AI response using the bot's persona"
+    },
+    {
+      "feature": "Bot Settings page loads correct bot-specific settings",
+      "status": "PASS",
+      "details": "Bot Settings shows API Tester with correct persona, custom instructions, and knowledge gate settings"
+    },
+    {
+      "feature": "PUT /api/admin/bot-config dual-writes to V2",
+      "status": "PASS",
+      "details": "Changes to V1 endpoint appear in V2 settings endpoint /api/v2/orgs/{org_id}/bots/{bot_id}/settings"
+    },
+    {
+      "feature": "Integrations page loads with Discord, Telegram, Zendesk, Web Chat",
+      "status": "PASS",
+      "details": "All 4 provider cards visible with correct status badges: Discord (Active), Telegram (Paused), Zendesk (Active), Web Chat (Ready)"
+    },
+    {
+      "feature": "Team & Access page shows user list and invite button",
+      "status": "PASS",
+      "details": "User table shows administrator and other users with Verified status. Invite User button present."
+    },
+    {
+      "feature": "Only 1 organisation remains (Default Organisation) after cleanup",
+      "status": "PASS",
+      "details": "TEST_Org_v2_API and Test New Org have been cleaned up. Only Default Organisation exists."
+    }
+  ],
+  "test_credentials": {
+    "admin": "administrator / Admin@123",
+    "org": "Default Organisation (cb91e73c-b74b-45a3-aecc-f7823ee07d2c)",
+    "bot": "API Tester (f014cae7-788f-447c-b524-7d72709daa80)",
+    "v1_instance_id": "88bfae82-2533-4235-968d-b3298fd57073"
+  }
+}

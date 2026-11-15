@@ -420,6 +420,7 @@ def _init_zendesk():
         search_knowledge, build_system_prompt, call_claude,
         save_conversation, get_tone_examples_text, _try_api_query,
         webhook_router_mod=webhook_router,
+        resolve_bot_config_fn=resolve_bot_config,
     )
 api_router.include_router(zendesk_routes.router)
 
@@ -432,10 +433,41 @@ api_router.include_router(account_routes.router)
 api_router.include_router(connection_routes.router)
 api_router.include_router(platform_routes.router)
 
+# ── Unified bot config resolver: V2-first, V1-fallback ──
+_V2_CONFIG_FIELDS = [
+    "name", "persona", "custom_instructions", "tone_instructions",
+    "manual_tone_examples", "knowledge_gate", "knowledge_gate_pct",
+    "fallback_message", "acknowledgment_replies", "llm_config",
+]
+
+async def resolve_bot_config(instance_id: str) -> dict:
+    """Load bot config with V2 data preferred over V1.
+    
+    1. Load legacy V1 bot_config (always, for fields not yet in V2)
+    2. Find matching V2 bot (by legacy_instance_id or id)
+    3. Merge V2 fields over V1 (V2 takes precedence)
+    """
+    v1 = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    # Try to find matching V2 bot
+    v2_bot = await db.bots.find_one({"legacy_instance_id": instance_id}, {"_id": 0})
+    if not v2_bot:
+        v2_bot = await db.bots.find_one({"id": instance_id}, {"_id": 0})
+    if v2_bot:
+        for field in _V2_CONFIG_FIELDS:
+            val = v2_bot.get(field)
+            if val is not None and val != "" and val != []:
+                v1[field] = val
+        # Ensure name always comes from V2 if available
+        if v2_bot.get("name"):
+            v1["name"] = v2_bot["name"]
+    return v1
+
+
+
 @api_router.post("/admin/api-test")
 async def test_api_query(body: dict, instance_id: str = Depends(get_instance_access)):
     """Admin tool to test an API endpoint directly. Returns raw JSON response."""
-    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_config = await resolve_bot_config(instance_id)
     if not bot_config.get("api_query_enabled"):
         raise HTTPException(status_code=400, detail="Live API queries are not enabled for this instance")
     base_url = (bot_config.get("api_base_url") or "").strip().rstrip("/")
@@ -1635,7 +1667,7 @@ async def stream_chat_response(session_id: str, user_message: str, instance_id: 
     # Emit session ID first
     yield await _sse_event("session", {"session_id": session_id})
 
-    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_config = await resolve_bot_config(instance_id)
     knowledge = await search_knowledge(user_message, instance_id)
 
     # Check if API integrations are available for this instance
@@ -2053,7 +2085,7 @@ async def start_shared_discord_bot(token: str):
                 gid = cfg.get("guild_id")
                 if iid and gid:
                     try:
-                        bot_config = await db.bot_config.find_one({"instance_id": iid}, {"_id": 0})
+                        bot_config = await resolve_bot_config(iid)
                         name = (bot_config or {}).get("name", "").strip()
                         if name:
                             await _sync_guild_nickname(token, gid, name)
@@ -2269,7 +2301,7 @@ async def start_shared_discord_bot(token: str):
                         await save_conversation(session_id=session_id, user_message=user_text, bot_response=response, platform="discord", instance_id=instance_id, metadata={"username": str(message.author.name), "user_id": str(message.author.id), "scripted": True})
                         return
 
-                bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+                bot_config = await resolve_bot_config(instance_id)
                 knowledge = await search_knowledge(user_text, instance_id)
 
                 # Check if API integrations exist for this instance
@@ -3307,7 +3339,7 @@ async def _resolve_chat_instance(provided_id: Optional[str]) -> str:
 async def send_chat_message(body: ChatMessage):
     session_id = body.session_id or str(uuid.uuid4())
     instance_id = await _resolve_chat_instance(body.instance_id)
-    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_config = await resolve_bot_config(instance_id)
     knowledge = await search_knowledge(body.message, instance_id)
 
     # Check if API integrations are available
@@ -3353,7 +3385,7 @@ async def get_chat_history(session_id: str):
 
 @api_router.get("/admin/bot-config")
 async def get_bot_config(instance_id: str = Depends(get_instance_access)):
-    config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+    config = await resolve_bot_config(instance_id)
     if not config:
         return {}
     # Mask sensitive API key value
@@ -3392,6 +3424,12 @@ async def update_bot_config(body: BotConfigUpdate, instance_id: str = Depends(ge
             raise HTTPException(status_code=422, detail="knowledge_gate must be 'strict', 'flexible', or 0-100")
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.bot_config.update_one({"instance_id": instance_id}, {"$set": update_data}, upsert=True)
+    # Dual-write: sync relevant fields to V2 bots collection
+    v2_sync = {k: v for k, v in update_data.items() if k in _V2_CONFIG_FIELDS}
+    if v2_sync:
+        v2_sync["updated_at"] = update_data["updated_at"]
+        await db.bots.update_one({"legacy_instance_id": instance_id}, {"$set": v2_sync})
+        await db.bots.update_one({"id": instance_id, "legacy_instance_id": {"$exists": False}}, {"$set": v2_sync})
     # Mask api_key_value in response
     config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
     if config and config.get("api_key_value"):
@@ -4330,7 +4368,7 @@ async def external_chat(body: ExternalChatRequest, request: Request):
     _current_api_key_id.set(auth_info["key_id"])
     session_id = body.session_id or str(uuid.uuid4())
 
-    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_config = await resolve_bot_config(instance_id)
     knowledge = await search_knowledge(body.message, instance_id)
 
     has_api_integrations = await db.api_integrations.count_documents(
@@ -6191,7 +6229,7 @@ async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str 
     if not body.invite_url:
         raise HTTPException(status_code=400, detail="Invite URL is required")
     inst = await db.bot_instances.find_one({"id": instance_id}, {"_id": 0}) or {}
-    bot_cfg = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0}) or {}
+    bot_cfg = await resolve_bot_config(instance_id)
     bot_name = bot_cfg.get("name") or inst.get("name") or "BitBot Pro"
     recipient = (body.recipient_name or "there").strip()
     note_html = ""
@@ -6306,7 +6344,7 @@ async def discord_oauth_callback(
                     _shared_discord_task.cancel()
                 _shared_discord_task = asyncio.create_task(start_shared_discord_bot(bot_token))
 
-            bot_name = (await db.bot_config.find_one({'instance_id': instance_id}, {'_id': 0}) or {}).get('name', 'BitBot Pro')
+            bot_name = (await resolve_bot_config(instance_id)).get('name', 'BitBot Pro')
             return RedirectResponse(
                 url=f"{frontend_base}/discord/invited?guild={guild.get('name', '')}&bot={bot_name}"
             )
@@ -6355,7 +6393,7 @@ async def sync_discord_name(instance_id: str = Depends(get_instance_access)):
     token = (config or {}).get("bot_token") or app_creds["bot_token"]
     if not token:
         raise HTTPException(status_code=400, detail="Bot token not configured")
-    bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+    bot_config = await resolve_bot_config(instance_id)
     name = (bot_config or {}).get("name", "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Bot name not set. Configure it in Bot Settings first.")
@@ -6789,7 +6827,7 @@ async def get_discord_status(instance_id: str = Depends(get_instance_access)):
                 display_name = guild.me.nick or guild.me.display_name
         # If no guild nickname found, show the bot_config name for this instance
         if not display_name:
-            bot_config = await db.bot_config.find_one({"instance_id": instance_id}, {"_id": 0})
+            bot_config = await resolve_bot_config(instance_id)
             display_name = (bot_config or {}).get("name") or str(_shared_discord_client.user)
         return {"status": "online", "bot_name": display_name}
     return {"status": "offline", "bot_name": None}
@@ -6999,7 +7037,7 @@ async def get_onboarding_step_status(request: Request, current_user: dict = Depe
         has_knowledge = kb_count > 0
 
         # Step 3: Has customized bot persona?
-        bot_cfg = await db.bot_config.find_one({"instance_id": inst_id}, {"_id": 0})
+        bot_cfg = await resolve_bot_config(inst_id)
         has_persona = bool(bot_cfg and (bot_cfg.get("name") or bot_cfg.get("system_prompt")))
 
         # Step 4: Has tested (any conversation)?
