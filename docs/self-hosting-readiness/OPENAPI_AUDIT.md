@@ -1,92 +1,129 @@
-# BitBot Pro — OpenAPI Documentation Audit
+# BridgeBot Pro — OpenAPI Documentation Audit
 
-## Specification Overview
+> Generated: November 2026
+
+---
+
+## Current State
 
 | Metric | Value |
-|---|---|
-| OpenAPI Version | 3.1.0 |
-| Total Paths | 170 |
-| Total Operations | 190+ |
-| Total Schemas | 42+ |
-| V2 Paths | 23 |
-| Endpoints with Summaries | 190+ / 190+ (100%) |
-| Endpoints with Response Schema | 190+ / 190+ (100%) |
+|--------|-------|
+| **Total API Operations** | 226 |
+| **Paths Documented in OpenAPI** | 185 |
+| **Operations in OpenAPI spec** | 226 |
+| **Pydantic Schemas Defined** | 65 |
+| **Security Schemes Defined** | 0 |
+| **Methods**: GET | 93 |
+| **Methods**: POST | 77 |
+| **Methods**: PUT | 19 |
+| **Methods**: DELETE | 23 |
+| **Methods**: PATCH | 14 |
 
-The exported spec is at: `docs/self-hosting-readiness/openapi.json` (updated Nov 2026 with V2 endpoints)
+---
 
-## Coverage Assessment
+## Issues Found
 
-### Well-Documented Areas
-- **Authentication routes**: Full request/response schemas via Pydantic models
-- **API Integrations**: Typed models for IntegrationCreate, IntegrationUpdate, EndpointUpdate, etc.
-- **Diagnostics**: Full request schemas (DiscoveryTestRequest, ExecutionTestRequest, UnifiedTestRequest)
-- **Telegram & Zendesk**: Config models with field validation
+### 1. No Security Schemes Defined (HIGH)
 
-### Areas Needing Improvement
+**Problem:** The OpenAPI spec has zero `securitySchemes` definitions. While FastAPI auto-documents the endpoint paths and request bodies, there is no formal declaration of:
+- Bearer JWT authentication
+- API Key authentication (`X-API-Key` header)
+- Webhook secret validation
+- Sidebar key authentication
 
-#### 1. Missing Request Body Schemas (uses raw dict)
-These endpoints accept JSON but rely on `request.json()` instead of Pydantic models:
+**Impact:** API consumers cannot understand auth requirements from the spec alone.
 
-| Endpoint | Issue |
-|---|---|
-| `PUT /api/admin/bot-config` | Accepts arbitrary dict, no typed schema |
-| `PUT /api/admin/embed-config` | Accepts arbitrary dict |
-| `PUT /api/discord/config` | Accepts arbitrary dict |
-| `POST /api/admin/api-test` | Accepts raw JSON body |
-| `POST /api/knowledge/sources/faq` | Partial schema |
-| `POST /api/knowledge/sources/url` | Minimal schema |
-| `POST /api/knowledge/sources/github/scan` | Accepts raw dict |
-
-**Impact**: API consumers won't know expected fields. Self-hosting users need to inspect frontend code.
-**Recommendation**: Add Pydantic request models without changing behavior.
-
-#### 2. Generic Response Schemas
-Many endpoints return `dict` or `JSONResponse` without typed response models:
-
-| Pattern | Count | Examples |
-|---|---|---|
-| Returns raw MongoDB docs | ~20 | Knowledge sources, conversations, analytics |
-| Returns `{"success": True}` | ~15 | Toggle, delete, bulk operations |
-| Returns `{"message": "..."}` | ~10 | Auth operations |
-
-**Impact**: Low risk for migration but poor documentation coverage.
-**Recommendation**: Add response models progressively, starting with public-facing endpoints.
-
-#### 3. Missing Parameter Descriptions
-- `X-Instance-ID` header: Used by ~80% of endpoints but not documented in OpenAPI
-- `X-API-Key` header: Used by `/api/v1/chat` but not in spec
-- Query parameters on `/api/conversations` (`limit`, `offset`, `search`) lack descriptions
-
-#### 4. Missing Error Response Definitions
-Most endpoints only document `200` and `422` (validation). Common undocumented errors:
-- `401 Unauthorized` (expired/missing JWT)
-- `403 Forbidden` (wrong role)
-- `404 Not Found` (missing resource)
-- `409 Conflict` (duplicate)
-- `429 Too Many Requests` (rate limit on API keys)
-
-#### 5. Authentication Documentation
-The OpenAPI spec lacks a `securitySchemes` definition. Add:
-```yaml
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
+**Recommendation:** Add a `securitySchemes` component and apply `security` tags to protected endpoints. Example:
+```python
+from fastapi.security import HTTPBearer, APIKeyHeader
+security_scheme = HTTPBearer()
+api_key_scheme = APIKeyHeader(name="X-API-Key")
 ```
 
-## Recommendations (Safe, Non-Breaking)
+### 2. Generic "Successful Response" on All 200s (MEDIUM)
 
-1. **Add `securitySchemes`** to the FastAPI app initialization — documents auth without changing behavior
-2. **Add `X-Instance-ID` as a Header parameter** in endpoint decorators where used
-3. **Create Pydantic response models** for the top 10 most-used endpoints
-4. **Add error response examples** to auth and CRUD endpoints
-5. **Version the API** — add `/v2/` prefix planning for migration
+**Problem:** All 226 operations have `"description": "Successful Response"` for their 200 status code. No endpoint documents its actual success response schema.
 
-## Files Modified
-None. This is a read-only audit. The exported `openapi.json` reflects the current state.
+**Impact:** Consumers cannot see response shapes without reading source code.
+
+**Recommendation:** Add `response_model` to key endpoints (chat, auth, knowledge base) to auto-generate response schemas.
+
+### 3. 34 POST/PUT/PATCH Endpoints Without Request Body Schema (MEDIUM)
+
+**Problem:** 34 write operations (POST/PUT/PATCH) have no `requestBody` in the OpenAPI spec. These likely use `Request` directly instead of Pydantic models.
+
+**Examples of endpoints missing request body schemas:**
+- Many Discord endpoints that read from `request.json()`
+- Zendesk webhook handlers
+- Some admin configuration endpoints
+
+**Recommendation:** Convert `request.json()` patterns to Pydantic models where feasible.
+
+### 4. No Error Response Documentation (LOW)
+
+**Problem:** No endpoint documents error responses (400, 401, 403, 404, 500).
+
+**Recommendation:** Add `responses` parameter to critical endpoints with common error schemas.
+
+### 5. Missing Parameter Descriptions (LOW)
+
+**Problem:** Path parameters (like `{instance_id}`, `{org_id}`) lack descriptions.
+
+**Recommendation:** Add `description` to `Path()` parameters.
+
+---
+
+## Schema Coverage
+
+### Well-Documented Schemas (65 Pydantic models)
+
+These request body schemas ARE properly defined and appear in the OpenAPI spec:
+
+| Schema | Used By |
+|--------|---------|
+| `ChatMessage` | `/chat/send`, `/chat/stream` |
+| `AcceptInviteBody` | `/invite/{token}/accept` |
+| `AccountCreate/Update` | `/v2/orgs/{id}/accounts` |
+| `BotCreate/Update` | `/v2/orgs/{id}/bots` |
+| `BotSettingsUpdate` | `/v2/orgs/{id}/bots/{id}/settings` |
+| `ConnectionCreate/Update` | `/v2/orgs/{id}/bots/{id}/connections` |
+| `EmbedConfigUpdate` | `/admin/embed-config` |
+| `DiscordAppConfigUpdate` | `/discord/app-config` |
+| `DiscordConfigUpdate` | `/discord/config` |
+| `ChangelogEntryCreate` | `/admin/changelog` |
+| `InviteBody` | `/admin/users/invite` |
+| `LoginBody/RegisterBody` | `/auth/login`, `/auth/register` |
+| + 50 more... | Various endpoints |
+
+### Missing Response Schemas
+
+No endpoints have formal response models. All return untyped `dict` or `JSONResponse`.
+
+---
+
+## OpenAPI Spec Export
+
+The generated OpenAPI specification has been exported to:
+```
+/app/docs/self-hosting-readiness/openapi.json
+```
+
+This file is version-controlled and can be used for:
+- API client generation (TypeScript, Python, etc.)
+- Documentation hosting (Swagger UI, Redoc)
+- Contract testing
+- Migration validation
+
+---
+
+## Recommendations Summary
+
+| Priority | Issue | Effort |
+|----------|-------|--------|
+| HIGH | Add security schemes (Bearer JWT, API Key) | Low (~20 lines) |
+| MEDIUM | Add response_model to key endpoints | Medium (gradual) |
+| MEDIUM | Convert request.json() to Pydantic models | Medium (gradual) |
+| LOW | Add error response documentation | Low (gradual) |
+| LOW | Add parameter descriptions | Low (gradual) |
+
+**Note:** These improvements should be made incrementally without changing application behavior. The existing 65 Pydantic request schemas provide good coverage for the most critical endpoints.

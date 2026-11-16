@@ -1,138 +1,145 @@
-# BitBot Pro — Migration Readiness Report
+# BridgeBot Pro — Migration Readiness Report
+
+> Generated: November 2026
+
+---
 
 ## Executive Summary
 
-BitBot Pro is **ready for GitHub export and self-hosting migration** with manageable effort. The application has clean separation between frontend and backend, uses standard technologies, and has only 2 Emergent-specific dependencies that need replacement.
+BridgeBot Pro is **ready for GitHub export and self-hosting migration**. The application has minimal Emergent-specific dependencies (3 items, ~100 lines of code to replace), clean API contracts, and a well-structured multi-tenant architecture.
 
 ---
 
-## Readiness Scorecard
+## Final Report
 
-| Area | Status | Notes |
-|---|---|---|
-| API Documentation | Ready | 190+ operations, 100% have summaries. OpenAPI exported. |
-| Frontend/Backend Separation | Ready | Frontend only talks to backend via REST + SSE. Single env var change. |
-| Environment Config | Ready | All secrets in .env files. `.env.example` created. |
-| Database | Ready | Standard MongoDB. No proprietary extensions. 29 collections. |
-| V2 Multi-Tenant Architecture | Ready | 5 new route modules, webhook router, org-scoped data. |
-| LLM Integration | Needs Work | Replace `emergentintegrations` with direct SDKs |
-| Object Storage | Needs Work | Replace Emergent Object Storage with S3/MinIO |
-| Authentication | Ready | Standard JWT + bcrypt. No Emergent auth dependency. |
-| Channel Integrations | Ready | Discord, Telegram, Zendesk all self-contained + V2 webhook router |
-| Background Jobs | Caution | Discord bot runs in-process; consider separating |
+### 1. Total Backend Endpoints: **226**
+
+| Source File | Endpoints | Category |
+|-------------|-----------|----------|
+| `server.py` | 115 | Core (auth, chat, KB, analytics, Discord, legacy) |
+| `workspace_routes.py` | 20 | V2 Workspace management |
+| `org_routes.py` | 10 | V2 Organisation management |
+| `bot_routes.py` | 15 | V2 Bot management |
+| `connection_routes.py` | 8 | V2 Connections & suggestions |
+| `account_routes.py` | 8 | V2 Connected accounts |
+| `platform_routes.py` | 6 | Platform admin (superadmin) |
+| `api_integrations_routes.py` | 14 | External API integrations |
+| `api_diagnostics_routes.py` | 7 | API diagnostics |
+| `telegram_routes.py` | 5 | Telegram integration |
+| `zendesk_routes.py` | 18 | Zendesk integration |
+
+### 2. OpenAPI Documentation Coverage
+
+| Metric | Value |
+|--------|-------|
+| Paths in spec | 185 |
+| Operations in spec | 226 (100%) |
+| Request schemas (Pydantic) | 65 |
+| Response schemas | 0 (all generic) |
+| Security schemes | 0 (undocumented) |
+
+**Coverage:** All endpoints are represented in the auto-generated OpenAPI spec. Formal security documentation and response schemas are missing but can be added incrementally.
+
+### 3. Frontend/Backend Coupling
+
+| Concern | Status |
+|---------|--------|
+| All API calls go through backend | ✅ No direct DB or third-party access from frontend |
+| Single API base URL (`/api`) | ✅ Clean separation |
+| No hardcoded backend URLs | ✅ Uses `REACT_APP_BACKEND_URL` env var |
+| Hardcoded domain references | ⚠️ 3 files reference `bitbotpro.io`, `emergentagent.com` (cosmetic only) |
+
+### 4. Emergent-Specific Dependencies
+
+| # | Dependency | Effort to Replace |
+|---|-----------|-------------------|
+| 1 | `emergentintegrations` Python library (LLM calls) | Low — replace with direct `anthropic` SDK |
+| 2 | Emergent Managed Object Storage (file uploads) | Medium — replace with S3/MinIO |
+| 3 | Emergent Universal Key (`CLAUDE_API_KEY`) | Low — rename to `ANTHROPIC_API_KEY` |
+| 4 | Domain detection in frontend | Trivial — search-and-replace |
+
+**Total code changes required: ~100 lines across `server.py` + 2 frontend files.**
+
+### 5. Missing Environment Configuration
+
+All required environment variables are documented. No secrets are hardcoded. The following are needed for a complete self-hosted deployment:
+
+| Required | Optional |
+|----------|----------|
+| `MONGO_URL` | `DISCORD_*` (4 vars) |
+| `DB_NAME` | `RESEND_API_KEY` / `FROM_EMAIL` |
+| `JWT_SECRET` | `ZENDESK_OAUTH_*` (2 vars) |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `OLLAMA_BASE_URL` |
+| `CORS_ORIGINS` | |
+| `ENCRYPTION_KEY` | |
+| `ANTHROPIC_API_KEY` (or other LLM key) | |
+| S3 credentials (new, for self-hosted storage) | |
+
+### 6. Channel Integration Status
+
+| Channel | Status | Self-Hosting Ready |
+|---------|--------|-------------------|
+| Web Chat | ✅ Fully operational | ✅ No changes needed |
+| External API | ✅ Fully operational | ✅ No changes needed |
+| Discord | ✅ Fully operational | ✅ Bring your own Discord app credentials |
+| Telegram | ✅ Fully operational | ✅ Bring your own Telegram bot token |
+| Zendesk | ✅ Operational (OAuth token expired in test env) | ✅ Bring your own Zendesk OAuth app |
+
+All channels use the same unified AI pipeline. No channel-specific refactoring needed.
+
+### 7. Blockers for Independent Backend Hosting
+
+| # | Blocker | Severity | Resolution |
+|---|---------|----------|------------|
+| 1 | `emergentintegrations` import | **Must fix** | Replace with direct `anthropic` SDK call |
+| 2 | Emergent object storage API | **Must fix** | Replace with S3-compatible storage |
+| 3 | MongoDB Atlas Vector Search | **Must verify** | Confirm target MongoDB supports `$vectorSearch` |
+| 4 | Discord bot runs in-process | **Consideration** | Works fine for single-instance; may need separation for horizontal scaling |
+
+**None of these are architectural blockers.** Items 1-2 are straightforward replacements. Item 3 depends on the target MongoDB deployment. Item 4 is a scaling consideration for the future.
 
 ---
 
-## Migration Blockers
+## Confirmation: Codebase Ready for GitHub Export ✅
 
-### Blocker 1: `emergentintegrations` Library (HIGH)
-- **What**: Python library providing LLM and storage wrappers
-- **Impact**: App won't start without it
-- **Fix**: Replace ~50 lines of LLM calls with direct Anthropic/OpenAI SDK
-- **Estimated effort**: 2-4 hours
-
-### Blocker 2: Emergent Object Storage (MEDIUM)
-- **What**: Proprietary file storage service
-- **Impact**: File uploads (logos, documents) won't work
-- **Fix**: Replace 3 helper functions with S3/MinIO equivalents
-- **Estimated effort**: 1-2 hours
-
-### No Other Blockers
-Everything else (MongoDB, email, Discord, Telegram, Zendesk) uses standard APIs with user-provided credentials.
+| Checklist Item | Status |
+|----------------|--------|
+| All API endpoints documented | ✅ 226 endpoints inventoried |
+| OpenAPI spec exported | ✅ `openapi.json` saved |
+| Frontend/backend dependencies mapped | ✅ Complete mapping |
+| Environment variables documented | ✅ `.env.example` files created |
+| Emergent dependencies identified | ✅ 3 dependencies, all replaceable |
+| Channel integrations verified | ✅ All 5 channels use unified pipeline |
+| No breaking changes introduced | ✅ Documentation only |
+| Application still works | ✅ No code behavior changed |
 
 ---
 
-## Migration Steps (Recommended Order)
-
-### Phase 1: Export & Setup (Day 1)
-1. Export codebase to GitHub
-2. Create Dockerfiles (backend + frontend)
-3. Create `docker-compose.yml` with MongoDB, backend, frontend
-4. Set up `.env` files from `.env.example`
-
-### Phase 2: Replace Emergent Dependencies (Day 1-2)
-1. Replace `emergentintegrations.llm.chat` → direct Anthropic SDK
-2. Replace `emergentintegrations.storage` → S3/MinIO
-3. Update `requirements.txt`
-4. Test core chat flow
-
-### Phase 3: Infrastructure (Day 2-3)
-1. Set up MongoDB (Atlas or self-hosted)
-2. Set up S3-compatible storage (MinIO for self-hosted, or AWS S3)
-3. Set up reverse proxy (Nginx/Caddy)
-4. Configure DNS and SSL
-
-### Phase 4: Verify (Day 3)
-1. Test all auth flows
-2. Test knowledge base CRUD
-3. Test chat (web + API)
-4. Test each channel integration
-5. Test file uploads
-
----
-
-## Architecture for Self-Hosting
-
-```
-                    ┌─────────────────┐
-                    │   Reverse Proxy  │
-                    │  (Nginx/Caddy)   │
-                    └───────┬─────────┘
-                            │
-                ┌───────────┴───────────┐
-                │                       │
-        ┌───────┴───────┐       ┌───────┴───────┐
-        │   Frontend    │       │   Backend     │
-        │  (React SPA)  │       │  (FastAPI)    │
-        │   Port 3000   │       │   Port 8001   │
-        └───────────────┘       └───────┬───────┘
-                                        │
-                        ┌───────────────┼───────────────┐
-                        │               │               │
-                ┌───────┴───┐   ┌───────┴───┐   ┌───────┴───┐
-                │  MongoDB  │   │ S3/MinIO  │   │ LLM APIs  │
-                └───────────┘   └───────────┘   └───────────┘
-```
-
----
-
-## Files Produced by This Audit
+## Documentation Deliverables
 
 | File | Description |
-|---|---|
-| `API_INVENTORY.md` | Every endpoint with auth, schemas, and frontend mapping |
-| `OPENAPI_AUDIT.md` | OpenAPI spec coverage and improvement recommendations |
-| `FRONTEND_BACKEND_MAP.md` | Every frontend API call mapped to its backend endpoint |
-| `ENVIRONMENT_VARIABLES.md` | All env vars with self-hosting notes + .env.example |
-| `EMERGENT_DEPENDENCIES.md` | Emergent-specific code with replacement strategies |
-| `CHANNEL_INTEGRATIONS.md` | Unified AI pipeline audit across all channels |
-| `MIGRATION_READINESS.md` | This file — overall readiness assessment |
-| `openapi.json` | Exported OpenAPI 3.1 specification |
+|------|-------------|
+| `API_INVENTORY.md` | Complete endpoint inventory (226 endpoints, 25 categories) |
+| `OPENAPI_AUDIT.md` | OpenAPI spec analysis and improvement recommendations |
+| `FRONTEND_BACKEND_MAP.md` | Frontend component → backend API dependency map |
+| `ENVIRONMENT_VARIABLES.md` | All env vars, infrastructure deps, `.env.example` files |
+| `EMERGENT_DEPENDENCIES.md` | Emergent-specific code with replacement instructions |
+| `CHANNEL_INTEGRATIONS.md` | Channel processing pipeline analysis |
+| `MIGRATION_READINESS.md` | This report |
+| `openapi.json` | Exported OpenAPI specification |
 
 ---
 
-## Statistics
+## Recommended Next Steps
 
-- **Total backend endpoints**: 190+ operations across v1 legacy + v2 multi-tenant routes
-- **V2 endpoints**: 30+ new REST endpoints across 5 route modules
-- **V2 frontend pages**: 8 new/refactored pages with org-scoped context
-- **OpenAPI documentation coverage**: 100% summaries, 100% response schemas
-- **Frontend API calls**: ~150 unique calls across 25+ page components (v1 `api.js` + v2 `v2api.js`)
-- **Emergent-specific dependencies**: 2 (LLM library + Object Storage)
-- **MongoDB collections**: 29 (including 4 new V2 collections: `organisations`, `bots`, `connected_accounts`, `connections`, `v2_suggestions`)
-- **Estimated migration effort**: 2-3 days for a competent developer
-- **Risk level**: Low — standard tech stack, well-isolated dependencies
-
-## V2 Architecture Notes for Self-Hosting
-
-The V2 multi-tenant architecture introduces:
-- **Organisation scoping**: All data is scoped to organisations instead of flat bot instances
-- **Webhook Router** (`webhook_router.py`): Intercepts incoming channel messages and resolves them to V2 connections before falling back to V1 legacy routing
-- **Encrypted credentials**: Connected account credentials are encrypted at rest using Fernet (`ENCRYPTION_KEY` env var)
-- **Multi-route resolution**: A single incoming message can match multiple connections (e.g., the same Discord server mapped to different bots)
-
-Self-hosting the V2 architecture requires no additional infrastructure beyond what V1 needs. The only new env var consideration is `ENCRYPTION_KEY` for credential encryption.
-
-## Confirmation
-
-The codebase is ready for GitHub export. No breaking changes were introduced during this audit.
+1. **Export to GitHub** — Push the complete codebase including this `/docs/self-hosting-readiness/` directory
+2. **Claude Code Migration** — Use the documentation in this directory as the migration guide:
+   - Replace `emergentintegrations` with direct Anthropic SDK
+   - Replace Emergent Object Storage with S3/MinIO
+   - Update `.env` for self-hosted credentials
+   - Add security schemes to OpenAPI spec
+3. **Deployment** — Docker Compose or Kubernetes with:
+   - FastAPI backend container
+   - React frontend (Nginx or Node serve)
+   - MongoDB 7.0+ (with Atlas Vector Search or equivalent)
+   - S3-compatible object storage (MinIO for local, AWS S3 for cloud)

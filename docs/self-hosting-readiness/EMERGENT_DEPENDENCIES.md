@@ -1,174 +1,147 @@
-# BitBot Pro — Emergent-Specific Dependencies
+# BridgeBot Pro — Emergent-Specific Dependencies
 
-## Summary
-
-| Dependency | Impact | Essential | Replaceable | Effort |
-|---|---|---|---|---|
-| `emergentintegrations` Python library | High | Yes (for LLM) | Yes | Medium |
-| Emergent Object Storage | Medium | Yes (for uploads) | Yes | Medium |
-| Emergent Universal LLM Key | High | No (if BYOK) | Yes | Low |
-| Emergent Preview URL routing | Low | No | N/A | N/A |
-| Emergent Deployment Pipeline | Low | No | N/A | N/A |
+> Generated: November 2026
 
 ---
 
-## 1. `emergentintegrations` Python Library
+## Overview
 
-### What It Does
-Provides a unified LLM interface (`LlmChat`) that routes to Claude, GPT, or Gemini through a single API key (Emergent Universal Key). Also provides `EmergentObjectStorage` for file uploads.
-
-### Where Used
-```
-server.py:28  — from emergentintegrations.llm.chat import LlmChat, ChatMessage
-server.py:29  — from emergentintegrations.llm.chat import LlmModelType (model enum)
-server.py:30  — from emergentintegrations.storage import EmergentObjectStorage
-```
-
-### How It Works
-- `LlmChat` wraps Anthropic/OpenAI SDKs behind a unified interface
-- Takes an Emergent API key that proxies to the actual provider
-- `EmergentObjectStorage` wraps a proprietary object storage API
-
-### Replacement Strategy
-**LLM**: Replace `LlmChat` calls with direct Anthropic/OpenAI SDK calls:
-```python
-# Current (Emergent)
-from emergentintegrations.llm.chat import LlmChat, ChatMessage
-chat = LlmChat(api_key=EMERGENT_KEY, model=LlmModelType.CLAUDE_SONNET_4_6)
-response = await chat.send_message_async(messages)
-
-# Replacement (Direct Anthropic)
-import anthropic
-client = anthropic.AsyncAnthropic(api_key=CLAUDE_API_KEY)
-response = await client.messages.create(model="claude-sonnet-4-6", messages=messages)
-```
-
-**Object Storage**: Replace `EmergentObjectStorage` with S3-compatible storage:
-```python
-# Current (Emergent)
-from emergentintegrations.storage import EmergentObjectStorage
-storage = EmergentObjectStorage(api_key=key)
-url = await storage.upload(file_bytes, path)
-
-# Replacement (S3/MinIO)
-import boto3
-s3 = boto3.client('s3', ...)
-s3.upload_fileobj(file, bucket, key)
-```
-
-### Essential?
-Yes — the app cannot function without LLM calls. But the library is a thin wrapper; replacing it is straightforward.
+BridgeBot Pro has **3 direct Emergent dependencies**. Two are essential (LLM + Object Storage), one is an optional URL reference. None require major architectural changes — they can be swapped with standard alternatives.
 
 ---
 
-## 2. Emergent Object Storage
+## 1. `emergentintegrations` Python Library (LLM Gateway)
 
-### What It Does
-Stores uploaded files (bot logos, documents) via Emergent's proprietary storage API.
+**What it does:** Provides `LlmChat` class that routes LLM calls through Emergent's Universal Key proxy. Manages conversation history, model selection, and token counting.
 
-### Where Used
-```
-server.py:67-80  — _upload_to_storage(), _get_storage_url(), _delete_from_storage()
-server.py:3464   — Bot logo upload
-server.py:4680   — Document upload for knowledge base
-```
+**Where it is used:**
+- `server.py` line 28: `from emergentintegrations.llm.chat import LlmChat, UserMessage`
+- `server.py` lines 1172-1195: `_call_emergent()` function
+- Called by the unified AI pipeline for the default "emergent" LLM provider
 
-### API Contract
-```
-POST   {STORAGE_URL}/objects/{path}    — Upload file
-GET    {STORAGE_URL}/objects/{path}    — Download file  
-DELETE {STORAGE_URL}/objects/{path}    — Delete file
-Headers: X-Storage-Key: {key}
-```
+**Is it essential?** No — it's one of four LLM provider backends. The app already supports direct Anthropic, OpenAI, and Ollama calls that bypass this library entirely.
 
-### Replacement
-Replace with any S3-compatible service. The storage functions are isolated in 3 helper functions at the top of `server.py` — only these need changing.
+**Can it be configured externally?** Yes — per-bot LLM config allows selecting `anthropic`, `openai`, or `ollama` providers with BYOK (Bring Your Own Key).
 
-### Essential?
-Yes for file upload features. No for core chat functionality.
+**What Claude Code needs to do:**
+1. Remove the `emergentintegrations` import
+2. Replace `_call_emergent()` with a direct Anthropic SDK call (the default model is `claude-sonnet-4-6`)
+3. Update `_resolve_llm_config()` to default to `"anthropic"` instead of `"emergent"`
+4. Install `anthropic` SDK as a direct dependency
+5. The existing `_call_anthropic()` function already handles direct Anthropic calls — make it the default
+
+**Effort:** Low (~30 lines of code change)
 
 ---
 
-## 3. Emergent Universal LLM Key
+## 2. Emergent Managed Object Storage
 
-### What It Does
-A single API key that works across Claude, GPT, and Gemini models via the `emergentintegrations` library.
+**What it does:** Provides file storage for bot logos and uploaded knowledge base documents (PDF, DOCX, etc.) via a REST API.
 
-### Where Used
+**Where it is used:**
+- `server.py` lines 75-115: Storage initialization, `_put_object()`, `_get_object()`, `_delete_object()`
+- Called by: bot logo upload/retrieval, knowledge base document upload
+
+**API Contract:**
 ```
-backend/.env: CLAUDE_API_KEY (this IS the Emergent Universal Key)
-server.py:1123  — _call_emergent() uses this key
-server.py:1615  — stream_chat_response() routes through it
-```
-
-### Replacement
-Replace with direct provider API keys:
-- Anthropic: `ANTHROPIC_API_KEY`
-- OpenAI: `OPENAI_API_KEY`
-
-The app already supports OpenAI BYOK (Bring Your Own Key) per-instance. Extending this to Anthropic is the migration path.
-
-### Essential?
-No — if you have direct API keys, you can bypass the Universal Key entirely.
-
----
-
-## 4. Emergent Preview URL Routing
-
-### What It Does
-The Emergent platform routes `/api/*` requests to port 8001 (backend) and all other requests to port 3000 (frontend) via Kubernetes ingress.
-
-### Where Used
-- `frontend/.env`: `REACT_APP_BACKEND_URL=https://xxx.preview.emergentagent.com`
-- `utils/api.js`: `baseURL: /api` (relative path)
-
-### Replacement
-Standard reverse proxy (Nginx, Caddy, or cloud load balancer):
-```nginx
-location /api/ {
-    proxy_pass http://backend:8001;
-}
-location / {
-    proxy_pass http://frontend:3000;
-}
+POST   {STORAGE_URL}/init            → {storage_key}
+PUT    {STORAGE_URL}/objects/{path}   (upload file)
+GET    {STORAGE_URL}/objects/{path}   (download file)
+DELETE {STORAGE_URL}/objects/{path}   (delete file)
 ```
 
-### Essential?
-No — this is infrastructure routing, not application code.
+**Is it essential?** Yes — file storage is required for bot logos and document uploads.
+
+**Can it be configured externally?** Partially — the base URL is configurable via `INTEGRATION_PROXY_URL` env var, but the API contract is Emergent-specific.
+
+**What Claude Code needs to do:**
+1. Replace the 4 storage functions (`_init_storage`, `_put_object`, `_get_object`, `_delete_object`) with S3-compatible equivalents
+2. Add `boto3` dependency (or use MinIO client)
+3. Add new env vars: `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`
+4. Keep the same function signatures so callers don't need changes
+
+**Effort:** Medium (~50 lines of code change)
 
 ---
 
-## 5. Emergent Deployment Pipeline
+## 3. Emergent Universal Key (`CLAUDE_API_KEY`)
 
-### What It Does
-Builds and deploys the app via Emergent's internal CI/CD.
+**What it does:** A single API key that provides access to multiple LLM providers (Claude, GPT, Gemini) through Emergent's billing proxy.
 
-### Where Used
-- `.emergent/emergent.yml` — deployment config
-- `.emergent/markers/` — internal state
+**Where it is used:**
+- `server.py` line 78: `_EMERGENT_KEY = os.environ.get("CLAUDE_API_KEY") or os.environ.get("EMERGENT_LLM_KEY")`
+- Used by `_call_emergent()` for LLM calls and `_init_storage()` for object storage init
 
-### Replacement
-Standard Docker + CI/CD:
-- Dockerfile for backend (Python + FastAPI)
-- Dockerfile for frontend (Node + React build)
-- docker-compose.yml for local development
-- GitHub Actions / GitLab CI for deployment
+**Is it essential?** No for LLM (BYOK alternatives exist). Yes for object storage (until replaced with S3).
 
-### Essential?
-No — the app runs as standard Python + Node processes.
+**What Claude Code needs to do:**
+1. Rename `CLAUDE_API_KEY` to `ANTHROPIC_API_KEY` in env
+2. Use it directly with the `anthropic` SDK instead of routing through `emergentintegrations`
+3. Remove `EMERGENT_LLM_KEY` references
+
+**Effort:** Low (env rename + ~5 lines)
 
 ---
 
-## Migration Priority
+## 4. Hardcoded Emergent URLs in Frontend
 
-1. **High Priority**: Replace `emergentintegrations.llm.chat` with direct Anthropic/OpenAI SDK
-2. **High Priority**: Replace `EmergentObjectStorage` with S3-compatible storage
-3. **Medium Priority**: Create Dockerfiles and docker-compose.yml
-4. **Low Priority**: Set up CI/CD pipeline
-5. **Not Needed**: Frontend requires no changes beyond `REACT_APP_BACKEND_URL`
+**What it does:** Domain detection for environment banners (preview vs production).
+
+**Where it is used:**
+- `AdminLayout.js` line 264: `host.includes("preview.emergentagent.com")`
+
+**Is it essential?** No — purely cosmetic, used to show "PREVIEW · SANDBOX" banner.
+
+**What Claude Code needs to do:**
+1. Remove or update the domain check to match the self-hosted domain
+2. Or use an env var like `REACT_APP_ENV` instead of hostname detection
+
+**Effort:** Trivial (~2 lines)
 
 ---
 
-## V2 Architecture — No Additional Emergent Dependencies
+## 5. `bitbotpro.io` / `bridgebot.tech` Domain References
 
-The V2 multi-tenant architecture (organisations, bots, connected accounts, connections, webhook router, platform admin, suggestions inbox) was built entirely with standard Python + MongoDB and does not introduce any new Emergent-specific dependencies. All V2 route files (`org_routes.py`, `bot_routes.py`, `account_routes.py`, `connection_routes.py`, `platform_routes.py`, `webhook_router.py`) use only FastAPI, Motor (MongoDB), and the Python standard library.
+**Where:**
+- `AdminLayout.js` line 261: Domain detection for env banner
+- `LandingPage.js` line 904: Example embed code snippet
+- `EmbedCode.js`: Example URLs in generated snippets
+
+**Is it essential?** No — these are cosmetic/example text only.
+
+**What Claude Code needs to do:** Search-and-replace domain references with the self-hosted domain.
+
+**Effort:** Trivial
+
+---
+
+## Summary Table
+
+| Dependency | Type | Essential | Replacement | Effort |
+|-----------|------|-----------|-------------|--------|
+| `emergentintegrations` library | Python package | No | Direct `anthropic` SDK | Low |
+| Emergent Object Storage | REST API | Yes (until replaced) | AWS S3 / MinIO | Medium |
+| Emergent Universal Key | API credential | No | Direct Anthropic key | Low |
+| Emergent domain detection | Frontend URL check | No | Env var or remove | Trivial |
+| `bitbotpro.io` references | Hardcoded strings | No | Search-and-replace | Trivial |
+
+**Total estimated migration effort: ~100 lines of code changes across 2 files.**
+
+---
+
+## Dependencies That Are NOT Emergent-Specific
+
+These work independently and require no changes for self-hosting:
+
+| Dependency | Status |
+|-----------|--------|
+| MongoDB / Motor | Standard, no Emergent coupling |
+| Discord.py bot | Standard Discord API |
+| Telegram webhooks | Standard Telegram API |
+| Zendesk OAuth + API | Standard Zendesk API |
+| JWT auth (python-jose) | Standard JWT |
+| bcrypt password hashing | Standard |
+| FastAPI / Uvicorn | Standard |
+| React frontend | Standard, uses `REACT_APP_BACKEND_URL` env var |
+| Resend email | Standard third-party API |
+| OpenAI / Anthropic SDKs | Already present for BYOK |

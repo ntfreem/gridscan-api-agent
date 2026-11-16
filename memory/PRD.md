@@ -149,8 +149,19 @@ users                → +platform_role field
 ### Bug Fix: Zendesk Instance ID Mismatch — DONE ✅ (Nov 2026)
 - [x] Fixed selectBot() in AuthContext.js — added missing else branch to create synthetic instance with legacy_instance_id when not found in user's instances array
 - [x] Fixed stale async fetch race condition in ZendeskSettings.js — added sequence counter to discard out-of-order responses, reset all Zendesk state when bot/instance changes
+- [x] Replaced lockedInstanceId pattern with config.instance_id derivation for all action handlers (Test, Save, Disconnect)
 - [x] Root cause: (1) selectBot() not setting bf_instance_id for legacy bots, (2) switching workspaces/bots caused stale fetches to overwrite state with wrong instance's config
 - [x] Tested: 13/13 backend + all frontend verification passed (iteration_86.json)
+
+### Stage 3: Self-Hosting Readiness Audit — DONE ✅ (Nov 2026)
+- [x] Complete API Inventory: 226 endpoints documented across 11 source files, 25 categories
+- [x] OpenAPI spec exported (openapi.json): 185 paths, 65 Pydantic schemas
+- [x] Frontend-to-Backend Dependency Map: every component to API call mapped
+- [x] Environment Variables documented: 16 backend env vars, .env.example files created
+- [x] Emergent Dependencies identified: 3 items (~100 lines to replace)
+- [x] Channel Integration verified: all 5 channels use unified AI pipeline
+- [x] Migration Readiness Report: codebase confirmed ready for GitHub export
+- [x] All documentation in /app/docs/self-hosting-readiness/
 
 ### Stage 4: Billing Integration — NOT STARTED
 - [ ] Stripe customer/subscription linked to workspace
@@ -182,11 +193,12 @@ users                → +platform_role field
 
 ## Backlog
 - P0: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)
+- P1: GitHub Export to begin self-hosting migration with Claude Code
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
-- P1: GitHub Export (DO NOT start until instructed)
 - P2: WhatsApp integration
 - P2: APP_MODE env splitting
 - P2: Backend refactor — server.py modularization
+- P2: OpenAPI improvements (add security schemes, response models)
 - P3: Users.js component splitting (file at 752 lines)
 - P3: Workspace/org switching UX polish
 
