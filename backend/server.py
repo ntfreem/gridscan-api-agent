@@ -2404,6 +2404,23 @@ async def startup_event():
     global _shared_discord_task
     app_creds = await get_discord_credentials()
     bot_token = app_creds.get("bot_token")
+
+    # Backfill metadata.source on Discord connected_accounts that lack it
+    global_client_id = app_creds.get("client_id") or ""
+    if global_client_id:
+        untagged = await db.connected_accounts.find(
+            {"provider": "discord", "metadata.source": {"$exists": False}}
+        ).to_list(100)
+        for acc in untagged:
+            creds = acc.get("credentials") or {}
+            source = "platform" if creds.get("client_id") == global_client_id else "custom"
+            await db.connected_accounts.update_one(
+                {"id": acc["id"]},
+                {"$set": {"metadata.source": source}}
+            )
+        if untagged:
+            logger.info(f"Backfilled metadata.source on {len(untagged)} Discord account(s)")
+
     # Build guild→instance map
     active_configs = await db.discord_config.find({"is_active": True}, {"_id": 0}).to_list(50)
     for cfg in active_configs:

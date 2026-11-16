@@ -105,7 +105,7 @@ function DiscordDetail({ connection, account, botName, onToggle, onBack, onCreat
   const hasGlobalConfig = !!(globalDiscordConfig?.client_id);
   const discordAccount = accounts.find(a => a.provider === "discord");
   const hasOrgAccount = !!discordAccount;
-  const accountSource = discordAccount?.metadata?.source || (discordAccount?.name?.includes("Platform") ? "platform" : "custom");
+  const accountSource = discordAccount?.metadata?.source || "platform";
 
   // Invite URL from account credentials OR global config
   const clientId = account?.credentials_masked?.application_id || account?.credentials_masked?.client_id || account?.credentials_display?.client_id || globalDiscordConfig?.client_id || "";
