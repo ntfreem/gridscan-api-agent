@@ -1,23 +1,25 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { colors, fonts, T, onFocus, onBlur } from "@/theme";
+import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import { toast } from "sonner";
 import api from "@/utils/api";
 import v2 from "@/utils/v2api";
 import {
   Plus, Trash2, Shield, UserPlus, RefreshCw, Mail, CheckCircle,
-  Clock, X, Eye, Lock, ChevronDown, Search, Users as UsersIcon,
+  Clock, X, Eye, Lock, ChevronDown, Search, Users as UsersIcon, Edit2, Building2, Layers,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function Users() {
-  const { user: currentUser, token, selectedWorkspace } = useAuth();
+  const { user: currentUser, token, selectedWorkspace, workspaces } = useAuth();
   const [users, setUsers] = useState([]);
   const [wsMemberMap, setWsMemberMap] = useState({});
+  const [allWsMemberships, setAllWsMemberships] = useState({});  // userId -> [{ws_id, ws_name, role}]
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
-  const [showResetPw, setShowResetPw] = useState(null); // user obj
+  const [showResetPw, setShowResetPw] = useState(null);
+  const [editUser, setEditUser] = useState(null);  // user being edited
   const [search, setSearch] = useState("");
 
   // Orgs + Bots for assignment
@@ -37,7 +39,7 @@ export default function Users() {
       });
       if (res.ok) setUsers(await res.json());
     } catch {}
-    // Load workspace members for role display
+    // Load workspace members for the selected workspace
     if (selectedWorkspace) {
       try {
         const wsRes = await v2.getWorkspaceMembers(selectedWorkspace.id);
@@ -46,6 +48,22 @@ export default function Users() {
         members.forEach(m => { map[m.user_id] = m; });
         setWsMemberMap(map);
       } catch {}
+    }
+    // Load memberships across ALL workspaces (superadmin view)
+    const isSA = currentUser?.role === "superadmin" || currentUser?.platform_role === "superadmin";
+    if (isSA && workspaces.length > 0) {
+      const allMemberships = {};
+      for (const ws of workspaces) {
+        try {
+          const wsRes = await v2.getWorkspaceMembers(ws.id);
+          const members = wsRes.data?.members || [];
+          members.forEach(m => {
+            if (!allMemberships[m.user_id]) allMemberships[m.user_id] = [];
+            allMemberships[m.user_id].push({ ws_id: ws.id, ws_name: ws.name, role: m.role });
+          });
+        } catch {}
+      }
+      setAllWsMemberships(allMemberships);
     }
     setLoading(false);
   };
@@ -239,11 +257,10 @@ export default function Users() {
             {/* Actions */}
             <div style={{ display: "flex", gap: "6px" }}>
               {u.id !== currentUser?.id && u.platform_role !== "superadmin" && u.role !== "superadmin" && wsMemberMap[u.id]?.role !== "owner" && (
-                <button onClick={() => toggleRole(u)} title={wsMemberMap[u.id]?.role === "admin" ? "Set as Regular" : "Make Workspace Admin"} data-testid={`toggle-role-${u.id}`} style={{
-                  padding: "6px", borderRadius: "6px", border: `1px solid ${wsMemberMap[u.id]?.role === "admin" ? "rgba(96,165,250,0.4)" : colors.border.default}`,
-                  backgroundColor: wsMemberMap[u.id]?.role === "admin" ? "rgba(96,165,250,0.08)" : colors.bg.base,
-                  cursor: "pointer", color: wsMemberMap[u.id]?.role === "admin" ? "#60A5FA" : colors.text.secondary,
-                }}><Shield size={13} /></button>
+                <button onClick={() => setEditUser(u)} title="Edit Workspace Roles" data-testid={`edit-user-${u.id}`} style={{
+                  padding: "6px", borderRadius: "6px", border: `1px solid ${colors.border.default}`,
+                  backgroundColor: colors.bg.base, cursor: "pointer", color: colors.text.secondary,
+                }}><Edit2 size={13} /></button>
               )}
               <button onClick={() => setShowResetPw(u)} title="Reset Password" data-testid={`reset-pw-${u.id}`} style={{
                 padding: "6px", borderRadius: "6px", border: `1px solid ${colors.border.default}`,
@@ -265,6 +282,10 @@ export default function Users() {
 
       {/* Reset Password Modal */}
       {showResetPw && <ResetPasswordModal user={showResetPw} token={token} onClose={() => setShowResetPw(null)} />}
+
+      {/* Edit User Workspace Roles Modal */}
+      {editUser && <EditUserModal user={editUser} workspaces={workspaces} allWsMemberships={allWsMemberships} token={token}
+        onClose={() => setEditUser(null)} onDone={() => { setEditUser(null); loadUsers(); }} />}
     </div>
   );
 }
@@ -487,6 +508,149 @@ function ResetPasswordModal({ user, token, onClose }) {
         }}>
           <Lock size={14} /> {saving ? "Resetting..." : "Reset Password"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── Edit User Workspace Roles Modal ── */
+function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onDone }) {
+  const [saving, setSaving] = useState({});
+  const userMemberships = allWsMemberships[user.id] || [];
+  const membershipMap = {};
+  userMemberships.forEach(m => { membershipMap[m.ws_id] = m; });
+
+  const toggleWsRole = async (ws, currentRole) => {
+    const newRole = currentRole === "admin" ? "member" : "admin";
+    const label = newRole === "admin" ? "workspace admin" : "regular member";
+    setSaving(prev => ({ ...prev, [ws.id]: true }));
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users/${user.id}/role`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole, workspace_id: ws.id }),
+      });
+      if (res.ok) {
+        toast.success(`${user.email} set as ${label} in ${ws.name}`);
+        onDone();
+      } else {
+        const data = await res.json();
+        toast.error(data.detail || "Failed to update role");
+      }
+    } catch {
+      toast.error("Failed to update role");
+    } finally {
+      setSaving(prev => ({ ...prev, [ws.id]: false }));
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 50,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div data-testid="edit-user-modal" style={{
+        width: "520px", maxHeight: "80vh", overflow: "auto",
+        backgroundColor: colors.bg.panel, borderRadius: "16px",
+        border: `1px solid ${colors.border.default}`, padding: "28px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <h2 style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+            Edit User Roles
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px" }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* User info */}
+        <div style={{
+          padding: "14px 16px", backgroundColor: colors.bg.surface, borderRadius: radius.md,
+          border: `1px solid ${colors.border.default}`, marginBottom: "20px",
+        }}>
+          <div style={{ fontFamily: fonts.body, fontSize: "14px", fontWeight: "600", color: colors.text.primary }}>
+            {user.first_name || user.username || user.email.split("@")[0]} {user.last_name || ""}
+          </div>
+          <div style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, marginTop: "2px" }}>{user.email}</div>
+        </div>
+
+        {/* Workspace roles */}
+        <h3 style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.secondary, marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Workspace Access
+        </h3>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {workspaces.map(ws => {
+            const membership = membershipMap[ws.id];
+            const isOwner = membership?.role === "owner";
+            const isAdmin = membership?.role === "admin";
+            const isMember = !!membership;
+            const isSaving = saving[ws.id];
+
+            return (
+              <div key={ws.id} data-testid={`ws-role-row-${ws.id}`} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 16px", backgroundColor: colors.bg.surface,
+                border: `1px solid ${isAdmin ? "rgba(96,165,250,0.3)" : isOwner ? "rgba(245,158,11,0.3)" : colors.border.default}`,
+                borderRadius: radius.md,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <Layers size={14} color={isAdmin ? "#60A5FA" : isOwner ? "#F59E0B" : colors.text.muted} />
+                  <div>
+                    <div style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: "500", color: colors.text.primary }}>{ws.name}</div>
+                    <div style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, marginTop: "1px" }}>
+                      {ws.org_count || 0} org{(ws.org_count || 0) !== 1 ? "s" : ""} · {ws.member_count || 0} member{(ws.member_count || 0) !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {isOwner ? (
+                    <span style={{
+                      padding: "3px 10px", borderRadius: radius.full, fontSize: "10px",
+                      fontWeight: "600", fontFamily: fonts.mono, textTransform: "uppercase",
+                      backgroundColor: "rgba(245,158,11,0.1)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.2)",
+                    }}>Owner</span>
+                  ) : (
+                    <button
+                      data-testid={`toggle-ws-role-${ws.id}`}
+                      onClick={() => toggleWsRole(ws, isAdmin ? "admin" : "none")}
+                      disabled={isSaving}
+                      style={{
+                        padding: "5px 14px", borderRadius: radius.full, fontSize: "11px",
+                        fontWeight: "600", fontFamily: fonts.body, cursor: isSaving ? "wait" : "pointer",
+                        border: isAdmin ? "1px solid rgba(96,165,250,0.4)" : `1px solid ${colors.border.default}`,
+                        backgroundColor: isAdmin ? "rgba(96,165,250,0.08)" : "transparent",
+                        color: isAdmin ? "#60A5FA" : colors.text.secondary,
+                        transition: "all 0.15s",
+                        opacity: isSaving ? 0.5 : 1,
+                      }}
+                    >
+                      <Shield size={10} style={{ marginRight: "4px", verticalAlign: "middle" }} />
+                      {isSaving ? "..." : isAdmin ? "Admin" : "Make Admin"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {workspaces.length === 0 && (
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted }}>No workspaces found.</p>
+          )}
+        </div>
+
+        {/* Close */}
+        <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={onClose} data-testid="close-edit-user" style={{
+            ...T.btnPrimary, backgroundColor: colors.bg.surface, color: colors.text.primary,
+            border: `1px solid ${colors.border.default}`,
+          }}>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
