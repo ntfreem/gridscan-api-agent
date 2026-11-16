@@ -2832,6 +2832,8 @@ class InviteUserBody(BaseModel):
     username: Optional[str] = None
     org_ids: Optional[List[str]] = None
     bot_ids: Optional[List[str]] = None
+    workspace_id: Optional[str] = None
+    workspace_role: Optional[str] = "admin"  # admin or member (workspace-level)
 
 class AcceptInviteBody(BaseModel):
     username: str
@@ -2898,12 +2900,12 @@ async def send_invitation_email(to_email: str, invite_token: str, role: str, inv
 
 @api_router.post("/admin/users/invite")
 async def invite_user(body: InviteUserBody, current_user: dict = Depends(require_admin)):
-    """Send an email invitation to a new user with a pre-assigned role and optional instance."""
+    """Send an email invitation to a new user with a pre-assigned role, workspace, and org access."""
     email = body.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required")
-    if body.role not in ("superadmin", "user"):
-        raise HTTPException(status_code=400, detail="Role must be 'superadmin' or 'user'")
+    # Platform role: only "user" for invited users (superadmin cannot be granted via invite)
+    platform_role = "user"
 
     # Check if email already registered
     existing = await db.users.find_one({"email": email})
@@ -2919,24 +2921,28 @@ async def invite_user(body: InviteUserBody, current_user: dict = Depends(require
         if datetime.now(timezone.utc) - created < timedelta(days=7):
             raise HTTPException(status_code=400, detail=f"An invitation is already pending for {email}")
 
-    # Validate instance if provided
-    if body.instance_id:
-        inst = await db.bot_instances.find_one({"id": body.instance_id})
-        if not inst:
-            raise HTTPException(status_code=400, detail="Instance not found")
+    # Validate workspace if provided
+    if body.workspace_id:
+        ws = await db.workspaces.find_one({"id": body.workspace_id})
+        if not ws:
+            raise HTTPException(status_code=400, detail="Workspace not found")
+        if body.workspace_role not in ("admin", "member", None):
+            raise HTTPException(status_code=400, detail="Workspace role must be 'admin' or 'member'")
 
-    token = secrets.token_urlsafe(48)
+    token_val = secrets.token_urlsafe(48)
     now = datetime.now(timezone.utc).isoformat()
     await db.invitations.insert_one({
-        "token": token,
+        "token": token_val,
         "email": email,
-        "role": body.role,
+        "role": platform_role,
         "instance_id": body.instance_id or None,
         "first_name": (body.first_name or "").strip(),
         "last_name": (body.last_name or "").strip(),
         "username": (body.username or "").strip().lower() or None,
         "org_ids": body.org_ids or [],
         "bot_ids": body.bot_ids or [],
+        "workspace_id": body.workspace_id,
+        "workspace_role": body.workspace_role or "admin",
         "invited_by": current_user["id"],
         "invited_by_email": current_user.get("email", ""),
         "status": "pending",
@@ -2945,9 +2951,9 @@ async def invite_user(body: InviteUserBody, current_user: dict = Depends(require
     })
 
     inviter_name = current_user.get("username", current_user.get("email", "An admin"))
-    await send_invitation_email(email, token, body.role, inviter_name)
+    await send_invitation_email(email, token_val, body.workspace_role or "member", inviter_name)
 
-    return {"success": True, "message": f"Invitation sent to {email}", "token": token}
+    return {"success": True, "message": f"Invitation sent to {email}", "token": token_val}
 
 @api_router.get("/admin/users/invitations")
 async def list_invitations(current_user: dict = Depends(require_admin)):
@@ -3048,8 +3054,43 @@ async def accept_invite(token: str, body: AcceptInviteBody):
     for oid in invite.get("org_ids", []):
         await db.organisations.update_one(
             {"id": oid},
-            {"$addToSet": {"member_ids": user_id}}
+            {"$addToSet": {"member_ids": user_id},
+             "$set": {f"member_roles.{user_id}": "member"}}
         )
+
+    # Assign to workspace if specified
+    ws_id = invite.get("workspace_id")
+    if ws_id:
+        ws_role = invite.get("workspace_role", "admin")
+        existing_ws = await db.workspace_members.find_one({"workspace_id": ws_id, "user_id": user_id})
+        if not existing_ws:
+            await db.workspace_members.insert_one({
+                "workspace_id": ws_id,
+                "user_id": user_id,
+                "role": ws_role,
+                "permissions": {"manage_billing": False, "manage_discord_apps": ws_role == "admin"},
+                "invited_by": invite.get("invited_by", ""),
+                "joined_at": now,
+            })
+    else:
+        # Auto-create a workspace for the invited user (like signup flow)
+        existing_ws_check = await db.workspace_members.find_one({"user_id": user_id})
+        if not existing_ws_check:
+            new_ws_id = str(uuid.uuid4())
+            ws_slug = f"ws-{user_id[:8]}"
+            ws_name = f"{(first_name or username or invite['email'].split('@')[0])}'s Workspace"
+            await db.workspaces.insert_one({
+                "id": new_ws_id, "name": ws_name, "slug": ws_slug, "owner_id": user_id,
+                "billing": {"plan": "free", "stripe_customer_id": None, "stripe_subscription_id": None,
+                    "limits": {"max_organisations": 3, "max_bots_per_org": 3, "max_discord_connections": 10, "max_monthly_ai_messages": 1000, "max_custom_discord_apps": 1}},
+                "usage": {"current_period_start": now, "ai_messages_used": 0},
+                "created_at": now, "updated_at": now,
+            })
+            await db.workspace_members.insert_one({
+                "workspace_id": new_ws_id, "user_id": user_id, "role": "owner",
+                "permissions": {"manage_billing": True, "manage_discord_apps": True},
+                "invited_by": None, "joined_at": now,
+            })
 
     # Mark invitation as accepted
     await db.invitations.update_one(

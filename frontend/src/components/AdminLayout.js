@@ -4,11 +4,13 @@ import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
   BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle,
   SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket, Menu, X,
-  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2, CreditCard,
+  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2, CreditCard, Plus,
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useRef, useEffect } from "react";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
+import v2 from "@/utils/v2api";
+import { toast } from "sonner";
 
 // ── Section label ──
 function SectionLabel({ icon: Icon, label }) {
@@ -248,6 +250,83 @@ function detectEnvironment() {
   return null;
 }
 
+// ── New Workspace Modal ──
+function NewWorkspaceModal({ onClose, onCreated }) {
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) { toast.error("Workspace name is required"); return; }
+    setCreating(true);
+    try {
+      await v2.createWorkspace({ name: name.trim() });
+      toast.success(`Workspace "${name.trim()}" created`);
+      onCreated();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to create workspace");
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div data-testid="new-workspace-modal" style={{
+        width: "400px", backgroundColor: colors.bg.panel, borderRadius: "16px",
+        border: `1px solid ${colors.border.default}`, padding: "28px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <h2 style={{ fontFamily: fonts.heading, fontSize: "16px", fontWeight: "700", color: colors.text.primary, margin: 0 }}>
+            New Workspace
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 16px" }}>
+          Create a new isolated workspace with its own orgs, bots, and members.
+        </p>
+        <label style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, marginBottom: "6px", display: "block" }}>Workspace Name</label>
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleCreate()}
+          placeholder="e.g. Acme Corp"
+          data-testid="new-workspace-name"
+          autoFocus
+          style={{
+            width: "100%", backgroundColor: colors.bg.surface,
+            border: `1px solid ${colors.border.default}`, borderRadius: radius.md,
+            padding: "10px 14px", color: colors.text.primary,
+            fontFamily: fonts.body, fontSize: "14px", outline: "none",
+            boxSizing: "border-box", transition: "border-color 0.25s ease, box-shadow 0.25s ease",
+          }}
+          onFocus={onFocus} onBlur={onBlur}
+        />
+        <button
+          onClick={handleCreate}
+          disabled={creating || !name.trim()}
+          data-testid="confirm-new-workspace"
+          style={{
+            marginTop: "16px", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+            padding: "10px 20px",
+            background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.light})`,
+            color: "#FFFFFF", border: "none", borderRadius: radius.md,
+            fontSize: "13px", fontFamily: fonts.body, fontWeight: "600",
+            cursor: creating || !name.trim() ? "not-allowed" : "pointer",
+            opacity: creating || !name.trim() ? 0.6 : 1,
+            boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)", transition: "all 0.25s ease",
+          }}
+        >
+          <Plus size={14} /> {creating ? "Creating..." : "Create Workspace"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EnvironmentBanner() {
   const env = detectEnvironment();
   if (!env) return null;
@@ -272,7 +351,7 @@ function EnvironmentBanner() {
 export default function AdminLayout() {
   const {
     user, logout,
-    workspaces, selectedWorkspace, selectWorkspace,
+    workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
     orgs, selectedOrg, selectOrg,
     bots, selectedBot, selectBot, refreshOrgs,
     selectedInstance,
@@ -283,6 +362,7 @@ export default function AdminLayout() {
   const [orgDropOpen, setOrgDropOpen] = useState(false);
   const [botDropOpen, setBotDropOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showNewWs, setShowNewWs] = useState(false);
 
   const closeMobile = () => setMobileMenuOpen(false);
   const closeAllDropdowns = () => { setWsDropOpen(false); setOrgDropOpen(false); setBotDropOpen(false); };
@@ -344,25 +424,44 @@ export default function AdminLayout() {
           {workspaces.length > 0 && (
             <>
               <SectionLabel icon={Layers} label="Workspace" />
-              <div style={{ padding: "0 4px 6px" }}>
-                <CompactSelector
-                  label="Workspace"
-                  value={selectedWorkspace?.name}
-                  items={workspaces.map(ws => ({
-                    ...ws,
-                    bot_count: ws.org_count,
-                    member_count: ws.member_count,
-                  }))}
-                  onSelect={(ws) => {
-                    selectWorkspace(ws);
-                    navigate("/admin");
-                    closeAllDropdowns();
-                  }}
-                  open={wsDropOpen}
-                  setOpen={(v) => { setWsDropOpen(v); setOrgDropOpen(false); setBotDropOpen(false); }}
-                  testId="workspace-switcher"
-                  icon={Layers}
-                />
+              <div style={{ padding: "0 4px 6px", display: "flex", alignItems: "flex-start", gap: "4px" }}>
+                <div style={{ flex: 1 }}>
+                  <CompactSelector
+                    label="Workspace"
+                    value={selectedWorkspace?.name}
+                    items={workspaces.map(ws => ({
+                      ...ws,
+                      bot_count: ws.org_count,
+                      member_count: ws.member_count,
+                    }))}
+                    onSelect={(ws) => {
+                      selectWorkspace(ws);
+                      navigate("/admin");
+                      closeAllDropdowns();
+                    }}
+                    open={wsDropOpen}
+                    setOpen={(v) => { setWsDropOpen(v); setOrgDropOpen(false); setBotDropOpen(false); }}
+                    testId="workspace-switcher"
+                    icon={Layers}
+                  />
+                </div>
+                {isSuperAdmin && (
+                  <button
+                    data-testid="new-workspace-btn"
+                    onClick={() => setShowNewWs(true)}
+                    title="Create new workspace"
+                    style={{
+                      marginTop: "5px", padding: "7px", borderRadius: radius.md,
+                      border: `1px solid ${colors.border.default}`, backgroundColor: colors.bg.panel,
+                      cursor: "pointer", color: colors.text.muted, flexShrink: 0,
+                      transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = colors.brand.light; e.currentTarget.style.color = colors.brand.light; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = colors.border.default; e.currentTarget.style.color = colors.text.muted; }}
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -498,6 +597,16 @@ export default function AdminLayout() {
           .admin-main { margin-left: 0 !important; overflow-x: hidden; }
         }
       `}</style>
+
+      {showNewWs && (
+        <NewWorkspaceModal
+          onClose={() => setShowNewWs(false)}
+          onCreated={async () => {
+            setShowNewWs(false);
+            await refreshWorkspaces();
+          }}
+        />
+      )}
     </div>
   );
 }

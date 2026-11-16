@@ -314,6 +314,65 @@ async def remove_workspace_user(ws_id: str, target_user_id: str, request: Reques
     return {"ok": True, "message": f"Removed {target.get('email', target_user_id)} from workspace and {removed_from} organisation(s)"}
 
 
+
+# ── Endpoints: User Org Membership ──
+
+class OrgMembershipUpdate(BaseModel):
+    user_id: str
+    org_id: str
+    action: str  # "add" or "remove"
+    org_role: Optional[str] = "member"  # admin or member
+
+
+@router.post("/{ws_id}/org-membership")
+async def update_org_membership(ws_id: str, body: OrgMembershipUpdate, request: Request):
+    """Add or remove a user from an org within this workspace."""
+    user, ws = await h.require_workspace_admin(request, ws_id)
+    org = await h._db.organisations.find_one({"id": body.org_id, "workspace_id": ws_id})
+    if not org:
+        raise HTTPException(404, "Organisation not found in this workspace")
+    target = await h._db.users.find_one({"id": body.user_id})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if body.action == "add":
+        await h._db.organisations.update_one(
+            {"id": body.org_id},
+            {"$addToSet": {"member_ids": body.user_id},
+             "$set": {f"member_roles.{body.user_id}": body.org_role or "member", "updated_at": h._now()}}
+        )
+        return {"ok": True, "message": f"Added {target.get('email','')} to {org['name']}"}
+    elif body.action == "remove":
+        if body.user_id == org.get("owner_id"):
+            raise HTTPException(400, "Cannot remove the org owner")
+        await h._db.organisations.update_one(
+            {"id": body.org_id},
+            {"$pull": {"member_ids": body.user_id},
+             "$unset": {f"member_roles.{body.user_id}": ""},
+             "$set": {"updated_at": h._now()}}
+        )
+        return {"ok": True, "message": f"Removed {target.get('email','')} from {org['name']}"}
+    raise HTTPException(400, "Action must be 'add' or 'remove'")
+
+
+@router.get("/{ws_id}/user-orgs/{target_user_id}")
+async def get_user_org_memberships(ws_id: str, target_user_id: str, request: Request):
+    """Get all org memberships for a user within a workspace."""
+    user, ws = await h.require_workspace_admin(request, ws_id)
+    orgs = await h._db.organisations.find({"workspace_id": ws_id}, {"_id": 0}).to_list(100)
+    result = []
+    for org in orgs:
+        is_member = target_user_id in org.get("member_ids", [])
+        org_role = org.get("member_roles", {}).get(target_user_id, "member") if is_member else None
+        result.append({
+            "org_id": org["id"],
+            "org_name": org["name"],
+            "is_member": is_member,
+            "org_role": org_role,
+            "is_owner": org.get("owner_id") == target_user_id,
+        })
+    return {"org_memberships": result}
+
+
 # ── Endpoints: Workspace Orgs ──
 
 @router.get("/{ws_id}/orgs")

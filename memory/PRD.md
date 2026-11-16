@@ -86,9 +86,19 @@ users                → +platform_role field
 - [x] Default plan: "free" with starter limits (3 orgs, 3 bots, 1000 msgs)
 - [x] Never auto-adds new customers to "development" workspace
 
-### Stage 3: Signup & Invitation System — NOT STARTED
-- [ ] Workspace invitation system (email + role + token)
-- [ ] Org invitation scoped to workspace
+### Stage 2.7: Admin UI Enhancements — DONE ✅ (Nov 2026)
+- [x] EditUserModal: Cross-workspace role management (admin/member toggle per workspace)
+- [x] EditUserModal: Org assignment toggle — expand workspace to see org list, add/remove user from orgs
+- [x] InviteModal: Workspace selection dropdown + workspace role (admin/member) pre-assignment
+- [x] InviteModal: Backend stores workspace_id + workspace_role on invitation record
+- [x] New Workspace button: "+" button in sidebar next to workspace selector (superadmin only)
+- [x] NewWorkspaceModal: Name input, slug auto-generation, creator becomes owner
+- [x] Backend APIs: getUserOrgMemberships, updateOrgMembership, invite with workspace
+- [x] Tested: 13/13 backend + all UI passed (iteration_80.json)
+
+### Stage 3: Signup & Invitation System — PARTIAL
+- [x] Workspace invitation system (email + role + token) — backend done, UI done
+- [ ] Org invitation scoped to workspace (invite accept flow needs workspace auto-join)
 - [ ] Workspace/org switching UX improvements
 
 ### Stage 4: Billing Integration — NOT STARTED
@@ -120,12 +130,14 @@ users                → +platform_role field
 - Landing page, Analytics, Branding
 
 ## Backlog
-- P0: Stages 3-6 of Customer Workspace Architecture
+- P0: Complete invite accept flow to auto-join workspace
+- P0: Stages 4-6 of Customer Workspace Architecture
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P1: GitHub Export (DO NOT start until instructed)
 - P2: WhatsApp integration
 - P2: APP_MODE env splitting
 - P2: Backend refactor — server.py modularization
+- P3: Users.js component splitting (file at 752 lines)
 
 ## Key URLs
 - Production: `https://bitbotpro.io`

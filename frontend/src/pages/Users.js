@@ -292,11 +292,13 @@ export default function Users() {
 
 /* ── Invite Modal ── */
 function InviteModal({ orgs, bots, token, onClose, onDone }) {
+  const { workspaces } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [role, setRole] = useState("user");
+  const [role, setRole] = useState("admin"); // workspace role: admin or member
+  const [selectedWsId, setSelectedWsId] = useState(workspaces[0]?.id || "");
   const [selectedOrgs, setSelectedOrgs] = useState([]);
   const [selectedBots, setSelectedBots] = useState([]);
   const [sending, setSending] = useState(false);
@@ -313,12 +315,14 @@ function InviteModal({ orgs, bots, token, onClose, onDone }) {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
-          role,
+          role: "user",
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           username: username.trim().toLowerCase() || undefined,
           org_ids: selectedOrgs,
           bot_ids: selectedBots,
+          workspace_id: selectedWsId || undefined,
+          workspace_role: role,
         }),
       });
       const data = await res.json();
@@ -370,21 +374,42 @@ function InviteModal({ orgs, bots, token, onClose, onDone }) {
           </p>
         </div>
 
-        {/* Role */}
-        <div style={{ marginBottom: "18px" }}>
-          <label style={T.label}>Role</label>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {[{ v: "user", l: "Member" }, { v: "superadmin", l: "Admin" }].map(r => (
-              <button key={r.v} onClick={() => setRole(r.v)} style={{
-                flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
-                border: `1px solid ${role === r.v ? colors.brand.light + "50" : colors.border.default}`,
-                backgroundColor: role === r.v ? colors.brand.light + "0a" : colors.bg.base,
-                fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
-                color: role === r.v ? colors.brand.light : colors.text.secondary,
-              }}>{r.l}</button>
+        {/* Workspace */}
+        <div style={{ marginBottom: "14px" }}>
+          <label style={T.label}>Assign to Workspace</label>
+          <select
+            value={selectedWsId}
+            onChange={e => setSelectedWsId(e.target.value)}
+            style={{ ...T.input, width: "100%", cursor: "pointer" }}
+            data-testid="invite-workspace"
+          >
+            <option value="">No workspace (creates their own)</option>
+            {workspaces.map(ws => (
+              <option key={ws.id} value={ws.id}>{ws.name}</option>
             ))}
-          </div>
+          </select>
         </div>
+
+        {/* Workspace Role */}
+        {selectedWsId && (
+          <div style={{ marginBottom: "18px" }}>
+            <label style={T.label}>Workspace Role</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {[{ v: "admin", l: "Admin", desc: "Can manage orgs and users" }, { v: "member", l: "Member", desc: "Access assigned orgs only" }].map(r => (
+                <button key={r.v} onClick={() => setRole(r.v)} style={{
+                  flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center",
+                  border: `1px solid ${role === r.v ? colors.brand.light + "50" : colors.border.default}`,
+                  backgroundColor: role === r.v ? colors.brand.light + "0a" : colors.bg.base,
+                  fontFamily: fonts.body, fontSize: "12px", fontWeight: "600",
+                  color: role === r.v ? colors.brand.light : colors.text.secondary,
+                }}>
+                  {r.l}
+                  <div style={{ fontSize: "9px", fontWeight: "400", marginTop: "2px", opacity: 0.7 }}>{r.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Assign to Organisations */}
         <div style={{ marginBottom: "18px" }}>
@@ -517,9 +542,23 @@ function ResetPasswordModal({ user, token, onClose }) {
 /* ── Edit User Workspace Roles Modal ── */
 function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onDone }) {
   const [saving, setSaving] = useState({});
+  const [orgData, setOrgData] = useState({});  // ws_id -> [{org_id, org_name, is_member, org_role, is_owner}]
+  const [loadingOrgs, setLoadingOrgs] = useState({});
   const userMemberships = allWsMemberships[user.id] || [];
   const membershipMap = {};
   userMemberships.forEach(m => { membershipMap[m.ws_id] = m; });
+  const [expandedWs, setExpandedWs] = useState(null);
+
+  const loadOrgsForWs = async (wsId) => {
+    if (orgData[wsId]) { setExpandedWs(expandedWs === wsId ? null : wsId); return; }
+    setLoadingOrgs(prev => ({ ...prev, [wsId]: true }));
+    try {
+      const res = await v2.getUserOrgMemberships(wsId, user.id);
+      setOrgData(prev => ({ ...prev, [wsId]: res.data.org_memberships || [] }));
+      setExpandedWs(wsId);
+    } catch { toast.error("Failed to load orgs"); }
+    finally { setLoadingOrgs(prev => ({ ...prev, [wsId]: false })); }
+  };
 
   const toggleWsRole = async (ws, currentRole) => {
     const newRole = currentRole === "admin" ? "member" : "admin";
@@ -531,18 +570,23 @@ function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onD
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ role: newRole, workspace_id: ws.id }),
       });
-      if (res.ok) {
-        toast.success(`${user.email} set as ${label} in ${ws.name}`);
-        onDone();
-      } else {
-        const data = await res.json();
-        toast.error(data.detail || "Failed to update role");
-      }
-    } catch {
-      toast.error("Failed to update role");
-    } finally {
-      setSaving(prev => ({ ...prev, [ws.id]: false }));
-    }
+      if (res.ok) { toast.success(`${user.email} set as ${label} in ${ws.name}`); onDone(); }
+      else { const data = await res.json(); toast.error(data.detail || "Failed to update role"); }
+    } catch { toast.error("Failed to update role"); }
+    finally { setSaving(prev => ({ ...prev, [ws.id]: false })); }
+  };
+
+  const toggleOrgMembership = async (wsId, orgId, orgName, isMember) => {
+    const action = isMember ? "remove" : "add";
+    setSaving(prev => ({ ...prev, [`org-${orgId}`]: true }));
+    try {
+      await v2.updateOrgMembership(wsId, { user_id: user.id, org_id: orgId, action, org_role: "member" });
+      toast.success(isMember ? `Removed from ${orgName}` : `Added to ${orgName}`);
+      // Refresh org data
+      const res = await v2.getUserOrgMemberships(wsId, user.id);
+      setOrgData(prev => ({ ...prev, [wsId]: res.data.org_memberships || [] }));
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to update org membership"); }
+    finally { setSaving(prev => ({ ...prev, [`org-${orgId}`]: false })); }
   };
 
   return (
@@ -552,7 +596,7 @@ function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onD
       backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div data-testid="edit-user-modal" style={{
-        width: "520px", maxHeight: "80vh", overflow: "auto",
+        width: "560px", maxHeight: "85vh", overflow: "auto",
         backgroundColor: colors.bg.panel, borderRadius: "16px",
         border: `1px solid ${colors.border.default}`, padding: "28px",
       }}>
@@ -576,9 +620,9 @@ function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onD
           <div style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.muted, marginTop: "2px" }}>{user.email}</div>
         </div>
 
-        {/* Workspace roles */}
-        <h3 style={{ fontFamily: fonts.heading, fontSize: "13px", fontWeight: "600", color: colors.text.secondary, marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Workspace Access
+        {/* Workspace roles + org assignments */}
+        <h3 style={{ fontFamily: fonts.heading, fontSize: "12px", fontWeight: "600", color: colors.text.secondary, marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Workspace & Organisation Access
         </h3>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -586,53 +630,103 @@ function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onD
             const membership = membershipMap[ws.id];
             const isOwner = membership?.role === "owner";
             const isAdmin = membership?.role === "admin";
-            const isMember = !!membership;
             const isSaving = saving[ws.id];
+            const isExpanded = expandedWs === ws.id;
+            const wsOrgs = orgData[ws.id] || [];
 
             return (
-              <div key={ws.id} data-testid={`ws-role-row-${ws.id}`} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "12px 16px", backgroundColor: colors.bg.surface,
-                border: `1px solid ${isAdmin ? "rgba(96,165,250,0.3)" : isOwner ? "rgba(245,158,11,0.3)" : colors.border.default}`,
-                borderRadius: radius.md,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <Layers size={14} color={isAdmin ? "#60A5FA" : isOwner ? "#F59E0B" : colors.text.muted} />
-                  <div>
-                    <div style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: "500", color: colors.text.primary }}>{ws.name}</div>
-                    <div style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, marginTop: "1px" }}>
-                      {ws.org_count || 0} org{(ws.org_count || 0) !== 1 ? "s" : ""} · {ws.member_count || 0} member{(ws.member_count || 0) !== 1 ? "s" : ""}
+              <div key={ws.id} data-testid={`ws-role-row-${ws.id}`}>
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 16px", backgroundColor: colors.bg.surface,
+                  border: `1px solid ${isAdmin ? "rgba(96,165,250,0.3)" : isOwner ? "rgba(245,158,11,0.3)" : colors.border.default}`,
+                  borderRadius: isExpanded ? `${radius.md} ${radius.md} 0 0` : radius.md,
+                  cursor: "pointer",
+                }} onClick={() => loadOrgsForWs(ws.id)}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Layers size={14} color={isAdmin ? "#60A5FA" : isOwner ? "#F59E0B" : colors.text.muted} />
+                    <div>
+                      <div style={{ fontFamily: fonts.body, fontSize: "13px", fontWeight: "500", color: colors.text.primary }}>{ws.name}</div>
+                      <div style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted, marginTop: "1px" }}>
+                        {ws.org_count || 0} org{(ws.org_count || 0) !== 1 ? "s" : ""} · Click to {isExpanded ? "collapse" : "expand"} orgs
+                      </div>
                     </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }} onClick={e => e.stopPropagation()}>
+                    {isOwner ? (
+                      <span style={{
+                        padding: "3px 10px", borderRadius: radius.full, fontSize: "10px",
+                        fontWeight: "600", fontFamily: fonts.mono, textTransform: "uppercase",
+                        backgroundColor: "rgba(245,158,11,0.1)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.2)",
+                      }}>Owner</span>
+                    ) : (
+                      <button
+                        data-testid={`toggle-ws-role-${ws.id}`}
+                        onClick={() => toggleWsRole(ws, isAdmin ? "admin" : "none")}
+                        disabled={isSaving}
+                        style={{
+                          padding: "5px 14px", borderRadius: radius.full, fontSize: "11px",
+                          fontWeight: "600", fontFamily: fonts.body, cursor: isSaving ? "wait" : "pointer",
+                          border: isAdmin ? "1px solid rgba(96,165,250,0.4)" : `1px solid ${colors.border.default}`,
+                          backgroundColor: isAdmin ? "rgba(96,165,250,0.08)" : "transparent",
+                          color: isAdmin ? "#60A5FA" : colors.text.secondary,
+                          transition: "all 0.15s", opacity: isSaving ? 0.5 : 1,
+                        }}
+                      >
+                        <Shield size={10} style={{ marginRight: "4px", verticalAlign: "middle" }} />
+                        {isSaving ? "..." : isAdmin ? "Admin" : "Make Admin"}
+                      </button>
+                    )}
+                    <ChevronDown size={14} color={colors.text.muted}
+                      style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {isOwner ? (
-                    <span style={{
-                      padding: "3px 10px", borderRadius: radius.full, fontSize: "10px",
-                      fontWeight: "600", fontFamily: fonts.mono, textTransform: "uppercase",
-                      backgroundColor: "rgba(245,158,11,0.1)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.2)",
-                    }}>Owner</span>
-                  ) : (
-                    <button
-                      data-testid={`toggle-ws-role-${ws.id}`}
-                      onClick={() => toggleWsRole(ws, isAdmin ? "admin" : "none")}
-                      disabled={isSaving}
-                      style={{
-                        padding: "5px 14px", borderRadius: radius.full, fontSize: "11px",
-                        fontWeight: "600", fontFamily: fonts.body, cursor: isSaving ? "wait" : "pointer",
-                        border: isAdmin ? "1px solid rgba(96,165,250,0.4)" : `1px solid ${colors.border.default}`,
-                        backgroundColor: isAdmin ? "rgba(96,165,250,0.08)" : "transparent",
-                        color: isAdmin ? "#60A5FA" : colors.text.secondary,
-                        transition: "all 0.15s",
-                        opacity: isSaving ? 0.5 : 1,
-                      }}
-                    >
-                      <Shield size={10} style={{ marginRight: "4px", verticalAlign: "middle" }} />
-                      {isSaving ? "..." : isAdmin ? "Admin" : "Make Admin"}
-                    </button>
-                  )}
-                </div>
+                {/* Org assignments */}
+                {isExpanded && (
+                  <div style={{
+                    border: `1px solid ${colors.border.default}`, borderTop: "none",
+                    borderRadius: `0 0 ${radius.md} ${radius.md}`,
+                    backgroundColor: colors.bg.base, padding: "8px 12px",
+                  }}>
+                    {loadingOrgs[ws.id] ? (
+                      <div style={{ padding: "8px", fontSize: "11px", color: colors.text.muted }}>Loading organisations...</div>
+                    ) : wsOrgs.length === 0 ? (
+                      <div style={{ padding: "8px", fontSize: "11px", color: colors.text.muted }}>No organisations in this workspace</div>
+                    ) : wsOrgs.map(org => (
+                      <div key={org.org_id} data-testid={`org-row-${org.org_id}`} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "8px 10px", borderRadius: "6px",
+                        backgroundColor: org.is_member ? "rgba(96,165,250,0.04)" : "transparent",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <Building2 size={12} color={org.is_member ? "#60A5FA" : colors.text.muted} />
+                          <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.primary }}>{org.org_name}</span>
+                          {org.is_owner && <span style={{ fontSize: "9px", fontFamily: fonts.mono, color: "#F59E0B" }}>OWNER</span>}
+                          {org.is_member && !org.is_owner && org.org_role === "admin" && <span style={{ fontSize: "9px", fontFamily: fonts.mono, color: "#60A5FA" }}>ADMIN</span>}
+                        </div>
+                        {!org.is_owner && (
+                          <button
+                            data-testid={`toggle-org-${org.org_id}`}
+                            onClick={() => toggleOrgMembership(ws.id, org.org_id, org.org_name, org.is_member)}
+                            disabled={saving[`org-${org.org_id}`]}
+                            style={{
+                              padding: "3px 10px", borderRadius: radius.full, fontSize: "10px",
+                              fontWeight: "500", fontFamily: fonts.body, cursor: "pointer",
+                              border: org.is_member ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(34,197,94,0.3)",
+                              backgroundColor: org.is_member ? "rgba(239,68,68,0.06)" : "rgba(34,197,94,0.06)",
+                              color: org.is_member ? "#EF4444" : "#22C55E",
+                              opacity: saving[`org-${org.org_id}`] ? 0.5 : 1,
+                            }}
+                          >
+                            {saving[`org-${org.org_id}`] ? "..." : org.is_member ? "Remove" : "Add"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
