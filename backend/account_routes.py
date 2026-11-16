@@ -285,8 +285,7 @@ async def test_account(org_id: str, account_id: str, request: Request):
 @router.delete("/{org_id}/accounts/{account_id}")
 async def delete_account(org_id: str, account_id: str, request: Request):
     """Delete a connected account. Fails if it has active connections."""
-    user = await h.require_admin(request)
-    org = await h.require_org(request, org_id)
+    user, org = await h.require_org_admin(request)
     account = await h._db.connected_accounts.find_one({"id": account_id, "org_id": org_id})
     if not account:
         raise HTTPException(404, "Account not found")

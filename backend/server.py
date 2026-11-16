@@ -38,6 +38,7 @@ import bot_routes
 import account_routes
 import connection_routes
 import platform_routes
+import workspace_routes
 import webhook_router
 from api_integrations import build_endpoint_selection_context, build_schema_context
 
@@ -405,6 +406,7 @@ api_router.include_router(zendesk_routes.router)
 # ── v2 routes (Org → Bot → Account → Connection model) ──
 v2_helpers.init(db, _get_instance_from_request)
 webhook_router.init(db)
+api_router.include_router(workspace_routes.router)
 api_router.include_router(org_routes.router)
 api_router.include_router(bot_routes.router)
 api_router.include_router(account_routes.router)
@@ -2345,6 +2347,14 @@ async def startup_event():
         await db.users.create_index([("id", 1)])
         await db.invitations.create_index([("token", 1)], unique=True)
         await db.invitations.create_index([("email", 1)])
+        # Workspace indexes
+        await db.workspaces.create_index([("id", 1)], unique=True)
+        await db.workspaces.create_index([("slug", 1)], unique=True)
+        await db.workspace_members.create_index([("workspace_id", 1), ("user_id", 1)], unique=True)
+        await db.workspace_members.create_index([("user_id", 1)])
+        await db.workspace_discord_apps.create_index([("id", 1)], unique=True)
+        await db.workspace_discord_apps.create_index([("workspace_id", 1)])
+        await db.organisations.create_index([("workspace_id", 1)])
         # TTL index: dedup records expire 5 minutes after creation (well past any sane Discord retry window)
         await db.processed_discord_messages.create_index(
             [("processed_at", 1)], expireAfterSeconds=300
@@ -2399,6 +2409,14 @@ async def startup_event():
             logger.info(f"V2 migration complete: {result}")
         except Exception as e:
             logger.error(f"V2 migration failed: {e}")
+
+    # ── Run Workspace migration (idempotent) ──
+    try:
+        from migrate_workspaces import run_workspace_migration
+        ws_result = await run_workspace_migration(db)
+        logger.info(f"Workspace migration: {ws_result}")
+    except Exception as e:
+        logger.error(f"Workspace migration failed: {e}")
 
     # Start shared Discord bot (one client, routes to all instances by guild)
     global _shared_discord_task

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/v2/orgs", tags=["v2-organisations"])
 class OrgCreate(BaseModel):
     name: str
     description: Optional[str] = ""
+    workspace_id: Optional[str] = None
 
 
 class OrgUpdate(BaseModel):
@@ -32,11 +33,26 @@ class AddMember(BaseModel):
 
 @router.get("")
 async def list_orgs(request: Request):
-    """List organisations the current user belongs to."""
+    """List organisations the current user belongs to.
+    If X-Workspace-ID header is set, filter to that workspace."""
     user = await h._authed_user(request)
+    ws_id = request.headers.get("X-Workspace-ID", "").strip()
     query = {}
-    if user.get("role") != "superadmin":
-        query = {"member_ids": user["id"]}
+    if h._is_platform_superadmin(user):
+        if ws_id:
+            query["workspace_id"] = ws_id
+    else:
+        if ws_id:
+            # Check workspace membership first
+            membership = await h.get_workspace_membership(ws_id, user["id"])
+            if membership and membership["role"] in ("owner", "admin"):
+                # Workspace admin/owner sees all orgs in workspace
+                query["workspace_id"] = ws_id
+            else:
+                # Non-workspace-admin: only their orgs within the workspace
+                query = {"workspace_id": ws_id, "member_ids": user["id"]}
+        else:
+            query = {"member_ids": user["id"]}
     orgs = await h._db.organisations.find(query, {"_id": 0}).sort("name", 1).to_list(100)
     # Attach bot count for each org
     for org in orgs:
@@ -48,12 +64,36 @@ async def list_orgs(request: Request):
 
 @router.post("")
 async def create_org(body: OrgCreate, request: Request):
-    """Create a new organisation. The creator becomes the owner."""
+    """Create a new organisation. The creator becomes the owner.
+    If workspace_id is provided, the org is scoped to that workspace and
+    the user must have workspace admin+ access. If omitted, the org is
+    assigned to the user's first workspace (or left unscoped for legacy compat)."""
     user = await h._authed_user(request)
+    ws_id = body.workspace_id
+    if ws_id:
+        # Validate workspace access — must be workspace admin or higher
+        ws = await h._get_workspace(ws_id)
+        if not h._is_platform_superadmin(user):
+            membership = await h.get_workspace_membership(ws_id, user["id"])
+            if not membership or membership["role"] not in ("owner", "admin"):
+                raise h.HTTPException(403, "Workspace admin access required to create organisations")
+        # Check workspace org limit
+        current_org_count = await h._db.organisations.count_documents({"workspace_id": ws_id})
+        limit = ws.get("billing", {}).get("limits", {}).get("max_organisations", 100)
+        if current_org_count >= limit:
+            raise h.HTTPException(400, f"Organisation limit reached ({limit}) for this workspace")
+    else:
+        # Auto-assign to user's first workspace if they have one
+        first_membership = await h._db.workspace_members.find_one(
+            {"user_id": user["id"]}, {"workspace_id": 1}
+        )
+        if first_membership:
+            ws_id = first_membership["workspace_id"]
     org = {
         "id": h._uuid(),
         "name": body.name.strip(),
         "description": (body.description or "").strip(),
+        "workspace_id": ws_id,
         "owner_id": user["id"],
         "member_ids": [user["id"]],
         "member_roles": {user["id"]: "admin"},

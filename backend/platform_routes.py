@@ -11,7 +11,7 @@ router = APIRouter(prefix="/v2/platform", tags=["v2-platform-admin"])
 
 async def _require_superadmin(request: Request):
     user = await h._authed_user(request)
-    if user.get("role") != "superadmin":
+    if not h._is_platform_superadmin(user):
         raise HTTPException(403, "Superadmin access required")
     return user
 
@@ -177,3 +177,40 @@ async def list_provider_apps(request: Request):
             "zendesk": zendesk_app,
         },
     }
+
+
+# ── Platform Discord App (Superadmin Only) ──
+
+@router.get("/discord-app")
+async def get_platform_discord_app(request: Request):
+    """Get platform-provided Discord app config (credentials masked)."""
+    await _require_superadmin(request)
+    doc = await h._db.platform_config.find_one({"_id": "platform_discord_app"})
+    if not doc:
+        return {"configured": False}
+    return {
+        "configured": True,
+        "client_id": doc.get("client_id", ""),
+        "client_secret": h.mask_credential(doc.get("client_secret", "")),
+        "bot_token": h.mask_credential(doc.get("bot_token", "")),
+        "redirect_uri": doc.get("redirect_uri", ""),
+        "managed_by": doc.get("managed_by", "platform"),
+        "updated_at": doc.get("updated_at", ""),
+    }
+
+
+@router.put("/discord-app")
+async def update_platform_discord_app(request: Request):
+    """Update platform-provided Discord app config. Superadmin only."""
+    user = await _require_superadmin(request)
+    body = await request.json()
+    update = {"updated_at": h._now(), "updated_by": user["id"], "managed_by": "platform"}
+    for field in ("client_id", "client_secret", "bot_token", "redirect_uri"):
+        if field in body and body[field] is not None:
+            update[field] = body[field].strip()
+    await h._db.platform_config.update_one(
+        {"_id": "platform_discord_app"},
+        {"$set": update},
+        upsert=True,
+    )
+    return {"ok": True}

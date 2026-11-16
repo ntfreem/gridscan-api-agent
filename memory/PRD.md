@@ -6,218 +6,140 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 ## Core Architecture
 - **Frontend**: React SPA with neon electric blue theme
 - **Backend**: FastAPI (Python) — fully V2 multi-tenant API
-- **Database**: MongoDB Atlas (29 collections)
+- **Database**: MongoDB Atlas (29+ collections)
 - **Channels**: Web Chat, Discord, Telegram, Zendesk
 - **LLM**: Claude/OpenAI via Emergent Universal Key
 - **Storage**: Emergent Object Storage
 - **Email**: Emergent Managed Resend
 
-## v2 Data Model
-
-### Collections
-```
-organisations      → {id, name, owner_id, member_ids, member_roles}
-bots               → {id, org_id, name, persona, instructions, settings, legacy_instance_id}
-connected_accounts → {id, org_id, provider, name, status, credentials (encrypted), metadata}
-connections        → {id, org_id, bot_id, account_id, provider, destination, response_mode, overrides, priority}
-v2_suggestions     → {_id, connection_id, bot_id, instance_id, platform, user_message, ai_suggestion, status}
-```
+## Customer Workspace Architecture (NEW — Feb 2026)
 
 ### Hierarchy
 ```
-Organisation
-├── Members (users with org-level roles)
-├── Connected Accounts (reusable provider identities)
-│   ├── Discord Bot identity
-│   ├── Telegram Bot identity
-│   └── Zendesk OAuth account
-└── Bots (AI assistants)
-    ├── Bot Settings (persona, KB, LLM config)
-    └── Connections (routes to destinations)
-        ├── Discord → Server A / #general-help (auto_reply)
-        ├── Discord → Server A / #billing (agent_assist → suggestions inbox)
-        ├── Telegram → Customer group (auto_reply)
-        └── Zendesk → Billing ticket group (internal_note)
+Platform (BitBot Pro)
+└── Customer Workspace (billing, Discord app choices, usage limits)
+    ├── Workspace Members (owner, admin)
+    ├── Workspace Discord Apps (customer-owned)
+    └── Organisations (isolated tenants)
+        ├── Org Members (admin, member)
+        ├── Connected Accounts (provider identities)
+        └── AI Bots
+            ├── Bot Settings (persona, KB, LLM config)
+            └── Connections (routes to destinations)
 ```
 
-### v2 API Endpoints
+### Role Hierarchy
+```
+Platform Superadmin (internal, never assignable via customer flows)
+  └── Workspace Owner (highest customer role)
+        └── Workspace Admin (delegated workspace management)
+              └── Organisation Admin (single-org scope)
+                    └── Organisation Member (explicit permissions only)
+```
+
+### Account Assignments
+- `admin@bitbotpro.io` — Platform Superadmin (role=superadmin, platform_role=superadmin)
+- `admin@bridgebot.tech` — Workspace Owner of "development" (currently still superadmin, to be demoted after confirmation)
+
+### New Collections
+```
+workspaces           → {id, name, slug, owner_id, billing: {plan, stripe_*, limits}, usage, created_at}
+workspace_members    → {workspace_id, user_id, role: owner|admin, permissions: {manage_billing, manage_discord_apps}}
+workspace_discord_apps → {id, workspace_id, name, source, client_id, client_secret, bot_token, allowed_org_ids}
+platform_config      → {_id: "platform_discord_app", client_id, client_secret, bot_token, managed_by: "platform"}
+```
+
+### Modified Collections
+```
+organisations        → +workspace_id field (links org to workspace)
+users                → +platform_role field (explicit platform-level access flag)
+```
+
+### Workspace API Endpoints
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/v2/orgs` | GET/POST | List/create organisations |
-| `/api/v2/orgs/{org_id}` | GET/PUT | Get/update org |
-| `/api/v2/orgs/{org_id}/members` | GET/POST/DELETE/PATCH | Member management |
-| `/api/v2/orgs/{org_id}/overview` | GET | Org-scoped overview metrics |
-| `/api/v2/orgs/{org_id}/bots` | GET/POST | List/create bots |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}` | GET/PUT/DELETE | Bot CRUD |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/settings` | GET/PUT | Bot behaviour |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions` | GET | List AI suggestions |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/suggestions/{id}` | PATCH | Accept/dismiss suggestion |
-| `/api/v2/orgs/{org_id}/accounts` | GET/POST | List/create accounts |
-| `/api/v2/orgs/{org_id}/accounts/{id}` | GET/PUT | Account CRUD |
-| `/api/v2/orgs/{org_id}/accounts/{id}/disconnect` | POST | Soft-disconnect |
-| `/api/v2/orgs/{org_id}/accounts/{id}/reconnect` | POST | Re-activate |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections` | GET/POST | List/create connections |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}` | GET/PUT | Connection CRUD |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/toggle` | PATCH | Enable/disable |
-| `/api/v2/orgs/{org_id}/bots/{bot_id}/connections/{id}/activity` | GET | Activity + suggestions |
-| `/api/v2/platform/stats` | GET | Platform-wide statistics |
-| `/api/v2/platform/workspaces` | GET | All orgs with stats |
-| `/api/v2/platform/workspaces/{org_id}/detail` | GET | Org detail (members, bots, accounts) |
-| `/api/v2/platform/provider-apps` | GET | Provider account/connection breakdown |
+| `/api/v2/workspaces` | GET/POST | List/create workspaces |
+| `/api/v2/workspaces/{ws_id}` | GET/PUT/DELETE | Workspace CRUD |
+| `/api/v2/workspaces/{ws_id}/members` | GET/POST | List/add members |
+| `/api/v2/workspaces/{ws_id}/members/{id}` | DELETE | Remove member |
+| `/api/v2/workspaces/{ws_id}/members/{id}/role` | PATCH | Update role |
+| `/api/v2/workspaces/{ws_id}/orgs` | GET | List orgs in workspace |
+| `/api/v2/workspaces/{ws_id}/billing` | GET/PUT | Billing info/update |
+| `/api/v2/workspaces/{ws_id}/discord-apps` | GET/POST | Custom Discord apps |
+| `/api/v2/workspaces/{ws_id}/discord-apps/{id}` | PUT/DELETE | Discord app CRUD |
+| `/api/v2/platform/discord-app` | GET/PUT | Platform Discord app (superadmin) |
 
-## Completed Features — V2 Architecture (All 5 Phases)
+## Implementation Status
 
-### Phase 1 — v2 Data Model & Backend (Done — Nov 2026)
-- [x] 4 new collections with proper indexes
-- [x] 5 new route files + migration script
-- [x] Tested: 100% pass (iteration_64.json)
+### Stage 1: Backend Data Model + Migration — DONE (Feb 2026)
+- [x] `workspaces` collection with indexes (id, slug unique)
+- [x] `workspace_members` collection with indexes (workspace_id+user_id unique)
+- [x] `workspace_discord_apps` collection with indexes
+- [x] `platform_config` collection for platform Discord app
+- [x] RBAC helpers: `_is_platform_superadmin()`, `require_workspace_member/admin/owner()`
+- [x] Updated `require_org_member/admin()` with workspace inheritance
+- [x] Workspace CRUD routes (list, create, get, update, delete)
+- [x] Workspace member management (list, add, remove, role update)
+- [x] Workspace billing endpoints (get, update)
+- [x] Workspace Discord app CRUD (list, create, update, delete)
+- [x] Platform Discord app endpoints (get, update — superadmin only)
+- [x] Org creation with workspace_id scoping + limit enforcement
+- [x] Org listing with X-Workspace-ID header filtering
+- [x] Idempotent migration: created development workspace, assigned all orgs, created admin@bitbotpro.io, demoted test accounts, formalized platform Discord app
+- [x] Tested: 100% pass — 21/21 backend (iteration_78.json)
 
-### Phase 2 — Navigation & Layout Restructure (Done — Nov 2026)
-- [x] AdminLayout with Org/Bot selectors, section groups
-- [x] Tested: 100% pass (iteration_65.json)
+### Stage 2: Frontend Workspace UI — NOT STARTED
+- [ ] Workspace selector in sidebar (above org selector)
+- [ ] Workspace Settings page (billing, Discord apps, member management)
+- [ ] AuthContext updated with workspace state
+- [ ] Org creation scoped to selected workspace
 
-### Phase 3 — Core Pages: Connected Accounts + Integrations (Done — Nov 2026)
-- [x] Connected Accounts: list, add, edit, disconnect
-- [x] Integrations: connection cards, Add Connection wizard
-- [x] Tested: included in iteration_65.json
+### Stage 3: Signup & Invitation Updates — NOT STARTED
+- [ ] New signup creates workspace + default org
+- [ ] Workspace invitation system
+- [ ] Org invitation scoped to workspace
 
-### Phase 4 — Provider Routing & Webhook Updates (Done — Nov 2026)
-- [x] `webhook_router.py` — V2 multi-route resolution engine
-- [x] Discord/Telegram/Zendesk handlers updated with V2 routing + V1 fallback
-- [x] Per-account rate limiting, V2 suggestion storage, connection_id tracking
-- [x] Tested: 100% pass (iteration_66.json)
+### Stage 4: Billing Integration — NOT STARTED
+- [ ] Stripe customer/subscription linked to workspace
+- [ ] Entitlement enforcement middleware
+- [ ] Usage tracking + plan management UI
 
-### Phase 5 — Platform Admin & Polish (Done — Nov 2026)
-- [x] **Provider Apps page** (`/admin/platform/provider-apps`) — platform-wide provider stats
-- [x] **Workspaces & Users page** (`/admin/platform/workspaces`) — cross-org admin dashboard with expandable detail
-- [x] **Suggestions Inbox** (`/admin/bots/:botId/suggestions`) — agent review panel with accept/dismiss/copy
-- [x] `platform_routes.py` — 4 new admin endpoints
-- [x] Suggestions list + update endpoints in `connection_routes.py`
-- [x] Tested: 100% pass (iteration_67.json)
+### Stage 5: Discord App Choices — NOT STARTED
+- [ ] Org connection flow: choose platform vs custom Discord app
+- [ ] OAuth state bound to workspace+org+app
+- [ ] Shared app isolation (multi-org same app)
 
-### UI/UX Polish (Done — Nov 2026)
-- [x] Discord guided setup panel in ConnectedAccounts.js (matches DiscordAppSetup.js design)
-- [x] Zendesk guided setup & settings panel in ConnectedAccounts.js (matches ZendeskSettings.js design — Connection card, Integration Status, Response Mode toggles)
-- [x] Telegram guided setup & settings panel in ConnectedAccounts.js (Connection card, masked token, Test button, Save/Reconnect/Disconnect)
-- [x] Provider Cards grid — 3 cards (Discord, Telegram, Zendesk) always visible with Connected/Disconnected/Connect badges, one account per org per provider
-- [x] Separate sidebar nav items for Discord, Telegram, Zendesk (replaces single "Connected Accounts" link), each at /admin/accounts/:provider
-- [x] Discord two-column layout always visible: Current Config (2x2 credential badges + timestamp) + Setup Guide (matching old DiscordAppSetup.js)
-- [x] Organisation management page with CRUD
-- [x] Sidebar org/bot selectors, UserPopover, Platform Admin sections
-- [x] API scraper merged into Knowledge Base tab
-- [x] Integrations page redesign: 3 provider cards (Discord, Telegram, Zendesk) with one connection per bot per provider
-- [x] Discord Bot detail: two-column layout with Connect card + invite link (left), Bot Status + Configuration + Listen Mode (right)
-- [x] Discord Bot detail production features: Reply Style, Passive Mode toggle, Scripted Mode toggle, Human Takeover (staff role, cooldown, resume command, follow-up message, handoff channels), Setup Guide, Save Configuration, Start Bot — Tested: 100% pass (iteration_72.json)
-- [x] Discord Bot detail production-matching layout: 50/50 grid, invite link always visible with fallback warning, production-accurate descriptions, section icons (Eye, Code, Users), Open Discord Developer Portal link, helper text under all fields, Save + Start side-by-side layout
-- [x] Discord Bot detail full production parity: Bot Status card (live polling), Specific Channels fetch+select, live handoff status, Start Bot (restart), Resume Bot Now (handoff-resume), OAuth invite flow, Passive/Scripted Mode Active badges + tip, Save syncs V2+V1
-- [x] Telegram detail view: production-matching with @BotFather info, token input + show/hide, connect flow, test/enable buttons, response mode badge
-- [x] Web Chat integration card: Moved Playground into Integrations as "Web Chat" with purple MessageCircle icon and "Ready" badge; removed Playground from sidebar
+### Stage 6: Testing & Production Migration — NOT STARTED
+- [ ] Two-workspace isolation test
+- [ ] Role escalation prevention
+- [ ] Billing limit enforcement
+- [ ] Production migration with approval gate
 
-### Self-Hosting Readiness Docs (Done — Nov 2026)
-- [x] Complete API Inventory (190+ endpoints, v1 + v2)
-- [x] Frontend-Backend API Map (v1 api.js + v2 v2api.js)
-- [x] Environment Variables doc with .env.example files
-- [x] Emergent Dependencies with replacement strategies
-- [x] Channel Integrations audit with V2 webhook router
-- [x] Migration Readiness report
-- [x] OpenAPI 3.1 spec export (openapi.json)
-- [x] Updated README.md for GitHub export
+## Previously Completed Features (V1→V2 Migration)
 
-### Bot/Org/User Deletion & Instance Scoping Fix (Done — Nov 2026)
-- [x] Fixed: selectOrg resets selectedInstance (prevents cross-org data leaking)
-- [x] Fixed: selectBot creates synthetic instance for V2 bots without legacy_instance_id
-- [x] Fixed: New bots get their own empty KB and default settings (no inheritance)
-- [x] Fixed: Creating a bot auto-selects it and navigates to its overview (no refresh needed)
-- [x] Delete org: cascades to bots, connections, accounts, templates
-- [x] Delete bot: removes from list immediately
-- [x] Delete user: already existed on Team page
-- [x] Tested: 100% pass — 8/8 backend, all frontend (iteration_76.json)
+### V2 Architecture (All 5 Phases — Done Nov 2026)
+- Phase 1: V2 Data Model & Backend
+- Phase 2: Navigation & Layout Restructure
+- Phase 3: Connected Accounts + Integrations
+- Phase 4: Provider Routing & Webhook Updates
+- Phase 5: Platform Admin & Polish
 
-### V2 Bot Instance Scoping Fix (Done — Nov 2026)
-- [x] AuthContext: selectBot creates synthetic instance for V2 bots without legacy_instance_id
-- [x] Backend: _verify_instance_access now accepts V2 bot IDs (not just V1 instances)
-- [x] New bots get isolated KB, conversations, and settings scope — no inheritance from other bots
+### Other Completed Work
+- Discord guided setup, Zendesk OAuth, Telegram setup
+- Bot Templates, Bot Cloning, Bot Deletion cascade
+- V1→V2 Runtime Migration, Full V1 Endpoint Cleanup
+- Admin User Management, Email Invitations
+- Self-Hosting Readiness Docs, OpenAPI spec
+- Discord Integration Isolation (platform vs custom)
+- Landing page, Analytics, Branding (BridgeBot → BitBot Pro)
 
-### Bot Templates (Done — Nov 2026)
-- [x] `bot_templates` MongoDB collection
-- [x] Save bot as template: POST /v2/orgs/{org_id}/bots/{bot_id}/save-as-template
-- [x] List templates: GET /v2/orgs/{org_id}/templates
-- [x] Create bot from template: POST /v2/orgs/{org_id}/templates/{template_id}/create-bot
-- [x] Delete template: DELETE /v2/orgs/{org_id}/templates/{template_id}
-- [x] "Save as Template" button on Bot Settings page
-- [x] Templates tab on Bots page with Use Template and Delete buttons
-- [x] Tested: 100% pass — 12/12 backend, all frontend (iteration_75.json)
-
-### V1 Endpoint Pruning (Done — Nov 2026)
-- [x] Removed 5 orphaned V1 endpoints with zero callers: api-test, llm-config/test, assign-user, unassign-user, reply-defaults (GET+PUT)
-- [x] Removed unused AssignUser Pydantic model
-- [x] All remaining V1 endpoints verified as still having active callers
-
-### Bot Cloning (Done — Nov 2026)
-- [x] POST /v2/orgs/{org_id}/bots/{bot_id}/clone endpoint — copies persona, instructions, tone, knowledge gate, LLM config
-- [x] Clone starts with 0 connections/knowledge (clean slate), name appended with "(Copy)"
-- [x] Clone button on each bot card in BotList.js with loading state
-- [x] v2api.js cloneBot() function added
-
-### V1→V2 Runtime Migration (Done — Nov 2026)
-- [x] Created `resolve_bot_config()` helper — V2-first with V1-fallback for all bot config reads
-- [x] Migrated all 12+ `db.bot_config.find_one()` reads in server.py to use resolver
-- [x] Migrated Zendesk routes to use injected resolver
-- [x] V1 `PUT /admin/bot-config` dual-writes to V2 `bots` collection
-- [x] Webhook router already had V2 merge logic (unchanged)
-- [x] V2 auto-migration runs on startup (production safe)
-- [x] Tested: 100% pass — 10/10 backend, 8/8 frontend (iteration_74.json)
-
-### Org Cleanup (Done — Nov 2026)
-- [x] Removed 3 empty test orgs: TEST_Org_v2_API ×2, Test New Org
-- [x] Only Default Organisation remains with 2 bots, 1 connection
-
-### Bot Settings V2 Migration (Done — Nov 2026)
-- [x] BotSettings.js now loads/saves from V2 bot-specific API instead of shared V1 bot_config
-- [x] New bots start with clean defaults (no property inheritance from other bots)
-- [x] Sidebar label renamed from "Behaviour" to "Bot Settings"
-
-### Zendesk Agent Assist Fix (Done — Nov 2026)
-- [x] V1 and V2 agent_assist paths now post internal notes to Zendesk (ticket summary + suggested reply)
-- [x] Description updated to match actual behavior
-
-### Admin User Management (Done — Nov 2026)
-- [x] Admin can invite users with extended details: first_name, last_name, username, org/bot assignments
-- [x] InviteAccept page pre-fills name and username from invitation token
-- [x] Admin can reset any user's password from Team page
-- [x] Login bypass for V2 invited users (no legacy instance requirement)
-- [x] Users.js: token read from localStorage to avoid AuthContext race condition
-- [x] Tested: 100% pass — 14/14 backend, all frontend features (iteration_73.json)
-
-### Full V1 Endpoint Cleanup (Done — Nov 2026)
-- [x] Removed ALL V1 instance CRUD endpoints: GET/POST/PUT/DELETE /admin/instances
-- [x] Removed V1 LLM config endpoints: GET/PUT /admin/instances/{id}/llm-config
-- [x] Removed V1 bot-config endpoints: GET/PUT /admin/bot-config
-- [x] Removed V1 external chat endpoints: POST /v1/chat, POST /v1/chat/stream
-- [x] Removed dead models: BotInstanceCreate, BotConfigUpdate, LLMProviderConfig, ExternalChatRequest
-- [x] Removed _authenticate_api_key helper (only used by /v1/chat)
-- [x] Added V2 LLM config endpoints: GET/PUT/POST-test at /v2/orgs/{org_id}/bots/{bot_id}/llm-config
-- [x] Added public /bot-info/{bot_id} endpoint for ChatPage/ChatWidget
-- [x] Updated _resolve_llm_config() and _resolve_chat_instance() to V2-first
-- [x] Updated auth/login and auth/me to return V2 bots instead of V1 instances
-- [x] Updated BotSettings.js: exclusively uses V2 APIs (v2.getLlmConfig, v2.putLlmConfig, v2.testLlmConfig)
-- [x] Updated ChatPage.js and ChatWidget.js: uses /bot-info/{id} instead of /admin/bot-config
-- [x] Updated KnowledgeBase.js: uses v2.listBots for sharing modal instead of /admin/instances
-- [x] Removed Instances page from App.js routes
-- [x] Tested: 100% pass — 17/17 backend, all frontend (iteration_77.json)
-
-### Earlier Completed Work
-- Zendesk OAuth, ZAF sidebar app, Analytics, Admin roles
-- User email invitations, Landing page, Self-hosting docs
-- Full branding (BridgeBot → BitBot Pro)
-
-## Pending / Upcoming Tasks
-
-### Backlog
-- P0: GitHub Export — push to GitHub and use Claude Code for self-hosting migration (DO NOT remove Emergent dependencies until user instructs)
-- P1: WhatsApp integration (use integration_playbook_expert_v2)
-- P2: Backend refactor — server.py modularization, extract remaining routes into separate modules
+## Backlog
+- P0: Stage 2-6 of Customer Workspace Architecture
+- P1: GitHub Export (DO NOT start until instructed)
+- P1: Demote admin@bridgebot.tech from superadmin after confirmation
+- P2: WhatsApp integration (use integration_playbook_expert_v2)
 - P2: APP_MODE env splitting (worker vs api)
+- P2: Backend refactor — server.py modularization
 
 ## Production URLs
 - Production: `https://bitbotpro.io`
