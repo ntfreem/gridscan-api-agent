@@ -3427,7 +3427,7 @@ def _generate_api_key() -> str:
     import secrets as _secrets
     return f"bbk_{_secrets.token_hex(24)}"
 @api_router.post("/admin/api-keys")
-async def create_api_key(body: dict, current_user: dict = Depends(require_admin)):
+async def create_api_key(body: dict, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Create a new API key for an instance."""
     instance_id = body.get("instance_id")
     label = body.get("label", "")
@@ -3466,13 +3466,13 @@ async def list_api_keys(instance_id: str = Depends(get_instance_access)):
     ).sort("created_at", -1).to_list(50)
     return keys
 @api_router.delete("/admin/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, current_user: dict = Depends(require_admin)):
+async def revoke_api_key(key_id: str, current_user: dict = Depends(require_admin_or_ws_admin)):
     result = await db.api_keys.delete_one({"id": key_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="API key not found")
     return {"success": True}
 @api_router.patch("/admin/api-keys/{key_id}/toggle")
-async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin)):
+async def toggle_api_key(key_id: str, current_user: dict = Depends(require_admin_or_ws_admin)):
     doc = await db.api_keys.find_one({"id": key_id})
     if not doc:
         raise HTTPException(status_code=404, detail="API key not found")
@@ -6009,7 +6009,7 @@ async def analytics_zendesk(instance_id: str = Depends(get_instance_access)):
 
 # ==================== DISCORD (PROTECTED) ====================
 @api_router.get("/discord/app-config")
-async def get_discord_app_config(current_user: dict = Depends(require_admin)):
+async def get_discord_app_config(current_user: dict = Depends(require_admin_or_ws_admin)):
     """Get Discord app credentials (admin only). Secrets are masked."""
     creds = await get_discord_credentials()
     raw = await db.discord_app_config.find_one({"_id": "discord_app"}) or {}
@@ -6031,7 +6031,7 @@ class DiscordAppConfigUpdate(BaseModel):
     bot_token: Optional[str] = None
 
 @api_router.put("/discord/app-config")
-async def update_discord_app_config(body: DiscordAppConfigUpdate, current_user: dict = Depends(require_admin)):
+async def update_discord_app_config(body: DiscordAppConfigUpdate, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Update Discord app credentials (admin only). Stored in DB."""
     update = {k: v.strip() for k, v in body.dict().items() if v is not None and v.strip()}
     if not update:
@@ -6042,7 +6042,7 @@ async def update_discord_app_config(body: DiscordAppConfigUpdate, current_user: 
     )
     return {"success": True, "message": "Discord credentials updated"}
 @api_router.get("/discord/app-config/connections")
-async def list_discord_connections(current_user: dict = Depends(require_admin)):
+async def list_discord_connections(current_user: dict = Depends(require_admin_or_ws_admin)):
     """List every instance currently mapped to a Discord guild. Used by Discord App Setup to
     preview the impact of clearing app credentials."""
     rows = await db.discord_config.find({"guild_id": {"$exists": True, "$ne": ""}}).to_list(length=None)
@@ -6059,7 +6059,7 @@ async def list_discord_connections(current_user: dict = Depends(require_admin)):
 @api_router.delete("/discord/app-config")
 async def clear_discord_app_config(
     clear_connections: bool = False,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_admin_or_ws_admin),
 ):
     """Clear the Discord App credentials (admin only).
     If clear_connections=true, also wipe every instance ↔ guild mapping in discord_config."""
@@ -6279,7 +6279,7 @@ async def disconnect_discord_guild(instance_id: str = Depends(get_instance_acces
         del guild_instance_map[guild_id]
     return {"success": True, "cleared_guild_id": guild_id}
 @api_router.post("/discord/purge-all-connections")
-async def purge_all_discord_connections(current_user: dict = Depends(require_admin)):
+async def purge_all_discord_connections(current_user: dict = Depends(require_admin_or_ws_admin)):
     """ADMIN-ONLY: Wipe every guild mapping across every instance. Useful after
     revoking/rotating a Discord App, removing the bot from many servers at once,
     or cleaning up after testing. Does NOT touch knowledge bases, users, or other
