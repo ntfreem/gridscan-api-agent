@@ -320,7 +320,7 @@ async def get_current_user(
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user["role"] != "superadmin":
+    if current_user.get("role") != "superadmin" and current_user.get("platform_role") != "superadmin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 async def _verify_instance_access(x_instance_id: Optional[str], current_user: dict) -> str:

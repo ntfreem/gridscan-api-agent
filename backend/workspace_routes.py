@@ -250,6 +250,70 @@ async def update_workspace_member_role(ws_id: str, member_id: str, body: Workspa
     return {"ok": True}
 
 
+
+# ── Endpoints: Workspace Users (scoped user management) ──
+
+@router.get("/{ws_id}/users")
+async def list_workspace_users(ws_id: str, request: Request):
+    """List all users in a workspace — workspace members + all org members within."""
+    user, ws = await h.require_workspace_admin(request, ws_id)
+    # Get workspace members
+    ws_members = await h._db.workspace_members.find(
+        {"workspace_id": ws_id}, {"_id": 0}
+    ).to_list(500)
+    ws_user_ids = {m["user_id"] for m in ws_members}
+    ws_role_map = {m["user_id"]: m["role"] for m in ws_members}
+    # Get org members within the workspace
+    orgs = await h._db.organisations.find(
+        {"workspace_id": ws_id}, {"_id": 0, "id": 1, "name": 1, "member_ids": 1, "member_roles": 1}
+    ).to_list(100)
+    all_user_ids = set(ws_user_ids)
+    user_org_map = {}
+    for org in orgs:
+        for mid in org.get("member_ids", []):
+            all_user_ids.add(mid)
+            user_org_map.setdefault(mid, []).append({"id": org["id"], "name": org["name"], "role": org.get("member_roles", {}).get(mid, "member")})
+    # Fetch user details
+    users = await h._db.users.find(
+        {"id": {"$in": list(all_user_ids)}},
+        {"_id": 0, "hashed_password": 0, "password_hash": 0, "verification_code": 0, "reset_code": 0}
+    ).to_list(500)
+    for u in users:
+        u["workspace_role"] = ws_role_map.get(u["id"])
+        u["is_workspace_member"] = u["id"] in ws_user_ids
+        u["organisations"] = user_org_map.get(u["id"], [])
+    return {"users": users}
+
+
+@router.delete("/{ws_id}/users/{target_user_id}")
+async def remove_workspace_user(ws_id: str, target_user_id: str, request: Request):
+    """Remove a user from a workspace and all its organisations.
+    Cannot remove the workspace owner or yourself."""
+    user, ws = await h.require_workspace_admin(request, ws_id)
+    if target_user_id == user["id"]:
+        raise HTTPException(400, "Cannot remove yourself")
+    if target_user_id == ws.get("owner_id"):
+        raise HTTPException(400, "Cannot remove the workspace owner")
+    target = await h._db.users.find_one({"id": target_user_id}, {"_id": 0, "id": 1, "email": 1})
+    if not target:
+        raise HTTPException(404, "User not found")
+    # Check they're not a platform superadmin
+    full_target = await h._db.users.find_one({"id": target_user_id})
+    if full_target and (full_target.get("role") == "superadmin" or full_target.get("platform_role") == "superadmin"):
+        raise HTTPException(400, "Cannot remove platform superadmin from workspace")
+    # Remove from workspace membership
+    await h._db.workspace_members.delete_one({"workspace_id": ws_id, "user_id": target_user_id})
+    # Remove from all orgs in this workspace
+    orgs = await h._db.organisations.find({"workspace_id": ws_id, "member_ids": target_user_id}).to_list(100)
+    for org in orgs:
+        await h._db.organisations.update_one(
+            {"id": org["id"]},
+            {"$pull": {"member_ids": target_user_id}, "$unset": {f"member_roles.{target_user_id}": ""}}
+        )
+    removed_from = len(orgs)
+    return {"ok": True, "message": f"Removed {target.get('email', target_user_id)} from workspace and {removed_from} organisation(s)"}
+
+
 # ── Endpoints: Workspace Orgs ──
 
 @router.get("/{ws_id}/orgs")

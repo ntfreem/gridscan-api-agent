@@ -20,7 +20,9 @@ export function AuthProvider({ children }) {
   const [bots, setBots] = useState([]);
   const [selectedBot, setSelectedBot] = useState(null);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("bf_token") : null;
+  const [token, setToken] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("bf_token") : null
+  );
 
   // ── Helper: fetch workspaces and orgs ──
   const fetchWorkspacesAndOrgs = useCallback(async (tk) => {
@@ -190,7 +192,10 @@ export function AuthProvider({ children }) {
     const inst = instancesVal || [];
     setUser(userVal);
     setInstances(inst);
-    if (tokenVal) localStorage.setItem("bf_token", tokenVal);
+    if (tokenVal) {
+      localStorage.setItem("bf_token", tokenVal);
+      setToken(tokenVal);
+    }
     localStorage.setItem("bf_user", JSON.stringify(userVal));
     localStorage.setItem("bf_instances", JSON.stringify(inst));
 
@@ -281,6 +286,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     axios.post(`${BASE}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
     setUser(null);
+    setToken(null);
     setInstances([]);
     setSelectedInstance(null);
     setWorkspaces([]);
@@ -360,12 +366,12 @@ export function AuthProvider({ children }) {
   }, [selectedWorkspace]);
 
   const value = useMemo(() => ({
-    user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+    user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
     // Workspaces
     workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
     // v2
     orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs,
-  }), [user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+  }), [user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
        workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
        orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs]);
 
