@@ -177,11 +177,23 @@ export function AuthProvider({ children }) {
         const legacyId = bot.legacy_instance_id;
         if (legacyId) {
           const inst = instances.find(i => i.id === legacyId);
-          if (inst && (!selectedInstance || selectedInstance.id !== inst.id)) {
+          if (inst) {
             setSelectedInstance(inst);
             localStorage.setItem("bf_instance", JSON.stringify(inst));
             localStorage.setItem("bf_instance_id", inst.id);
+          } else {
+            // Legacy instance not in user's list — use legacyId directly
+            const synth = { id: legacyId, name: bot.name };
+            setSelectedInstance(synth);
+            localStorage.setItem("bf_instance", JSON.stringify(synth));
+            localStorage.setItem("bf_instance_id", legacyId);
           }
+        } else {
+          // V2 bot without legacy instance — use bot.id as instance ID
+          const synth = { id: bot.id, name: bot.name };
+          setSelectedInstance(synth);
+          localStorage.setItem("bf_instance", JSON.stringify(synth));
+          localStorage.setItem("bf_instance_id", bot.id);
         }
       }
     }).catch(() => {});

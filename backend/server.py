@@ -340,18 +340,43 @@ async def require_admin_or_ws_admin(current_user: dict = Depends(get_current_use
 async def _verify_instance_access(x_instance_id: Optional[str], current_user: dict) -> str:
     if not x_instance_id:
         raise HTTPException(status_code=400, detail="X-Instance-ID header required")
-    if current_user["role"] == "superadmin":
+    is_super = current_user.get("role") == "superadmin" or current_user.get("platform_role") == "superadmin"
+    if is_super:
         return x_instance_id
+
+    uid = current_user["id"]
+
     # Check V1 instances first
     instance = await db.bot_instances.find_one({"id": x_instance_id}, {"_id": 0})
     if instance:
-        if current_user["id"] not in instance.get("assigned_user_ids", []):
-            raise HTTPException(status_code=403, detail="Access denied to this instance")
-        return x_instance_id
+        if uid in instance.get("assigned_user_ids", []):
+            return x_instance_id
+        # V1 instance exists but user not in assigned_user_ids — check V2 workspace membership
+        # Find the V2 bot that links to this legacy instance
+        linked_bot = await db.bots.find_one({"legacy_instance_id": x_instance_id}, {"_id": 0, "org_id": 1})
+        if linked_bot:
+            org = await db.organisations.find_one({"id": linked_bot["org_id"]}, {"_id": 0, "workspace_id": 1, "member_ids": 1})
+            if org:
+                # Check if user is a member of this org or the workspace
+                if uid in org.get("member_ids", []):
+                    return x_instance_id
+                ws_member = await db.workspace_members.find_one({"workspace_id": org["workspace_id"], "user_id": uid})
+                if ws_member and ws_member.get("role") in ("admin", "owner"):
+                    return x_instance_id
+        raise HTTPException(status_code=403, detail="Access denied to this instance")
+
     # Check V2 bots (for new bots without legacy instance)
-    v2_bot = await db.bots.find_one({"id": x_instance_id}, {"_id": 0})
+    v2_bot = await db.bots.find_one({"id": x_instance_id}, {"_id": 0, "org_id": 1})
     if v2_bot:
-        return x_instance_id
+        org = await db.organisations.find_one({"id": v2_bot["org_id"]}, {"_id": 0, "workspace_id": 1, "member_ids": 1})
+        if org:
+            if uid in org.get("member_ids", []):
+                return x_instance_id
+            ws_member = await db.workspace_members.find_one({"workspace_id": org["workspace_id"], "user_id": uid})
+            if ws_member and ws_member.get("role") in ("admin", "owner"):
+                return x_instance_id
+        raise HTTPException(status_code=403, detail="Access denied to this bot")
+
     raise HTTPException(status_code=404, detail="Instance not found")
 async def get_instance_access(
     x_instance_id: Optional[str] = Header(None, alias="X-Instance-ID"),

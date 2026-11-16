@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
   Headphones, CheckCircle, AlertCircle, RefreshCw, Trash2,
@@ -95,7 +96,11 @@ export default function ZendeskSettings() {
     }
   }, [searchParams, setSearchParams]);
 
+  const { selectedInstance } = useAuth();
+
   const fetchConfig = useCallback(async () => {
+    // Wait for instance to be selected (ensures X-Instance-ID header is set)
+    if (!selectedInstance?.id) return;
     try {
       const [cfgRes, oauthClientRes, cbRes] = await Promise.all([
         api.get("/admin/zendesk-config"),
@@ -128,7 +133,7 @@ export default function ZendeskSettings() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedInstance]);
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
