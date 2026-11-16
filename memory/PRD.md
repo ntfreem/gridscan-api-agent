@@ -12,7 +12,7 @@ BitBot Pro is a multi-tenant AI bot SaaS platform that connects to Discord, Tele
 - **Storage**: Emergent Object Storage
 - **Email**: Emergent Managed Resend
 
-## Customer Workspace Architecture (NEW — Feb 2026)
+## Customer Workspace Architecture (Feb 2026)
 
 ### Hierarchy
 ```
@@ -38,66 +38,58 @@ Platform Superadmin (internal, never assignable via customer flows)
 ```
 
 ### Account Assignments
-- `admin@bitbotpro.io` — Platform Superadmin (role=superadmin, platform_role=superadmin)
-- `admin@bridgebot.tech` — Workspace Owner of "development" (currently still superadmin, to be demoted after confirmation)
+- `admin@bitbotpro.io` — Platform Superadmin
+- `admin@bridgebot.tech` — Workspace Owner of "development" (still superadmin, to be demoted after confirmation)
 
 ### New Collections
 ```
-workspaces           → {id, name, slug, owner_id, billing: {plan, stripe_*, limits}, usage, created_at}
-workspace_members    → {workspace_id, user_id, role: owner|admin, permissions: {manage_billing, manage_discord_apps}}
+workspaces           → {id, name, slug, owner_id, billing, usage, created_at}
+workspace_members    → {workspace_id, user_id, role, permissions}
 workspace_discord_apps → {id, workspace_id, name, source, client_id, client_secret, bot_token, allowed_org_ids}
-platform_config      → {_id: "platform_discord_app", client_id, client_secret, bot_token, managed_by: "platform"}
+platform_config      → {_id: "platform_discord_app", client_id, client_secret, bot_token, managed_by}
 ```
 
 ### Modified Collections
 ```
-organisations        → +workspace_id field (links org to workspace)
-users                → +platform_role field (explicit platform-level access flag)
+organisations        → +workspace_id field
+users                → +platform_role field
 ```
-
-### Workspace API Endpoints
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/api/v2/workspaces` | GET/POST | List/create workspaces |
-| `/api/v2/workspaces/{ws_id}` | GET/PUT/DELETE | Workspace CRUD |
-| `/api/v2/workspaces/{ws_id}/members` | GET/POST | List/add members |
-| `/api/v2/workspaces/{ws_id}/members/{id}` | DELETE | Remove member |
-| `/api/v2/workspaces/{ws_id}/members/{id}/role` | PATCH | Update role |
-| `/api/v2/workspaces/{ws_id}/orgs` | GET | List orgs in workspace |
-| `/api/v2/workspaces/{ws_id}/billing` | GET/PUT | Billing info/update |
-| `/api/v2/workspaces/{ws_id}/discord-apps` | GET/POST | Custom Discord apps |
-| `/api/v2/workspaces/{ws_id}/discord-apps/{id}` | PUT/DELETE | Discord app CRUD |
-| `/api/v2/platform/discord-app` | GET/PUT | Platform Discord app (superadmin) |
 
 ## Implementation Status
 
-### Stage 1: Backend Data Model + Migration — DONE (Feb 2026)
-- [x] `workspaces` collection with indexes (id, slug unique)
-- [x] `workspace_members` collection with indexes (workspace_id+user_id unique)
-- [x] `workspace_discord_apps` collection with indexes
-- [x] `platform_config` collection for platform Discord app
-- [x] RBAC helpers: `_is_platform_superadmin()`, `require_workspace_member/admin/owner()`
+### Stage 1: Backend Data Model + Migration — DONE ✅
+- [x] `workspaces`, `workspace_members`, `workspace_discord_apps`, `platform_config` collections
+- [x] RBAC: `_is_platform_superadmin()`, `require_workspace_member/admin/owner()`
 - [x] Updated `require_org_member/admin()` with workspace inheritance
-- [x] Workspace CRUD routes (list, create, get, update, delete)
-- [x] Workspace member management (list, add, remove, role update)
-- [x] Workspace billing endpoints (get, update)
-- [x] Workspace Discord app CRUD (list, create, update, delete)
-- [x] Platform Discord app endpoints (get, update — superadmin only)
-- [x] Org creation with workspace_id scoping + limit enforcement
-- [x] Org listing with X-Workspace-ID header filtering
-- [x] Idempotent migration: created development workspace, assigned all orgs, created admin@bitbotpro.io, demoted test accounts, formalized platform Discord app
-- [x] Tested: 100% pass — 21/21 backend (iteration_78.json)
+- [x] 16 new workspace API endpoints (CRUD, members, billing, Discord apps)
+- [x] Platform Discord app endpoints (superadmin-only)
+- [x] Idempotent migration: development workspace, admin@bitbotpro.io, demoted test accounts
+- [x] Tested: 21/21 backend passed (iteration_78.json)
 
-### Stage 2: Frontend Workspace UI — NOT STARTED
-- [ ] Workspace selector in sidebar (above org selector)
-- [ ] Workspace Settings page (billing, Discord apps, member management)
-- [ ] AuthContext updated with workspace state
-- [ ] Org creation scoped to selected workspace
+### Stage 2: Frontend Workspace UI — DONE ✅
+- [x] AuthContext: workspace state (workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces)
+- [x] AuthContext: workspace-scoped org listing via X-Workspace-ID header
+- [x] AuthContext: fetchWorkspacesAndOrgs on login with localStorage persistence
+- [x] Sidebar: Workspace selector above org selector (data-testid="workspace-switcher")
+- [x] Sidebar: Workspace Settings nav section (General, Members, Billing, Discord Apps)
+- [x] WorkspaceSettings page: General tab (name edit, ID, slug, created date)
+- [x] WorkspaceSettings page: Members tab (list, role badges, owner protection, remove button)
+- [x] WorkspaceSettings page: Billing tab (plan, limits, usage tracker)
+- [x] WorkspaceSettings page: Discord Apps tab (platform app, custom apps)
+- [x] v2api.js: 18+ workspace methods added
+- [x] Mobile responsive workspace UI
+- [x] Tested: 16/16 backend + all UI passed (iteration_79.json)
 
-### Stage 3: Signup & Invitation Updates — NOT STARTED
-- [ ] New signup creates workspace + default org
-- [ ] Workspace invitation system
+### Stage 2.5: Signup Workspace Flow — DONE ✅
+- [x] Backend: email verification auto-creates workspace + default org for new users
+- [x] Idempotent: skips if user already has a workspace membership
+- [x] Default plan: "free" with starter limits (3 orgs, 3 bots, 1000 msgs)
+- [x] Never auto-adds new customers to "development" workspace
+
+### Stage 3: Signup & Invitation System — NOT STARTED
+- [ ] Workspace invitation system (email + role + token)
 - [ ] Org invitation scoped to workspace
+- [ ] Workspace/org switching UX improvements
 
 ### Stage 4: Billing Integration — NOT STARTED
 - [ ] Stripe customer/subscription linked to workspace
@@ -115,32 +107,26 @@ users                → +platform_role field (explicit platform-level access fl
 - [ ] Billing limit enforcement
 - [ ] Production migration with approval gate
 
-## Previously Completed Features (V1→V2 Migration)
+## Previously Completed Features
 
-### V2 Architecture (All 5 Phases — Done Nov 2026)
-- Phase 1: V2 Data Model & Backend
-- Phase 2: Navigation & Layout Restructure
-- Phase 3: Connected Accounts + Integrations
-- Phase 4: Provider Routing & Webhook Updates
-- Phase 5: Platform Admin & Polish
+### V2 Architecture (All 5 Phases)
+- Phase 1-5: Complete V2 multi-tenant API, navigation, integrations, routing, admin
 
 ### Other Completed Work
 - Discord guided setup, Zendesk OAuth, Telegram setup
 - Bot Templates, Bot Cloning, Bot Deletion cascade
 - V1→V2 Runtime Migration, Full V1 Endpoint Cleanup
-- Admin User Management, Email Invitations
-- Self-Hosting Readiness Docs, OpenAPI spec
 - Discord Integration Isolation (platform vs custom)
-- Landing page, Analytics, Branding (BridgeBot → BitBot Pro)
+- Landing page, Analytics, Branding
 
 ## Backlog
-- P0: Stage 2-6 of Customer Workspace Architecture
-- P1: GitHub Export (DO NOT start until instructed)
+- P0: Stages 3-6 of Customer Workspace Architecture
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
-- P2: WhatsApp integration (use integration_playbook_expert_v2)
-- P2: APP_MODE env splitting (worker vs api)
+- P1: GitHub Export (DO NOT start until instructed)
+- P2: WhatsApp integration
+- P2: APP_MODE env splitting
 - P2: Backend refactor — server.py modularization
 
-## Production URLs
+## Key URLs
 - Production: `https://bitbotpro.io`
 - Preview: `https://rag-search-dev.preview.emergentagent.com`

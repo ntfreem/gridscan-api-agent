@@ -10,6 +10,10 @@ export function AuthProvider({ children }) {
   const [selectedInstance, setSelectedInstance] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Workspace model
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
+
   // v2 org model
   const [orgs, setOrgs] = useState([]);
   const [selectedOrg, setSelectedOrg] = useState(null);
@@ -18,7 +22,69 @@ export function AuthProvider({ children }) {
 
   const token = typeof window !== "undefined" ? localStorage.getItem("bf_token") : null;
 
-  // Restore session
+  // ── Helper: fetch workspaces and orgs ──
+  const fetchWorkspacesAndOrgs = useCallback(async (tk) => {
+    try {
+      const wsRes = await axios.get(`${BASE}/v2/workspaces`, {
+        headers: { Authorization: `Bearer ${tk}` },
+      });
+      const fetchedWs = wsRes.data.workspaces || [];
+      setWorkspaces(fetchedWs);
+
+      // Restore or auto-select workspace
+      const storedWsId = localStorage.getItem("bf_ws_id");
+      const restoredWs = storedWsId ? fetchedWs.find(w => w.id === storedWsId) : null;
+      const ws = restoredWs || (fetchedWs.length > 0 ? fetchedWs[0] : null);
+      setSelectedWorkspace(ws);
+      if (ws) {
+        localStorage.setItem("bf_ws_id", ws.id);
+        // Fetch orgs scoped to this workspace
+        const orgRes = await axios.get(`${BASE}/v2/orgs`, {
+          headers: { Authorization: `Bearer ${tk}`, "X-Workspace-ID": ws.id },
+        });
+        const fetchedOrgs = orgRes.data.organisations || [];
+        setOrgs(fetchedOrgs);
+
+        const storedOrgId = localStorage.getItem("bf_org_id");
+        const restoredOrg = storedOrgId ? fetchedOrgs.find(o => o.id === storedOrgId) : null;
+        if (restoredOrg) {
+          setSelectedOrg(restoredOrg);
+        } else if (fetchedOrgs.length > 0) {
+          setSelectedOrg(fetchedOrgs[0]);
+          localStorage.setItem("bf_org_id", fetchedOrgs[0].id);
+        }
+      } else {
+        // No workspaces: try legacy org listing
+        const orgRes = await axios.get(`${BASE}/v2/orgs`, {
+          headers: { Authorization: `Bearer ${tk}` },
+        });
+        const fetchedOrgs = orgRes.data.organisations || [];
+        setOrgs(fetchedOrgs);
+        if (fetchedOrgs.length > 0) {
+          const storedOrgId = localStorage.getItem("bf_org_id");
+          const restoredOrg = storedOrgId ? fetchedOrgs.find(o => o.id === storedOrgId) : null;
+          setSelectedOrg(restoredOrg || fetchedOrgs[0]);
+          localStorage.setItem("bf_org_id", (restoredOrg || fetchedOrgs[0]).id);
+        }
+      }
+    } catch {
+      // Workspace endpoints not available — fallback
+      try {
+        const orgRes = await axios.get(`${BASE}/v2/orgs`, {
+          headers: { Authorization: `Bearer ${tk}` },
+        });
+        const fetchedOrgs = orgRes.data.organisations || [];
+        setOrgs(fetchedOrgs);
+        if (fetchedOrgs.length > 0 && !selectedOrg) {
+          setSelectedOrg(fetchedOrgs[0]);
+          localStorage.setItem("bf_org_id", fetchedOrgs[0].id);
+        }
+      } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Restore session ──
   useEffect(() => {
     const storedUser = localStorage.getItem("bf_user");
     const storedToken = localStorage.getItem("bf_token");
@@ -70,26 +136,8 @@ export function AuthProvider({ children }) {
         localStorage.setItem("bf_instance_id", freshInstances[0].id);
       }
 
-      // Fetch v2 orgs
-      try {
-        const orgRes = await axios.get(`${BASE}/v2/orgs`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
-        });
-        const fetchedOrgs = orgRes.data.organisations || [];
-        setOrgs(fetchedOrgs);
-
-        // Restore or auto-select org
-        const storedOrgId = localStorage.getItem("bf_org_id");
-        const restoredOrg = storedOrgId ? fetchedOrgs.find(o => o.id === storedOrgId) : null;
-        if (restoredOrg) {
-          setSelectedOrg(restoredOrg);
-        } else if (fetchedOrgs.length > 0) {
-          setSelectedOrg(fetchedOrgs[0]);
-          localStorage.setItem("bf_org_id", fetchedOrgs[0].id);
-        }
-      } catch {
-        // v2 orgs not available — legacy mode
-      }
+      // Fetch workspaces + orgs
+      await fetchWorkspacesAndOrgs(storedToken);
     }).catch(() => {
       localStorage.clear();
       setUser(null);
@@ -98,32 +146,6 @@ export function AuthProvider({ children }) {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Fetch orgs when user is set (covers both session restore and fresh login)
-  useEffect(() => {
-    if (!user) return;
-    const tk = localStorage.getItem("bf_token");
-    if (!tk) return;
-    // Only fetch if we don't already have orgs
-    if (orgs.length > 0) return;
-    axios.get(`${BASE}/v2/orgs`, {
-      headers: { Authorization: `Bearer ${tk}` },
-    }).then(res => {
-      const fetchedOrgs = res.data.organisations || [];
-      setOrgs(fetchedOrgs);
-      if (fetchedOrgs.length > 0 && !selectedOrg) {
-        const storedOrgId = localStorage.getItem("bf_org_id");
-        const restoredOrg = storedOrgId ? fetchedOrgs.find(o => o.id === storedOrgId) : null;
-        if (restoredOrg) {
-          setSelectedOrg(restoredOrg);
-        } else {
-          setSelectedOrg(fetchedOrgs[0]);
-          localStorage.setItem("bf_org_id", fetchedOrgs[0].id);
-        }
-      }
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
 
   // Fetch bots when org changes
   useEffect(() => {
@@ -138,7 +160,6 @@ export function AuthProvider({ children }) {
       const fetchedBots = res.data.bots || [];
       setBots(fetchedBots);
 
-      // Restore or auto-select bot
       const storedBotId = localStorage.getItem("bf_bot_id");
       const restoredBot = storedBotId ? fetchedBots.find(b => b.id === storedBotId) : null;
       if (restoredBot) {
@@ -148,7 +169,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem("bf_bot_id", fetchedBots[0].id);
       }
 
-      // Also sync legacy instance from bot's legacy_instance_id
+      // Sync legacy instance
       if (fetchedBots.length > 0) {
         const bot = restoredBot || fetchedBots[0];
         const legacyId = bot.legacy_instance_id;
@@ -178,7 +199,12 @@ export function AuthProvider({ children }) {
       localStorage.setItem("bf_instance", JSON.stringify(inst[0]));
       localStorage.setItem("bf_instance_id", inst[0].id);
     }
-  }, []);
+
+    // Fetch workspaces after login
+    if (tokenVal) {
+      fetchWorkspacesAndOrgs(tokenVal);
+    }
+  }, [fetchWorkspacesAndOrgs]);
 
   const selectInstance = useCallback((instance) => {
     setSelectedInstance(instance);
@@ -186,10 +212,37 @@ export function AuthProvider({ children }) {
     localStorage.setItem("bf_instance_id", instance.id);
   }, []);
 
+  const selectWorkspace = useCallback(async (ws) => {
+    setSelectedWorkspace(ws);
+    localStorage.setItem("bf_ws_id", ws.id);
+    // Reset org/bot selection
+    setSelectedOrg(null);
+    setSelectedBot(null);
+    setSelectedInstance(null);
+    setBots([]);
+    localStorage.removeItem("bf_org_id");
+    localStorage.removeItem("bf_bot_id");
+    localStorage.removeItem("bf_instance_id");
+    localStorage.removeItem("bf_instance");
+    // Fetch orgs for the new workspace
+    const tk = localStorage.getItem("bf_token");
+    if (!tk) return;
+    try {
+      const orgRes = await axios.get(`${BASE}/v2/orgs`, {
+        headers: { Authorization: `Bearer ${tk}`, "X-Workspace-ID": ws.id },
+      });
+      const fetchedOrgs = orgRes.data.organisations || [];
+      setOrgs(fetchedOrgs);
+      if (fetchedOrgs.length > 0) {
+        setSelectedOrg(fetchedOrgs[0]);
+        localStorage.setItem("bf_org_id", fetchedOrgs[0].id);
+      }
+    } catch {}
+  }, []);
+
   const selectOrg = useCallback((org) => {
     setSelectedOrg(org);
     localStorage.setItem("bf_org_id", org.id);
-    // Reset bot AND instance selection when org changes
     setSelectedBot(null);
     setSelectedInstance(null);
     localStorage.removeItem("bf_bot_id");
@@ -200,7 +253,6 @@ export function AuthProvider({ children }) {
   const selectBot = useCallback((bot) => {
     setSelectedBot(bot);
     localStorage.setItem("bf_bot_id", bot.id);
-    // Sync legacy instance
     if (bot.legacy_instance_id) {
       const inst = instances.find(i => i.id === bot.legacy_instance_id);
       if (inst) {
@@ -209,7 +261,6 @@ export function AuthProvider({ children }) {
         localStorage.setItem("bf_instance_id", inst.id);
       }
     } else {
-      // V2-only bot: use bot's own ID as instance scope
       const synth = { id: bot.id, name: bot.name };
       setSelectedInstance(synth);
       localStorage.setItem("bf_instance", JSON.stringify(synth));
@@ -232,12 +283,14 @@ export function AuthProvider({ children }) {
     setUser(null);
     setInstances([]);
     setSelectedInstance(null);
+    setWorkspaces([]);
+    setSelectedWorkspace(null);
     setOrgs([]);
     setSelectedOrg(null);
     setBots([]);
     setSelectedBot(null);
     ["bf_token", "bf_user", "bf_instance", "bf_instance_id", "bf_instances",
-     "bf_org_id", "bf_bot_id"].forEach(k => localStorage.removeItem(k));
+     "bf_org_id", "bf_bot_id", "bf_ws_id"].forEach(k => localStorage.removeItem(k));
   }, []);
 
   const refreshInstances = useCallback(async () => {
@@ -263,9 +316,9 @@ export function AuthProvider({ children }) {
     const tk = localStorage.getItem("bf_token");
     if (!tk) return;
     try {
-      const res = await axios.get(`${BASE}/v2/orgs`, {
-        headers: { Authorization: `Bearer ${tk}` },
-      });
+      const h = { Authorization: `Bearer ${tk}` };
+      if (selectedWorkspace) h["X-Workspace-ID"] = selectedWorkspace.id;
+      const res = await axios.get(`${BASE}/v2/orgs`, { headers: h });
       const fetchedOrgs = res.data.organisations || [];
       setOrgs(fetchedOrgs);
       if (selectedOrg) {
@@ -273,7 +326,6 @@ export function AuthProvider({ children }) {
         if (updated) {
           setSelectedOrg(updated);
         } else {
-          // Selected org was deleted — pick the first remaining or clear
           const fallback = fetchedOrgs.length > 0 ? fetchedOrgs[0] : null;
           setSelectedOrg(fallback);
           if (fallback) {
@@ -281,7 +333,6 @@ export function AuthProvider({ children }) {
           } else {
             localStorage.removeItem("bf_org_id");
           }
-          // Reset bot/instance since org changed
           setSelectedBot(null);
           setSelectedInstance(null);
           localStorage.removeItem("bf_bot_id");
@@ -290,13 +341,32 @@ export function AuthProvider({ children }) {
         }
       }
     } catch {}
-  }, [selectedOrg]);
+  }, [selectedOrg, selectedWorkspace]);
+
+  const refreshWorkspaces = useCallback(async () => {
+    const tk = localStorage.getItem("bf_token");
+    if (!tk) return;
+    try {
+      const res = await axios.get(`${BASE}/v2/workspaces`, {
+        headers: { Authorization: `Bearer ${tk}` },
+      });
+      const fetchedWs = res.data.workspaces || [];
+      setWorkspaces(fetchedWs);
+      if (selectedWorkspace) {
+        const updated = fetchedWs.find(w => w.id === selectedWorkspace.id);
+        if (updated) setSelectedWorkspace(updated);
+      }
+    } catch {}
+  }, [selectedWorkspace]);
 
   const value = useMemo(() => ({
     user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+    // Workspaces
+    workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
     // v2
     orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs,
   }), [user, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+       workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
        orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs]);
 
   return (

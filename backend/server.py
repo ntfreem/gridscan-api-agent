@@ -2577,8 +2577,59 @@ async def verify_email(body: VerifyEmailBody):
         raise HTTPException(status_code=400, detail="Code expired. Request a new one.")
     await db.users.update_one(
         {"email": body.email.lower()},
-        {"$set": {"is_verified": True, "verification_code": None, "verification_code_expiry": None}}
+        {"$set": {"is_verified": True, "verification_code": None, "verification_code_expiry": None, "platform_role": None}}
     )
+    # Auto-create workspace + default org for new customers
+    # (skip if user already has a workspace — idempotent)
+    existing_membership = await db.workspace_members.find_one({"user_id": user["id"]})
+    if not existing_membership:
+        now = datetime.now(timezone.utc).isoformat()
+        ws_slug = f"ws-{user['id'][:8]}"
+        ws_name = f"{user.get('username', user['email'].split('@')[0])}'s Workspace"
+        ws_id = str(uuid.uuid4())
+        await db.workspaces.insert_one({
+            "id": ws_id,
+            "name": ws_name,
+            "slug": ws_slug,
+            "owner_id": user["id"],
+            "billing": {
+                "plan": "free",
+                "stripe_customer_id": None,
+                "stripe_subscription_id": None,
+                "limits": {
+                    "max_organisations": 3,
+                    "max_bots_per_org": 3,
+                    "max_discord_connections": 10,
+                    "max_monthly_ai_messages": 1000,
+                    "max_custom_discord_apps": 1,
+                },
+            },
+            "usage": {"current_period_start": now, "ai_messages_used": 0},
+            "created_at": now,
+            "updated_at": now,
+        })
+        await db.workspace_members.insert_one({
+            "workspace_id": ws_id,
+            "user_id": user["id"],
+            "role": "owner",
+            "permissions": {"manage_billing": True, "manage_discord_apps": True},
+            "invited_by": None,
+            "joined_at": now,
+        })
+        # Create default org inside the workspace
+        org_id = str(uuid.uuid4())
+        await db.organisations.insert_one({
+            "id": org_id,
+            "name": "My Organisation",
+            "description": "",
+            "workspace_id": ws_id,
+            "owner_id": user["id"],
+            "member_ids": [user["id"]],
+            "member_roles": {user["id"]: "admin"},
+            "created_at": now,
+            "updated_at": now,
+        })
+        logger.info(f"Auto-created workspace '{ws_name}' + default org for {user['email']}")
     return {"message": "Email verified successfully"}
 @api_router.post("/auth/login")
 async def login(body: UserLogin, response: Response):

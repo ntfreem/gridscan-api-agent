@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
   BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle,
   SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket, Menu, X,
-  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2,
+  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2, CreditCard,
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useRef, useEffect } from "react";
@@ -272,18 +272,21 @@ function EnvironmentBanner() {
 export default function AdminLayout() {
   const {
     user, logout,
+    workspaces, selectedWorkspace, selectWorkspace,
     orgs, selectedOrg, selectOrg,
     bots, selectedBot, selectBot, refreshOrgs,
     selectedInstance,
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [wsDropOpen, setWsDropOpen] = useState(false);
   const [orgDropOpen, setOrgDropOpen] = useState(false);
   const [botDropOpen, setBotDropOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const closeMobile = () => setMobileMenuOpen(false);
-  const isSuperAdmin = user?.role === "superadmin";
+  const closeAllDropdowns = () => { setWsDropOpen(false); setOrgDropOpen(false); setBotDropOpen(false); };
+  const isSuperAdmin = user?.role === "superadmin" || user?.platform_role === "superadmin";
 
   // Determine if we're in a bot-scoped route
   const botId = selectedBot?.id;
@@ -337,6 +340,33 @@ export default function AdminLayout() {
 
         {/* Nav sections */}
         <nav style={{ flex: 1, padding: "6px 12px", overflowY: "auto" }}>
+          {/* Workspace Selector */}
+          {workspaces.length > 0 && (
+            <>
+              <SectionLabel icon={Layers} label="Workspace" />
+              <div style={{ padding: "0 4px 6px" }}>
+                <CompactSelector
+                  label="Workspace"
+                  value={selectedWorkspace?.name}
+                  items={workspaces.map(ws => ({
+                    ...ws,
+                    bot_count: ws.org_count,
+                    member_count: ws.member_count,
+                  }))}
+                  onSelect={(ws) => {
+                    selectWorkspace(ws);
+                    navigate("/admin");
+                    closeAllDropdowns();
+                  }}
+                  open={wsDropOpen}
+                  setOpen={(v) => { setWsDropOpen(v); setOrgDropOpen(false); setBotDropOpen(false); }}
+                  testId="workspace-switcher"
+                  icon={Layers}
+                />
+              </div>
+            </>
+          )}
+
           {/* Organisation */}
           <SectionLabel icon={Building2} label="Organisation" />
           {orgs.length > 0 && (
@@ -346,9 +376,9 @@ export default function AdminLayout() {
                   label="Organisation"
                   value={selectedOrg?.name}
                   items={orgs}
-                  onSelect={(org) => { selectOrg(org); navigate("/admin"); }}
+                  onSelect={(org) => { selectOrg(org); navigate("/admin"); closeAllDropdowns(); }}
                   open={orgDropOpen}
-                  setOpen={(v) => { setOrgDropOpen(v); setBotDropOpen(false); }}
+                  setOpen={(v) => { setOrgDropOpen(v); setWsDropOpen(false); setBotDropOpen(false); }}
                   testId="org-switcher"
                   icon={Building2}
                 />
@@ -400,9 +430,9 @@ export default function AdminLayout() {
                     label="AI Bot"
                     value={selectedBot?.name}
                     items={bots}
-                    onSelect={(bot) => { selectBot(bot); navigate(`/admin/bots/${bot.id}`); }}
+                    onSelect={(bot) => { selectBot(bot); navigate(`/admin/bots/${bot.id}`); closeAllDropdowns(); }}
                     open={botDropOpen}
-                    setOpen={(v) => { setBotDropOpen(v); setOrgDropOpen(false); }}
+                    setOpen={(v) => { setBotDropOpen(v); setOrgDropOpen(false); setWsDropOpen(false); }}
                     testId="bot-switcher"
                     icon={Bot}
                   />
@@ -415,6 +445,18 @@ export default function AdminLayout() {
               <SideNavLink to={`/admin/bots/${botId}/conversations`} icon={MessageSquare} label="Conversations" onClick={closeMobile} />
               <SideNavLink to={`/admin/bots/${botId}/suggestions`} icon={Sparkles} label="Suggestions" onClick={closeMobile} />
 
+              <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
+            </>
+          )}
+
+          {/* Workspace Settings */}
+          {selectedWorkspace && (
+            <>
+              <SectionLabel icon={Settings} label="Workspace Settings" />
+              <SideNavLink to="/admin/workspace/settings" icon={SlidersHorizontal} label="General" onClick={closeMobile} />
+              <SideNavLink to="/admin/workspace/members" icon={Users} label="Members" onClick={closeMobile} />
+              <SideNavLink to="/admin/workspace/billing" icon={CreditCard} label="Billing" onClick={closeMobile} />
+              <SideNavLink to="/admin/workspace/discord-apps" icon={Zap} label="Discord Apps" onClick={closeMobile} />
               <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
             </>
           )}
@@ -443,7 +485,7 @@ export default function AdminLayout() {
       </aside>
 
       <main className="admin-main" style={{ marginLeft: "250px", flex: 1, minHeight: "100vh", backgroundColor: colors.bg.base }}
-        onClick={() => { orgDropOpen && setOrgDropOpen(false); botDropOpen && setBotDropOpen(false); }}>
+        onClick={() => { wsDropOpen && setWsDropOpen(false); orgDropOpen && setOrgDropOpen(false); botDropOpen && setBotDropOpen(false); }}>
         <Outlet />
       </main>
 

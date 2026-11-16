@@ -41,6 +41,7 @@ import ProviderApps from "@/pages/ProviderApps";
 import Workspaces from "@/pages/Workspaces";
 import SuggestionsInbox from "@/pages/SuggestionsInbox";
 import Organisations from "@/pages/Organisations";
+import WorkspaceSettings from "@/pages/WorkspaceSettings";
 
 import "@/App.css";
 
@@ -88,6 +89,12 @@ function AppRoutes() {
         <Route path="bots" element={<BotList />} />
         <Route path="accounts/:provider" element={<ConnectedAccounts />} />
         <Route path="team" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
+
+        {/* Workspace Settings */}
+        <Route path="workspace/settings" element={<WorkspaceSettings />} />
+        <Route path="workspace/members" element={<WorkspaceSettings />} />
+        <Route path="workspace/billing" element={<WorkspaceSettings />} />
+        <Route path="workspace/discord-apps" element={<WorkspaceSettings />} />
 
         {/* Bot-scoped routes */}
         <Route path="bots/:botId" element={<BotOverview />} />

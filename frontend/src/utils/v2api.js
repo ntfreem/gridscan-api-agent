@@ -75,6 +75,33 @@ const v2 = {
   listWorkspaces: () => axios.get(`${BASE}/v2/platform/workspaces`, { headers: headers() }),
   workspaceDetail: (orgId) => axios.get(`${BASE}/v2/platform/workspaces/${orgId}/detail`, { headers: headers() }),
   listProviderApps: () => axios.get(`${BASE}/v2/platform/provider-apps`, { headers: headers() }),
+
+  // Customer Workspaces
+  getMyWorkspaces: () => axios.get(`${BASE}/v2/workspaces`, { headers: headers() }),
+  getWorkspace: (wsId) => axios.get(`${BASE}/v2/workspaces/${wsId}`, { headers: headers() }),
+  createWorkspace: (data) => axios.post(`${BASE}/v2/workspaces`, data, { headers: headers() }),
+  updateWorkspace: (wsId, data) => axios.put(`${BASE}/v2/workspaces/${wsId}`, data, { headers: headers() }),
+  deleteWorkspace: (wsId) => axios.delete(`${BASE}/v2/workspaces/${wsId}`, { headers: headers() }),
+  getWorkspaceMembers: (wsId) => axios.get(`${BASE}/v2/workspaces/${wsId}/members`, { headers: headers() }),
+  addWorkspaceMember: (wsId, data) => axios.post(`${BASE}/v2/workspaces/${wsId}/members`, data, { headers: headers() }),
+  removeWorkspaceMember: (wsId, userId) => axios.delete(`${BASE}/v2/workspaces/${wsId}/members/${userId}`, { headers: headers() }),
+  updateWorkspaceMemberRole: (wsId, userId, data) => axios.patch(`${BASE}/v2/workspaces/${wsId}/members/${userId}/role`, data, { headers: headers() }),
+  getWorkspaceOrgs: (wsId) => axios.get(`${BASE}/v2/workspaces/${wsId}/orgs`, { headers: headers() }),
+  getWorkspaceBilling: (wsId) => axios.get(`${BASE}/v2/workspaces/${wsId}/billing`, { headers: headers() }),
+  updateWorkspaceBilling: (wsId, data) => axios.put(`${BASE}/v2/workspaces/${wsId}/billing`, data, { headers: headers() }),
+  getWorkspaceDiscordApps: (wsId) => axios.get(`${BASE}/v2/workspaces/${wsId}/discord-apps`, { headers: headers() }),
+  createWorkspaceDiscordApp: (wsId, data) => axios.post(`${BASE}/v2/workspaces/${wsId}/discord-apps`, data, { headers: headers() }),
+  updateWorkspaceDiscordApp: (wsId, appId, data) => axios.put(`${BASE}/v2/workspaces/${wsId}/discord-apps/${appId}`, data, { headers: headers() }),
+  deleteWorkspaceDiscordApp: (wsId, appId) => axios.delete(`${BASE}/v2/workspaces/${wsId}/discord-apps/${appId}`, { headers: headers() }),
+  getPlatformDiscordApp: () => axios.get(`${BASE}/v2/platform/discord-app`, { headers: headers() }),
+  updatePlatformDiscordApp: (data) => axios.put(`${BASE}/v2/platform/discord-app`, data, { headers: headers() }),
+
+  // Workspace-scoped org listing
+  listOrgsInWorkspace: (wsId) => {
+    const h = headers();
+    h["X-Workspace-ID"] = wsId;
+    return axios.get(`${BASE}/v2/orgs`, { headers: h });
+  },
 };
 
 export default v2;
