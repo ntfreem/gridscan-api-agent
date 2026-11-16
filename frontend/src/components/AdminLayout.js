@@ -367,6 +367,8 @@ export default function AdminLayout() {
   const closeMobile = () => setMobileMenuOpen(false);
   const closeAllDropdowns = () => { setWsDropOpen(false); setOrgDropOpen(false); setBotDropOpen(false); };
   const isSuperAdmin = user?.role === "superadmin" || user?.platform_role === "superadmin";
+  const isWsAdmin = !isSuperAdmin && selectedWorkspace && ["admin", "owner"].includes(selectedWorkspace.my_role);
+  const isRegularUser = !isSuperAdmin && !isWsAdmin;
 
   // Determine if we're in a bot-scoped route
   const botId = selectedBot?.id;
@@ -420,8 +422,8 @@ export default function AdminLayout() {
 
         {/* Nav sections */}
         <nav style={{ flex: 1, padding: "6px 12px", overflowY: "auto" }}>
-          {/* Workspace Selector */}
-          {workspaces.length > 0 && (
+          {/* Workspace Selector — hidden for regular users */}
+          {workspaces.length > 0 && !isRegularUser && (
             <>
               <SectionLabel icon={Layers} label="Workspace" />
               <div style={{ padding: "0 4px 6px", display: "flex", alignItems: "flex-start", gap: "4px" }}>
@@ -482,7 +484,7 @@ export default function AdminLayout() {
                   icon={Building2}
                 />
               </div>
-              {selectedOrg && orgs.length > 1 && (
+              {selectedOrg && orgs.length > 1 && !isRegularUser && (
                 <button
                   onClick={async () => {
                     if (!confirm(`Delete "${selectedOrg.name}" and all its bots?`)) return;
@@ -548,8 +550,8 @@ export default function AdminLayout() {
             </>
           )}
 
-          {/* Admin — for workspace admins/owners (non-superadmin) */}
-          {selectedWorkspace && !isSuperAdmin && (
+          {/* Admin — for workspace admins/owners only */}
+          {isWsAdmin && (
             <>
               <SectionLabel icon={Settings} label="Admin" />
               <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />

@@ -74,10 +74,15 @@ async def list_workspaces(request: Request):
         workspaces = await h._db.workspaces.find(
             {"id": {"$in": ws_ids}}, {"_id": 0}
         ).sort("name", 1).to_list(100)
-    # Enrich with counts
+    # Enrich with counts and user's role
     for ws in workspaces:
         ws["org_count"] = await h._db.organisations.count_documents({"workspace_id": ws["id"]})
         ws["member_count"] = await h._db.workspace_members.count_documents({"workspace_id": ws["id"]})
+        # Include user's role in this workspace
+        membership = await h._db.workspace_members.find_one(
+            {"workspace_id": ws["id"], "user_id": user["id"]}, {"_id": 0, "role": 1}
+        )
+        ws["my_role"] = membership["role"] if membership else ("superadmin" if h._is_platform_superadmin(user) else None)
     return {"workspaces": workspaces}
 
 

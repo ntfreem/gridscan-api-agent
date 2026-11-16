@@ -1,0 +1,98 @@
+{
+  "summary": "Iteration 84 - 3-Tier Sidebar Role Testing Complete. All 14 backend tests passed. All frontend UI tests verified sidebar structure for Regular User (member role), Workspace Admin (owner role), and Superadmin (platform superadmin). Regular user johndoe@example.com correctly sees stripped-down sidebar with only org selector + bot management, no workspace selector, no admin/enterprise sections.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter84_regular_user_sidebar.py",
+    "/app/test_reports/pytest/iter84_regular_user_sidebar.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Regular user sidebar correctly hides workspace selector (isRegularUser check at line 426)",
+    "Regular user sidebar correctly hides org delete button (line 487: !isRegularUser check)",
+    "Regular user sidebar correctly hides Admin section (line 554: isWsAdmin check)",
+    "Regular user sidebar correctly hides Enterprise section (line 566: isSuperAdmin check)",
+    "Regular user can see org selector with 'Default Organisation'",
+    "Regular user can navigate to all bot management pages (Bot Overview, Bot Settings, Knowledge Base, Integrations)",
+    "Workspace admin sidebar correctly shows Admin section with 5 links",
+    "Workspace admin sidebar correctly hides Enterprise section and new workspace button",
+    "Superadmin sidebar correctly shows Enterprise section with 3 links and new workspace button",
+    "Superadmin sidebar correctly hides Admin section",
+    "GET /api/v2/workspaces returns my_role='member' for johndoe in development workspace",
+    "GET /api/v2/orgs filters by member_ids for regular users (line 53 in org_routes.py)",
+    "Regular user blocked from /api/admin/users (403)",
+    "Regular user blocked from /api/v2/workspaces/{id}/users (403)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter84_regular_user_sidebar.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "seed_data_creation": "None - used existing test users (johndoe was pre-added as member to development workspace and Default Organisation)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "3-tier sidebar testing complete. Key data-testids: workspace-switcher (hidden for regular users), org-switcher, nav-overview, nav-bots, delete-org-btn (hidden for regular users), new-workspace-btn (only superadmin), nav-organisations/nav-discord-app-setup/nav-team-&-access/nav-analytics/nav-api-key-usage (Admin section for workspace admins), nav-workspaces (Enterprise section for superadmins). Sidebar uses isRegularUser/isWsAdmin/isSuperAdmin checks based on selectedWorkspace.my_role field from backend.",
+  "features_tested": [
+    {
+      "feature": "Regular user (johndoe) sidebar shows ONLY org selector + bot management",
+      "status": "PASS",
+      "details": "Workspace selector hidden, Admin section hidden, Enterprise section hidden, org delete button hidden"
+    },
+    {
+      "feature": "Regular user sees only assigned orgs (Default Organisation)",
+      "status": "PASS",
+      "details": "GET /api/v2/orgs filters by member_ids for non-workspace-admin users"
+    },
+    {
+      "feature": "Regular user my_role='member' in workspace list",
+      "status": "PASS",
+      "details": "GET /api/v2/workspaces returns my_role field, johndoe has 'member' role"
+    },
+    {
+      "feature": "Regular user blocked from admin endpoints (403)",
+      "status": "PASS",
+      "details": "/api/admin/users returns 403, /api/v2/workspaces/{id}/users returns 403"
+    },
+    {
+      "feature": "Regular user can navigate to bot settings pages",
+      "status": "PASS",
+      "details": "Bot Overview, Bot Settings, Knowledge Base, Integrations pages all accessible"
+    },
+    {
+      "feature": "Workspace admin sidebar shows Admin section with 5 links",
+      "status": "PASS",
+      "details": "Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage visible"
+    },
+    {
+      "feature": "Workspace admin sidebar hides Enterprise section",
+      "status": "PASS",
+      "details": "Enterprise section and new workspace button hidden for workspace admin"
+    },
+    {
+      "feature": "Superadmin sidebar shows Enterprise section with 3 links",
+      "status": "PASS",
+      "details": "Workspaces, Team & Access, Discord App Setup visible with new workspace button"
+    },
+    {
+      "feature": "Superadmin sidebar hides Admin section",
+      "status": "PASS",
+      "details": "Organisations, Analytics, API Key Usage hidden for superadmin"
+    }
+  ],
+  "test_credentials": {
+    "platform_superadmin": "admin@bitbotpro.io / Admin@123",
+    "workspace_owner": "admin@bridgebot.tech / Admin@123",
+    "regular_user": "johndoe@example.com / User@123",
+    "development_workspace_id": "5346b610-1c2c-4bfe-86a5-de820e315ddf",
+    "default_org_id": "cb91e73c-b74b-45a3-aecc-f7823ee07d2c"
+  }
+}

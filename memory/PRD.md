@@ -125,7 +125,14 @@ users                → +platform_role field
 - [x] Superadmin sidebar unchanged (Enterprise section)
 - [x] Tested: 11/11 backend + all UI passed (iteration_83.json)
 
-### Stage 3: Signup & Invitation System — DONE ✅
+### Stage 2.11: Regular User Role-Based Sidebar — DONE ✅ (Nov 2026)
+- [x] 3-tier sidebar: Superadmin (Enterprise), Workspace Admin (Admin), Regular User (org + bots only)
+- [x] Regular users see only: Organisation selector, Overview, Bots, and bot management (no workspace selector, no admin sections)
+- [x] Org listing scoped by `member_ids` for regular users — they only see assigned orgs
+- [x] Org delete button hidden for regular users
+- [x] Workspace list returns `my_role` field for frontend role determination
+- [x] Admin endpoints reject regular users with 403
+- [x] Tested: 14/14 backend + all UI passed (iteration_84.json)
 - [x] Workspace invitation system (email + role + token) — backend + UI done
 - [x] Invite accept auto-joins workspace with pre-configured role
 - [x] Invite details show workspace name and role on accept page
