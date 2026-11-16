@@ -1,17 +1,19 @@
 # BitBot Pro Test Credentials
 
-## Platform Superadmin
+## Platform Superadmin (sole superadmin)
 - Email: admin@bitbotpro.io
 - Password: Admin@123
 - Role: superadmin + platform_role=superadmin
-- Note: Created during workspace migration, password copied from admin@bridgebot.tech
+- Access: All workspaces, platform admin, Discord app management
 
-## Workspace Owner (development)
+## Workspace Owner (development workspace only)
 - Email: admin@bridgebot.tech
 - Username: administrator
 - Password: Admin@123
-- Role: superadmin (to be demoted to user after confirmation)
+- Role: user (DEMOTED from superadmin)
 - Workspace Role: owner of "development" workspace
+- Access: development workspace only, NO platform admin access
+- Note: Temporary account — will be removed once admin@bitbotpro.io setup is confirmed
 
 ## Key IDs
 - Development Workspace ID: 5346b610-1c2c-4bfe-86a5-de820e315ddf
@@ -21,8 +23,6 @@
 
 ## Regular Users
 - johndoe@example.com (role: user, password unknown)
-- test_accept_ad995fb5@example.com (role: user)
-- test_accept_ui_9c6e9175@example.com (role: user)
 
 ## Demoted Test Accounts
 - test_promote_464322a4@example.com (was superadmin → now user)

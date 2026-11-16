@@ -160,7 +160,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
-FROM_EMAIL = "noreply@bridgebot.tech"
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@bitbotpro.io")
 async def send_verification_email(to_email: str, code: str):
     """Send verification code email via Resend. Falls back to console log if key not set."""
     if not resend.api_key:

@@ -84,16 +84,16 @@ async def run_workspace_migration(db) -> dict:
         results["admin_bitbotpro_created"] = True
         logger.info(f"[WS-MIGRATE] Created admin@bitbotpro.io → ID: {bitbotpro_user_id}")
 
-    # ── Step 3: Set platform_role on admin@bitbotpro.io, ensure bridgebot keeps superadmin for now ──
-    # (admin@bridgebot.tech demotion deferred until admin@bitbotpro.io is confirmed working)
+    # ── Step 3: Set platform_role on admin@bitbotpro.io ──
+    # admin@bridgebot.tech is workspace owner only — NOT platform superadmin
     await db.users.update_one(
         {"id": bitbotpro_user_id},
-        {"$set": {"platform_role": "superadmin"}}
+        {"$set": {"platform_role": "superadmin", "role": "superadmin"}}
     )
-    # Ensure bridgebot admin also gets platform_role field (currently still superadmin)
+    # Ensure bridgebot admin is NOT superadmin (demoted to workspace owner)
     await db.users.update_one(
-        {"id": bridgebot_user_id, "platform_role": {"$exists": False}},
-        {"$set": {"platform_role": "superadmin"}}
+        {"id": bridgebot_user_id, "role": "superadmin"},
+        {"$set": {"role": "user", "platform_role": None}}
     )
 
     # ── Step 4: Create "development" workspace (idempotent) ──
