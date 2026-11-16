@@ -276,6 +276,12 @@ export function AuthProvider({ children }) {
         setSelectedInstance(inst);
         localStorage.setItem("bf_instance", JSON.stringify(inst));
         localStorage.setItem("bf_instance_id", inst.id);
+      } else {
+        // Legacy instance not in user's assigned list — use legacyId directly
+        const synth = { id: bot.legacy_instance_id, name: bot.name };
+        setSelectedInstance(synth);
+        localStorage.setItem("bf_instance", JSON.stringify(synth));
+        localStorage.setItem("bf_instance_id", bot.legacy_instance_id);
       }
     } else {
       const synth = { id: bot.id, name: bot.name };

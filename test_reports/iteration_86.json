@@ -1,0 +1,116 @@
+{
+  "summary": "Iteration 86 - Zendesk P0 Bug Fix Verification Complete. The P0 bug 'No Zendesk connection found' when clicking Test button is FIXED. All 13 backend tests passed. Frontend UI tests verified the fix - clicking Test button now shows 'Authorization Expired' (expected in test env) instead of 'No Zendesk connection found'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter86_zendesk_p0_fix.py",
+    "/app/test_reports/pytest/iter86_zendesk_p0_fix.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "P0 Bug Fix Verified: selectBot() in AuthContext.js (lines 270-292) now correctly creates synthetic instance with legacy_instance_id when bot has legacy ID but it's not in user's instances array",
+    "Root cause confirmed: zendesk_config collection is keyed on legacy_instance_id (88bfae82-2533-4235-968d-b3298fd57073), not V2 bot ID (f014cae7-788f-447c-b524-7d72709daa80)",
+    "User's /auth/me instances array contains V2 bot IDs, not legacy IDs - the fix bridges this gap",
+    "ZendeskSettings.js correctly uses selectedInstance.id and lockedInstanceId for X-Instance-ID header",
+    "Backend _verify_instance_access properly validates access via V2 workspace membership fallback"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter86_zendesk_p0_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (all P0 bug verification tests passed)"
+  },
+  "seed_data_creation": "No seed data created - used existing test data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "P0 Zendesk bug is fixed. Key IDs: API Tester V2 bot ID=f014cae7-788f-447c-b524-7d72709daa80, legacy_instance_id=88bfae82-2533-4235-968d-b3298fd57073. Zendesk config is keyed on legacy ID. The fix in selectBot() creates synthetic instance when legacy ID not in user's instances. Test button now shows 'Authorization Expired' (expected - OAuth token expired in test env) instead of 'No Zendesk connection found'.",
+  "features_tested": [
+    {
+      "feature": "P0 Bug Fix: Zendesk config with legacy_instance_id returns connected=true",
+      "status": "PASS",
+      "details": "GET /api/admin/zendesk-config with X-Instance-ID=88bfae82-... returns connected=true, subdomain=midnight-gd"
+    },
+    {
+      "feature": "P0 Bug Fix: Test button does NOT show 'No Zendesk connection found'",
+      "status": "PASS",
+      "details": "POST /api/admin/zendesk-config/test returns 'Authorization Expired' (expected), NOT 'No Zendesk connection found'"
+    },
+    {
+      "feature": "Frontend Zendesk page shows 'Connected to midnight-gd.zendesk.com' with ACTIVE status",
+      "status": "PASS",
+      "details": "UI correctly displays connection status and ACTIVE badge"
+    },
+    {
+      "feature": "Frontend Test button click shows 'Authorization Expired' toast",
+      "status": "PASS",
+      "details": "Toast message: 'Zendesk authorization expired. Please reconnect.' - expected in test env"
+    },
+    {
+      "feature": "Superadmin login and sidebar shows Enterprise section",
+      "status": "PASS",
+      "details": "Enterprise section visible with Workspaces, Team & Access, Discord App Setup"
+    },
+    {
+      "feature": "Workspace owner login and sidebar shows Admin section",
+      "status": "PASS",
+      "details": "Admin section visible with Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage"
+    },
+    {
+      "feature": "Workspace owner can access Zendesk settings page",
+      "status": "PASS",
+      "details": "Zendesk page loads correctly showing 'Connected to midnight-gd.zendesk.com'"
+    },
+    {
+      "feature": "Navigation between pages (Overview, Bots, Bot Settings, Integrations)",
+      "status": "PASS",
+      "details": "All navigation links work correctly"
+    },
+    {
+      "feature": "Bot has correct legacy_instance_id mapping",
+      "status": "PASS",
+      "details": "API Tester bot has id=f014cae7-... and legacy_instance_id=88bfae82-..."
+    },
+    {
+      "feature": "User instances contain V2 bot ID (confirms bug scenario)",
+      "status": "PASS",
+      "details": "/auth/me returns instances with V2 bot IDs, not legacy IDs"
+    },
+    {
+      "feature": "All 3 user types can login",
+      "status": "PASS",
+      "details": "Superadmin, workspace owner, and regular user login all work"
+    },
+    {
+      "feature": "Workspaces and Orgs endpoints work",
+      "status": "PASS",
+      "details": "GET /api/v2/workspaces and GET /api/v2/orgs return correct data"
+    },
+    {
+      "feature": "Bots endpoint works",
+      "status": "PASS",
+      "details": "GET /api/v2/orgs/{org_id}/bots returns bots with legacy_instance_id"
+    }
+  ],
+  "test_credentials": {
+    "platform_superadmin": "admin@bitbotpro.io / Admin@123",
+    "workspace_owner": "admin@bridgebot.tech / Admin@123",
+    "regular_user": "johndoe@example.com / User@123",
+    "api_tester_v2_bot_id": "f014cae7-788f-447c-b524-7d72709daa80",
+    "api_tester_legacy_instance_id": "88bfae82-2533-4235-968d-b3298fd57073"
+  },
+  "p0_bug_verification": {
+    "bug_description": "'No Zendesk connection found' toast appearing when clicking Test button on Zendesk settings page",
+    "root_cause": "selectBot() in AuthContext.js didn't create synthetic instance when bot had legacy_instance_id but that ID wasn't in user's instances array",
+    "fix_location": "AuthContext.js lines 270-292 - added else branch to create synthetic instance with legacy_instance_id",
+    "verification_result": "FIXED - Test button now shows 'Authorization Expired' (expected) instead of 'No Zendesk connection found'",
+    "expected_behavior_in_test_env": "OAuth token is expired, so 'Authorization Expired' message is expected and correct"
+  }
+}

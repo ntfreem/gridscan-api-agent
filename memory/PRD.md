@@ -146,6 +146,11 @@ users                → +platform_role field
 - [x] Backend: PATCH /api/auth/profile, POST /api/auth/change-password
 - [x] Tested: 7/7 backend + all UI passed (iteration_85.json)
 
+### Bug Fix: Zendesk Instance ID Mismatch — DONE ✅ (Nov 2026)
+- [x] Fixed selectBot() in AuthContext.js — added missing else branch to create synthetic instance with legacy_instance_id when not found in user's instances array
+- [x] Root cause: zendesk_config keyed on legacy V1 instance ID, but selectBot() was not setting bf_instance_id to legacy ID → "No Zendesk connection found" toast
+- [x] Tested: 13/13 backend + all frontend verification passed (iteration_86.json)
+
 ### Stage 4: Billing Integration — NOT STARTED
 - [ ] Stripe customer/subscription linked to workspace
 - [ ] Entitlement enforcement middleware
