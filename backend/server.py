@@ -5956,7 +5956,7 @@ async def send_discord_invite_email(body: SendInviteEmailBody, instance_id: str 
 </div></body></html>"""
     try:
         result = resend.Emails.send({
-            "from": "BitBot Pro <noreply@bridgebot.tech>",
+            "from": f"BitBot Pro <{FROM_EMAIL}>",
             "to": [body.to_email.strip()],
             "subject": f"Invite {bot_name} to your Discord server",
             "html": html,
