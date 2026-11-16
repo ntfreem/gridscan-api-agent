@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -100,14 +100,29 @@ export default function ZendeskSettings() {
 
   // Stable instance ID: once config loads successfully with an instance_id, lock it for this session
   const [lockedInstanceId, setLockedInstanceId] = useState(null);
+  // Track which selectedInstance.id the latest fetch was for
+  const fetchSeqRef = useRef(0);
+
   const getHeaders = useCallback(() => {
     const iid = lockedInstanceId || selectedInstance?.id || localStorage.getItem("bf_instance_id");
     return iid ? { "X-Instance-ID": iid } : {};
   }, [lockedInstanceId, selectedInstance]);
 
+  // Reset state when the selected instance (bot) changes
+  useEffect(() => {
+    setLockedInstanceId(null);
+    setConfig(null);
+    setWebhookUrl("");
+    setTickets([]);
+    setSidebarKey("");
+    setLoading(true);
+  }, [selectedInstance?.id]);
+
   const fetchConfig = useCallback(async () => {
     // Wait for instance to be selected (ensures X-Instance-ID header is set)
     if (!selectedInstance?.id) return;
+    // Track this fetch so stale responses are ignored
+    const seq = ++fetchSeqRef.current;
     try {
       const headers = { "X-Instance-ID": selectedInstance.id };
       const [cfgRes, oauthClientRes, cbRes] = await Promise.all([
@@ -115,6 +130,8 @@ export default function ZendeskSettings() {
         api.get("/admin/zendesk/oauth/client-config", { headers }).catch(() => ({ data: { configured: false } })),
         api.get("/admin/zendesk/oauth/callback-url", { headers }).catch(() => ({ data: { callback_url: "" } })),
       ]);
+      // If a newer fetch has started, discard this stale response
+      if (seq !== fetchSeqRef.current) return;
       // Lock the instance_id that successfully returned the config
       if (cfgRes.data.instance_id) setLockedInstanceId(cfgRes.data.instance_id);
       setCallbackUrl(cbRes.data.callback_url || "");
@@ -128,21 +145,25 @@ export default function ZendeskSettings() {
         const h = { "X-Instance-ID": cfgRes.data.instance_id || selectedInstance.id };
         try {
           const wh = await api.get("/admin/zendesk-config/webhook-url", { headers: h });
+          if (seq !== fetchSeqRef.current) return;
           setWebhookUrl(wh.data.webhook_url || "");
         } catch { /* ignore */ }
         try {
           const tk = await api.get("/admin/zendesk-tickets", { headers: h });
+          if (seq !== fetchSeqRef.current) return;
           setTickets(tk.data.tickets || []);
         } catch { /* ignore */ }
         try {
           const sk = await api.get("/admin/zendesk/sidebar-key", { headers: h });
+          if (seq !== fetchSeqRef.current) return;
           setSidebarKey(sk.data.sidebar_api_key || "");
         } catch { /* ignore */ }
       }
     } catch {
+      if (seq !== fetchSeqRef.current) return;
       toast.error("Failed to load Zendesk config");
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   }, [selectedInstance]);
 

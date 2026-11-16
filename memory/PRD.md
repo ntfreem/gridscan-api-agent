@@ -148,7 +148,8 @@ users                → +platform_role field
 
 ### Bug Fix: Zendesk Instance ID Mismatch — DONE ✅ (Nov 2026)
 - [x] Fixed selectBot() in AuthContext.js — added missing else branch to create synthetic instance with legacy_instance_id when not found in user's instances array
-- [x] Root cause: zendesk_config keyed on legacy V1 instance ID, but selectBot() was not setting bf_instance_id to legacy ID → "No Zendesk connection found" toast
+- [x] Fixed stale async fetch race condition in ZendeskSettings.js — added sequence counter to discard out-of-order responses, reset all Zendesk state when bot/instance changes
+- [x] Root cause: (1) selectBot() not setting bf_instance_id for legacy bots, (2) switching workspaces/bots caused stale fetches to overwrite state with wrong instance's config
 - [x] Tested: 13/13 backend + all frontend verification passed (iteration_86.json)
 
 ### Stage 4: Billing Integration — NOT STARTED
