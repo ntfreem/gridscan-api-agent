@@ -548,8 +548,8 @@ export default function AdminLayout() {
             </>
           )}
 
-          {/* Workspace Settings */}
-          {selectedWorkspace && (
+          {/* Workspace Settings — only for NON-superadmins */}
+          {selectedWorkspace && !isSuperAdmin && (
             <>
               <SectionLabel icon={Settings} label="Workspace Settings" />
               <SideNavLink to="/admin/workspace/settings" icon={SlidersHorizontal} label="General" onClick={closeMobile} />
@@ -560,15 +560,13 @@ export default function AdminLayout() {
             </>
           )}
 
-          {/* Platform Admin */}
+          {/* Enterprise — superadmin only */}
           {isSuperAdmin && (
             <>
-              <SectionLabel icon={Shield} label="Platform Admin" />
-              <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />
-              <SideNavLink to="/admin/discord-app-setup" icon={Zap} label="Discord App Setup" onClick={closeMobile} />
+              <SectionLabel icon={Shield} label="Enterprise" />
+              <SideNavLink to="/admin/enterprise/workspaces" icon={Layers} label="Workspaces" onClick={closeMobile} />
               <SideNavLink to="/admin/team" icon={Users} label="Team & Access" onClick={closeMobile} />
-              <SideNavLink to="/admin/platform/analytics" icon={BarChart2} label="Analytics" onClick={closeMobile} />
-              <SideNavLink to="/admin/platform/api-keys" icon={Key} label="API Key Usage" onClick={closeMobile} />
+              <SideNavLink to="/admin/discord-app-setup" icon={Zap} label="Discord App Setup" onClick={closeMobile} />
             </>
           )}
         </nav>

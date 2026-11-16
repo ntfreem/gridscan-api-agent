@@ -106,6 +106,15 @@ users                → +platform_role field
 - [x] After deletion, switches to remaining workspace and redirects to /admin
 - [x] Tested: 5/5 backend + all UI passed (iteration_81.json)
 
+### Stage 2.9: Enterprise Superadmin View — DONE ✅ (Nov 2026)
+- [x] Restructured superadmin sidebar: removed Workspace Settings, Analytics, API Key Usage
+- [x] New "Enterprise" section: Workspaces, Team & Access, Discord App Setup
+- [x] Enterprise Workspaces page: full CRUD, member management, role editing, plan display
+- [x] Non-superadmin sidebar preserved: Workspace Settings still shows for workspace owners
+- [x] Workspace cards: expandable with members (role badges, edit, remove), orgs, plan (5 orgs, unlimited bots)
+- [x] Create workspace inline form + Delete with type-to-confirm and cascade protection
+- [x] Tested: 13/13 backend + all UI passed (iteration_82.json)
+
 ### Stage 3: Signup & Invitation System — DONE ✅
 - [x] Workspace invitation system (email + role + token) — backend + UI done
 - [x] Invite accept auto-joins workspace with pre-configured role
