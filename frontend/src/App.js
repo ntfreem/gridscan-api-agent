@@ -89,7 +89,7 @@ function AppRoutes() {
         <Route path="organisations" element={<Organisations />} />
         <Route path="bots" element={<BotList />} />
         <Route path="accounts/:provider" element={<ConnectedAccounts />} />
-        <Route path="team" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
+        <Route path="team" element={<ProtectedRoute><Users /></ProtectedRoute>} />
 
         {/* Workspace Settings */}
         <Route path="workspace/settings" element={<WorkspaceSettings />} />
@@ -122,7 +122,7 @@ function AppRoutes() {
         <Route path="settings" element={<BotSettings />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="discord" element={<DiscordSettings />} />
-        <Route path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
+        <Route path="discord-app-setup" element={<ProtectedRoute><DiscordAppSetup /></ProtectedRoute>} />
         <Route path="embed" element={<EmbedCode />} />
         <Route path="api-integrations" element={<ApiIntegrations />} />
         <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
@@ -130,7 +130,7 @@ function AppRoutes() {
         <Route path="zendesk" element={<ZendeskSettings />} />
         <Route path="changelog" element={<ChangelogPage />} />
         <Route path="setup-guide" element={<SetupGuide />} />
-        <Route path="users" element={<AdminOnlyRoute><Users /></AdminOnlyRoute>} />
+        <Route path="users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
       </Route>
 
       {/* Public pages */}

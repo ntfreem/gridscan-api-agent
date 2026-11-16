@@ -115,6 +115,16 @@ users                → +platform_role field
 - [x] Create workspace inline form + Delete with type-to-confirm and cascade protection
 - [x] Tested: 13/13 backend + all UI passed (iteration_82.json)
 
+### Stage 2.10: Admin Sidebar for Workspace Admins — DONE ✅ (Nov 2026)
+- [x] Workspace admins see "Admin" section: Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage
+- [x] Removed Workspace Settings section for non-superadmins
+- [x] Created `require_admin_or_ws_admin` backend dependency — allows workspace admins to access admin endpoints
+- [x] Workspace-scoped data: `/api/admin/users` returns only users in the admin's workspaces
+- [x] Workspace admin role editing scoped to their workspaces; platform role changes blocked
+- [x] Workspace admins can invite, delete (workspace-scoped), and manage team members
+- [x] Superadmin sidebar unchanged (Enterprise section)
+- [x] Tested: 11/11 backend + all UI passed (iteration_83.json)
+
 ### Stage 3: Signup & Invitation System — DONE ✅
 - [x] Workspace invitation system (email + role + token) — backend + UI done
 - [x] Invite accept auto-joins workspace with pre-configured role

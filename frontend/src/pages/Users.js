@@ -49,9 +49,8 @@ export default function Users() {
         setWsMemberMap(map);
       } catch {}
     }
-    // Load memberships across ALL workspaces (superadmin view)
-    const isSA = currentUser?.role === "superadmin" || currentUser?.platform_role === "superadmin";
-    if (isSA && workspaces.length > 0) {
+    // Load memberships across ALL workspaces (admin view)
+    if (workspaces.length > 0) {
       const allMemberships = {};
       for (const ws of workspaces) {
         try {

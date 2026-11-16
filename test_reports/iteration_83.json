@@ -1,0 +1,116 @@
+{
+  "summary": "Iteration 83 - Admin Sidebar Restructuring & Workspace-Scoped Team Access Testing Complete. All 11 backend tests passed. All frontend UI tests verified sidebar structure for workspace admins (Admin section with 5 links) and superadmins (Enterprise section with 3 links), workspace-scoped user list, role editing, and page access.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter83_admin_sidebar_workspace_scoping.py",
+    "/app/test_reports/pytest/iter83_admin_sidebar_workspace_scoping.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Workspace admin sidebar correctly shows 'Admin' section with 5 links: Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage",
+    "Workspace admin sidebar correctly hides 'Enterprise', 'Workspace Settings', and 'Platform Admin' sections",
+    "Workspace admin sidebar correctly hides the '+' button for creating new workspaces",
+    "Superadmin sidebar correctly shows 'Enterprise' section with 3 links: Workspaces, Team & Access, Discord App Setup",
+    "Superadmin sidebar correctly shows the '+' button for creating new workspaces",
+    "Superadmin sidebar correctly hides 'Admin' and 'Workspace Settings' sections",
+    "GET /api/admin/users returns workspace-scoped users for workspace admins (3 users) vs all users for superadmins",
+    "Workspace admin can access /admin/team page and see only workspace-scoped users",
+    "Workspace admin can edit workspace roles (admin/member) via Edit User modal",
+    "Workspace admin cannot change platform-level roles (returns 403)",
+    "Workspace admin cannot delete superadmin users (returns 400)",
+    "Workspace admin can access /admin/organisations, /admin/analytics, /admin/api-key-analytics pages without 403",
+    "Workspace admin can invite new team members via Invite User modal",
+    "UI correctly hides edit/delete buttons for owner and superadmin users"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter83_admin_sidebar_workspace_scoping.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "seed_data_creation": "None - used existing test users",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin sidebar restructuring complete. Key data-testids: nav-organisations, nav-discord-app-setup, nav-team-&-access, nav-analytics, nav-api-key-usage (Admin section for workspace admins), nav-workspaces (Enterprise section for superadmins), new-workspace-btn (only visible for superadmins), invite-user-btn, edit-user-modal, user-row-{id}, edit-user-{id}, delete-user-{id}, reset-pw-{id}. Sidebar uses isSuperAdmin check (user.role === 'superadmin' || user.platform_role === 'superadmin') to show Enterprise vs Admin sections. require_admin_or_ws_admin dependency allows workspace admins/owners to access admin endpoints with workspace-scoped data.",
+  "features_tested": [
+    {
+      "feature": "Workspace admin sidebar shows 'Admin' section with 5 links",
+      "status": "PASS",
+      "details": "Admin section with Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage links visible for workspace admin"
+    },
+    {
+      "feature": "Workspace admin sidebar hides Enterprise/Workspace Settings/Platform Admin",
+      "status": "PASS",
+      "details": "Enterprise, Workspace Settings, Platform Admin sections NOT shown for workspace admin"
+    },
+    {
+      "feature": "Workspace admin sidebar hides '+' button for creating workspaces",
+      "status": "PASS",
+      "details": "New workspace button NOT shown for workspace admin"
+    },
+    {
+      "feature": "Superadmin sidebar shows 'Enterprise' section with 3 links",
+      "status": "PASS",
+      "details": "Enterprise section with Workspaces, Team & Access, Discord App Setup links visible for superadmin"
+    },
+    {
+      "feature": "Superadmin sidebar shows '+' button for creating workspaces",
+      "status": "PASS",
+      "details": "New workspace button visible for superadmin"
+    },
+    {
+      "feature": "GET /api/admin/users returns workspace-scoped users for workspace admin",
+      "status": "PASS",
+      "details": "Workspace admin sees 3 users (workspace-scoped), superadmin sees all users"
+    },
+    {
+      "feature": "Workspace admin can access /admin/team page",
+      "status": "PASS",
+      "details": "Team page loads correctly with workspace-scoped users and Invite User button"
+    },
+    {
+      "feature": "Workspace admin can edit workspace roles (admin/member)",
+      "status": "PASS",
+      "details": "Edit User modal shows workspace role toggle, can change admin/member roles"
+    },
+    {
+      "feature": "Workspace admin cannot change platform-level roles",
+      "status": "PASS",
+      "details": "PATCH /api/admin/users/{id}/role without workspace_id returns 403 for workspace admin"
+    },
+    {
+      "feature": "Workspace admin cannot delete superadmin users",
+      "status": "PASS",
+      "details": "DELETE /api/admin/users/{superadmin_id} returns 400 'Cannot delete admin accounts'"
+    },
+    {
+      "feature": "Workspace admin can access admin pages without 403",
+      "status": "PASS",
+      "details": "Organisations, Analytics, API Key Usage, Discord App Setup pages all accessible"
+    },
+    {
+      "feature": "Workspace admin can invite new team members",
+      "status": "PASS",
+      "details": "Invite User modal opens with workspace selection and role options"
+    },
+    {
+      "feature": "UI hides edit/delete buttons for owner and superadmin users",
+      "status": "PASS",
+      "details": "Only reset password button shown for owner and superadmin rows"
+    }
+  ],
+  "test_credentials": {
+    "platform_superadmin": "admin@bitbotpro.io / Admin@123",
+    "workspace_owner": "admin@bridgebot.tech / Admin@123",
+    "development_workspace_id": "5346b610-1c2c-4bfe-86a5-de820e315ddf"
+  }
+}

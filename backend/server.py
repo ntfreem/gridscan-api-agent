@@ -323,6 +323,20 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "superadmin" and current_user.get("platform_role") != "superadmin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+async def require_admin_or_ws_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """Allow platform superadmins OR workspace admins/owners."""
+    if current_user.get("role") == "superadmin" or current_user.get("platform_role") == "superadmin":
+        return current_user
+    # Check if user is an admin/owner of any workspace
+    ws_membership = await db.workspace_members.find_one({
+        "user_id": current_user["id"],
+        "role": {"$in": ["admin", "owner"]}
+    })
+    if ws_membership:
+        return current_user
+    raise HTTPException(status_code=403, detail="Admin access required")
+
 async def _verify_instance_access(x_instance_id: Optional[str], current_user: dict) -> str:
     if not x_instance_id:
         raise HTTPException(status_code=400, detail="X-Instance-ID header required")
@@ -2712,13 +2726,37 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 # ==================== INSTANCE MANAGEMENT (SUPERADMIN) ====================
 
 @api_router.get("/admin/users")
-async def list_all_users(current_user: dict = Depends(require_admin)):
-    """Return all registered users with their assigned instances."""
-    users = await db.users.find(
-        {},
-        {"_id": 0, "hashed_password": 0, "verification_code": 0,
-         "verification_code_expiry": 0, "reset_code": 0, "reset_code_expires": 0}
-    ).to_list(1000)
+async def list_all_users(current_user: dict = Depends(require_admin_or_ws_admin)):
+    """Return users. Superadmins see all; workspace admins see users in their workspaces only."""
+    is_super = current_user.get("role") == "superadmin" or current_user.get("platform_role") == "superadmin"
+
+    if is_super:
+        users = await db.users.find(
+            {},
+            {"_id": 0, "hashed_password": 0, "verification_code": 0,
+             "verification_code_expiry": 0, "reset_code": 0, "reset_code_expires": 0}
+        ).to_list(1000)
+    else:
+        # Find workspaces where this user is admin/owner
+        my_ws = await db.workspace_members.find(
+            {"user_id": current_user["id"], "role": {"$in": ["admin", "owner"]}},
+            {"_id": 0, "workspace_id": 1}
+        ).to_list(100)
+        my_ws_ids = [m["workspace_id"] for m in my_ws]
+        # Find all users who are members of those workspaces
+        ws_members = await db.workspace_members.find(
+            {"workspace_id": {"$in": my_ws_ids}},
+            {"_id": 0, "user_id": 1}
+        ).to_list(1000)
+        user_ids = list(set(m["user_id"] for m in ws_members))
+        if not user_ids:
+            return []
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "hashed_password": 0, "verification_code": 0,
+             "verification_code_expiry": 0, "reset_code": 0, "reset_code_expires": 0}
+        ).to_list(1000)
+
     instances = await db.bot_instances.find(
         {}, {"_id": 0, "id": 1, "name": 1, "assigned_user_ids": 1}
     ).to_list(100)
@@ -2740,15 +2778,28 @@ async def list_all_users(current_user: dict = Depends(require_admin)):
         user["assigned_bots"] = [{"id": bid, "name": bot_map.get(bid, bid)} for bid in user_bot_ids]
     return users
 @api_router.delete("/admin/users/{user_id}")
-async def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
-    """Delete a user (admin only). Cannot delete yourself."""
+async def delete_user(user_id: str, current_user: dict = Depends(require_admin_or_ws_admin)):
+    """Delete a user. Superadmins can delete anyone except themselves. Workspace admins can only delete users in their workspaces."""
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("role") == "superadmin":
+    if user.get("role") == "superadmin" or user.get("platform_role") == "superadmin":
         raise HTTPException(status_code=400, detail="Cannot delete admin accounts")
+    is_super = current_user.get("role") == "superadmin" or current_user.get("platform_role") == "superadmin"
+    if not is_super:
+        # Workspace admin: verify target is in one of their workspaces
+        my_ws = await db.workspace_members.find(
+            {"user_id": current_user["id"], "role": {"$in": ["admin", "owner"]}},
+            {"_id": 0, "workspace_id": 1}
+        ).to_list(100)
+        my_ws_ids = [m["workspace_id"] for m in my_ws]
+        target_ws = await db.workspace_members.find_one(
+            {"user_id": user_id, "workspace_id": {"$in": my_ws_ids}}
+        )
+        if not target_ws:
+            raise HTTPException(status_code=403, detail="User is not in your workspace")
     # Remove user from all instance assignments
     await db.bot_instances.update_many(
         {"assigned_user_ids": user_id},
@@ -2763,11 +2814,12 @@ class UserRoleUpdate(BaseModel):
     workspace_id: Optional[str] = None
 
 @api_router.patch("/admin/users/{user_id}/role")
-async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dict = Depends(require_admin)):
+async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Update a user's role. 
     - With workspace_id: changes workspace role (admin/member)
     - Without workspace_id: changes platform role (superadmin/user) — superadmin only
     """
+    is_super = current_user.get("role") == "superadmin" or current_user.get("platform_role") == "superadmin"
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -2781,6 +2833,14 @@ async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dic
         ws = await db.workspaces.find_one({"id": body.workspace_id})
         if not ws:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        # Non-superadmin: must be admin/owner of THIS workspace
+        if not is_super:
+            my_membership = await db.workspace_members.find_one({
+                "workspace_id": body.workspace_id, "user_id": current_user["id"],
+                "role": {"$in": ["admin", "owner"]}
+            })
+            if not my_membership:
+                raise HTTPException(status_code=403, detail="You are not an admin of this workspace")
         # Cannot change workspace owner's role
         if ws.get("owner_id") == user_id:
             raise HTTPException(status_code=400, detail="Cannot change the workspace owner's role")
@@ -2808,7 +2868,9 @@ async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dic
             action = "set to regular member"
         return {"success": True, "message": f"{user.get('email', '')} {action}"}
 
-    # Platform-level role change (no workspace_id)
+    # Platform-level role change (no workspace_id) — superadmin only
+    if not is_super:
+        raise HTTPException(status_code=403, detail="Only platform superadmins can change platform roles")
     if body.role not in ("superadmin", "user"):
         raise HTTPException(status_code=400, detail="Platform role must be 'superadmin' or 'user'")
     # Only platform superadmins can grant/revoke platform superadmin
@@ -2845,7 +2907,7 @@ class AdminResetPasswordBody(BaseModel):
     new_password: str
 
 @api_router.post("/admin/users/{user_id}/reset-password")
-async def admin_reset_password(user_id: str, body: AdminResetPasswordBody, current_user: dict = Depends(require_admin)):
+async def admin_reset_password(user_id: str, body: AdminResetPasswordBody, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Admin can force-reset another user's password."""
     if len(body.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
@@ -2899,7 +2961,7 @@ async def send_invitation_email(to_email: str, invite_token: str, role: str, inv
         print(f"\n{'='*50}\nFALLBACK INVITE EMAIL\nTo: {to_email}\nLink: {invite_url}\n{'='*50}\n")
 
 @api_router.post("/admin/users/invite")
-async def invite_user(body: InviteUserBody, current_user: dict = Depends(require_admin)):
+async def invite_user(body: InviteUserBody, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Send an email invitation to a new user with a pre-assigned role, workspace, and org access."""
     email = body.email.strip().lower()
     if not email or "@" not in email:
@@ -2956,13 +3018,13 @@ async def invite_user(body: InviteUserBody, current_user: dict = Depends(require
     return {"success": True, "message": f"Invitation sent to {email}", "token": token_val}
 
 @api_router.get("/admin/users/invitations")
-async def list_invitations(current_user: dict = Depends(require_admin)):
+async def list_invitations(current_user: dict = Depends(require_admin_or_ws_admin)):
     """List all pending and recent invitations."""
     invites = await db.invitations.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {"invitations": invites}
 
 @api_router.delete("/admin/users/invitations/{token}")
-async def revoke_invitation(token: str, current_user: dict = Depends(require_admin)):
+async def revoke_invitation(token: str, current_user: dict = Depends(require_admin_or_ws_admin)):
     """Revoke a pending invitation."""
     result = await db.invitations.update_one(
         {"token": token, "status": "pending"},

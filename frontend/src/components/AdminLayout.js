@@ -548,15 +548,15 @@ export default function AdminLayout() {
             </>
           )}
 
-          {/* Workspace Settings — only for NON-superadmins */}
+          {/* Admin — for workspace admins/owners (non-superadmin) */}
           {selectedWorkspace && !isSuperAdmin && (
             <>
-              <SectionLabel icon={Settings} label="Workspace Settings" />
-              <SideNavLink to="/admin/workspace/settings" icon={SlidersHorizontal} label="General" onClick={closeMobile} />
-              <SideNavLink to="/admin/workspace/members" icon={Users} label="Members" onClick={closeMobile} />
-              <SideNavLink to="/admin/workspace/billing" icon={CreditCard} label="Billing" onClick={closeMobile} />
-              <SideNavLink to="/admin/workspace/discord-apps" icon={Zap} label="Discord Apps" onClick={closeMobile} />
-              <div style={{ height: "1px", backgroundColor: colors.border.subtle, margin: "10px 8px" }} />
+              <SectionLabel icon={Settings} label="Admin" />
+              <SideNavLink to="/admin/organisations" icon={Building2} label="Organisations" onClick={closeMobile} />
+              <SideNavLink to="/admin/workspace/discord-apps" icon={Zap} label="Discord App Setup" onClick={closeMobile} />
+              <SideNavLink to="/admin/team" icon={Users} label="Team & Access" onClick={closeMobile} />
+              <SideNavLink to="/admin/analytics" icon={BarChart2} label="Analytics" onClick={closeMobile} />
+              <SideNavLink to="/admin/api-key-analytics" icon={Key} label="API Key Usage" onClick={closeMobile} />
             </>
           )}
 
