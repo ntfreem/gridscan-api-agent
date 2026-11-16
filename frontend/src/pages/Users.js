@@ -12,8 +12,9 @@ import {
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function Users() {
-  const { user: currentUser, token } = useAuth();
+  const { user: currentUser, token, selectedWorkspace } = useAuth();
   const [users, setUsers] = useState([]);
+  const [wsMemberMap, setWsMemberMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [showResetPw, setShowResetPw] = useState(null); // user obj
@@ -36,6 +37,16 @@ export default function Users() {
       });
       if (res.ok) setUsers(await res.json());
     } catch {}
+    // Load workspace members for role display
+    if (selectedWorkspace) {
+      try {
+        const wsRes = await v2.getWorkspaceMembers(selectedWorkspace.id);
+        const members = wsRes.data?.members || [];
+        const map = {};
+        members.forEach(m => { map[m.user_id] = m; });
+        setWsMemberMap(map);
+      } catch {}
+    }
     setLoading(false);
   };
 
@@ -79,14 +90,22 @@ export default function Users() {
   };
 
   const toggleRole = async (u) => {
-    const newRole = u.role === "superadmin" ? "user" : "superadmin";
+    if (!selectedWorkspace) {
+      toast.error("No workspace selected");
+      return;
+    }
+    const wsMember = wsMemberMap[u.id];
+    const isWsAdmin = wsMember && (wsMember.role === "admin" || wsMember.role === "owner");
+    const newRole = isWsAdmin ? "member" : "admin";
+    const label = newRole === "admin" ? "workspace admin" : "regular member";
+    if (!window.confirm(`Set ${u.email} as ${label} in ${selectedWorkspace.name}?`)) return;
     try {
       const res = await fetch(`${API}/api/admin/users/${u.id}/role`, {
         method: "PATCH", 
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify({ role: newRole, workspace_id: selectedWorkspace.id }),
       });
-      if (res.ok) { toast.success(`Role updated to ${newRole}`); loadUsers(); }
+      if (res.ok) { toast.success(`${u.email} set as ${label}`); loadUsers(); }
       else toast.error((await res.json()).detail || "Failed");
     } catch { toast.error("Failed to update role"); }
   };
@@ -150,10 +169,16 @@ export default function Users() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div style={{
                 width: "36px", height: "36px", borderRadius: "10px",
-                backgroundColor: u.role === "superadmin" ? "rgba(139,92,246,0.12)" : "rgba(96,165,250,0.12)",
+                backgroundColor: (u.role === "superadmin" || u.platform_role === "superadmin") ? "rgba(139,92,246,0.12)"
+                  : wsMemberMap[u.id]?.role === "owner" ? "rgba(245,158,11,0.12)"
+                  : wsMemberMap[u.id]?.role === "admin" ? "rgba(96,165,250,0.12)"
+                  : "rgba(96,165,250,0.06)",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 fontFamily: fonts.heading, fontSize: "13px", fontWeight: "700",
-                color: u.role === "superadmin" ? "#8B5CF6" : "#60A5FA",
+                color: (u.role === "superadmin" || u.platform_role === "superadmin") ? "#8B5CF6"
+                  : wsMemberMap[u.id]?.role === "owner" ? "#F59E0B"
+                  : wsMemberMap[u.id]?.role === "admin" ? "#60A5FA"
+                  : colors.text.muted,
               }}>
                 {(u.first_name || u.username || u.email || "?")[0].toUpperCase()}
               </div>
@@ -199,22 +224,32 @@ export default function Users() {
                   <Clock size={12} /> Pending
                 </span>
               )}
-              {u.role === "superadmin" && (
-                <span style={{ display: "block", marginTop: "2px", fontSize: "10px", fontFamily: fonts.mono, color: "#8B5CF6" }}>Admin</span>
+              {(u.role === "superadmin" || u.platform_role === "superadmin") && (
+                <span style={{ display: "block", marginTop: "2px", fontSize: "10px", fontFamily: fonts.mono, color: "#8B5CF6" }}>Platform Admin</span>
               )}
+              {(() => {
+                const wm = wsMemberMap[u.id];
+                if (!wm) return null;
+                const c = wm.role === "owner" ? "#F59E0B" : wm.role === "admin" ? "#60A5FA" : colors.text.muted;
+                const label = wm.role === "owner" ? "Owner" : wm.role === "admin" ? "Ws Admin" : "Member";
+                return <span style={{ display: "block", marginTop: "2px", fontSize: "10px", fontFamily: fonts.mono, color: c }}>{label}</span>;
+              })()}
             </div>
 
             {/* Actions */}
             <div style={{ display: "flex", gap: "6px" }}>
-              <button onClick={() => toggleRole(u)} title={u.role === "superadmin" ? "Demote" : "Promote"} style={{
-                padding: "6px", borderRadius: "6px", border: `1px solid ${colors.border.default}`,
-                backgroundColor: colors.bg.base, cursor: "pointer", color: colors.text.secondary,
-              }}><Shield size={13} /></button>
+              {u.id !== currentUser?.id && u.platform_role !== "superadmin" && u.role !== "superadmin" && wsMemberMap[u.id]?.role !== "owner" && (
+                <button onClick={() => toggleRole(u)} title={wsMemberMap[u.id]?.role === "admin" ? "Set as Regular" : "Make Workspace Admin"} data-testid={`toggle-role-${u.id}`} style={{
+                  padding: "6px", borderRadius: "6px", border: `1px solid ${wsMemberMap[u.id]?.role === "admin" ? "rgba(96,165,250,0.4)" : colors.border.default}`,
+                  backgroundColor: wsMemberMap[u.id]?.role === "admin" ? "rgba(96,165,250,0.08)" : colors.bg.base,
+                  cursor: "pointer", color: wsMemberMap[u.id]?.role === "admin" ? "#60A5FA" : colors.text.secondary,
+                }}><Shield size={13} /></button>
+              )}
               <button onClick={() => setShowResetPw(u)} title="Reset Password" data-testid={`reset-pw-${u.id}`} style={{
                 padding: "6px", borderRadius: "6px", border: `1px solid ${colors.border.default}`,
                 backgroundColor: colors.bg.base, cursor: "pointer", color: colors.text.secondary,
               }}><Lock size={13} /></button>
-              {u.id !== currentUser?.id && u.role !== "superadmin" && (
+              {u.id !== currentUser?.id && u.platform_role !== "superadmin" && u.role !== "superadmin" && (
                 <button onClick={() => deleteUser(u)} title="Remove" data-testid={`delete-user-${u.id}`} style={{
                   padding: "6px", borderRadius: "6px", border: "1px solid rgba(244,63,94,0.2)",
                   backgroundColor: "rgba(244,63,94,0.06)", cursor: "pointer", color: "#F43F5E",

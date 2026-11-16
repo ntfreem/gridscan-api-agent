@@ -2759,22 +2759,66 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin))
     return {"success": True, "message": f"User {user.get('email', '')} deleted"}
 
 class UserRoleUpdate(BaseModel):
-    role: str  # "superadmin" or "user"
+    role: str  # "superadmin" or "user" (platform) or "admin"/"member" (workspace)
+    workspace_id: Optional[str] = None
 
 @api_router.patch("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, body: UserRoleUpdate, current_user: dict = Depends(require_admin)):
-    """Promote or demote a user (admin only). Cannot change your own role."""
-    if body.role not in ("superadmin", "user"):
-        raise HTTPException(status_code=400, detail="Role must be 'superadmin' or 'user'")
+    """Update a user's role. 
+    - With workspace_id: changes workspace role (admin/member)
+    - Without workspace_id: changes platform role (superadmin/user) — superadmin only
+    """
     if user_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("role") == body.role:
-        return {"success": True, "message": f"User already has role '{body.role}'"}
-    await db.users.update_one({"id": user_id}, {"$set": {"role": body.role}})
-    action = "promoted to Admin" if body.role == "superadmin" else "demoted to User"
+
+    # Workspace-scoped role change
+    if body.workspace_id:
+        if body.role not in ("admin", "member"):
+            raise HTTPException(status_code=400, detail="Workspace role must be 'admin' or 'member'")
+        ws = await db.workspaces.find_one({"id": body.workspace_id})
+        if not ws:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        # Cannot change workspace owner's role
+        if ws.get("owner_id") == user_id:
+            raise HTTPException(status_code=400, detail="Cannot change the workspace owner's role")
+        existing = await db.workspace_members.find_one({"workspace_id": body.workspace_id, "user_id": user_id})
+        if body.role == "admin":
+            if existing:
+                await db.workspace_members.update_one(
+                    {"workspace_id": body.workspace_id, "user_id": user_id},
+                    {"$set": {"role": "admin", "permissions": {"manage_billing": False, "manage_discord_apps": False}}}
+                )
+            else:
+                # Add user to workspace as admin
+                await db.workspace_members.insert_one({
+                    "workspace_id": body.workspace_id,
+                    "user_id": user_id,
+                    "role": "admin",
+                    "permissions": {"manage_billing": False, "manage_discord_apps": False},
+                    "invited_by": current_user["id"],
+                    "joined_at": datetime.now(timezone.utc).isoformat(),
+                })
+            action = "made workspace admin"
+        else:  # member — remove workspace-level role
+            if existing and existing.get("role") != "owner":
+                await db.workspace_members.delete_one({"workspace_id": body.workspace_id, "user_id": user_id})
+            action = "set to regular member"
+        return {"success": True, "message": f"{user.get('email', '')} {action}"}
+
+    # Platform-level role change (no workspace_id)
+    if body.role not in ("superadmin", "user"):
+        raise HTTPException(status_code=400, detail="Platform role must be 'superadmin' or 'user'")
+    # Only platform superadmins can grant/revoke platform superadmin
+    if user.get("platform_role") == "superadmin" and body.role == "user":
+        # Prevent removing last superadmin
+        sa_count = await db.users.count_documents({"$or": [{"role": "superadmin"}, {"platform_role": "superadmin"}]})
+        if sa_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot remove the last platform superadmin")
+    await db.users.update_one({"id": user_id}, {"$set": {"role": body.role, "platform_role": "superadmin" if body.role == "superadmin" else None}})
+    action = "promoted to Platform Admin" if body.role == "superadmin" else "demoted to Regular User"
     return {"success": True, "message": f"{user.get('email', '')} {action}"}
 
 # ── User Invitation System ──
