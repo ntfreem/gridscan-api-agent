@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, MessageSquare, Settings,
   BarChart2, Zap, Code2, ExternalLink, LogOut, ChevronDown, Shield, Users, HelpCircle,
   SlidersHorizontal, Globe, Activity, Send, Headphones, Sparkles, Rocket, Menu, X,
-  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2, CreditCard, Plus,
+  Building2, Bot, Link2, Network, Layers, Play, Key, Trash2, CreditCard, Plus, User,
 } from "lucide-react";
 import BridgeBotLogo from "./BridgeBotLogo";
 import { useState, useRef, useEffect } from "react";
@@ -217,6 +217,23 @@ function UserPopover({ user, isSuperAdmin, selectedInstance, onLogout, onSetupGu
           >
             <Rocket size={13} /> Setup Guide
           </button>
+
+          <a
+            href="/admin/profile"
+            data-testid="nav-profile"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "flex", alignItems: "center", gap: "9px",
+              padding: "10px 14px", textDecoration: "none",
+              fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+              color: colors.text.secondary,
+              borderBottom: `1px solid ${colors.border.muted}`, transition: "background-color 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = colors.bg.hover}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            <User size={13} /> Profile
+          </a>
 
           <button
             data-testid="logout-btn"

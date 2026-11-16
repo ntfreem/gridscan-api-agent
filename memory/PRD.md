@@ -138,6 +138,14 @@ users                → +platform_role field
 - [x] Invite details show workspace name and role on accept page
 - [ ] Workspace/org switching UX improvements (optional polish)
 
+### Stage 2.12: Org Assignment in Invite + User Profile — DONE ✅ (Nov 2026)
+- [x] InviteModal org filtering: orgs filter to selected workspace, switching workspace clears selections
+- [x] Invite accept flow auto-assigns user to selected orgs (member_ids) on first login
+- [x] User Profile page at /admin/profile: edit name, username; change password with current-password verification
+- [x] Profile accessible via user popover menu (all user types)
+- [x] Backend: PATCH /api/auth/profile, POST /api/auth/change-password
+- [x] Tested: 7/7 backend + all UI passed (iteration_85.json)
+
 ### Stage 4: Billing Integration — NOT STARTED
 - [ ] Stripe customer/subscription linked to workspace
 - [ ] Entitlement enforcement middleware

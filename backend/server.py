@@ -2723,6 +2723,51 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     v2_bots = await db.bots.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
     instances = [{"id": b["id"], "name": b.get("name", "")} for b in v2_bots]
     return {**user, "instances": instances}
+
+class ProfileUpdateBody(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.patch("/auth/profile")
+async def update_profile(body: ProfileUpdateBody, current_user: dict = Depends(get_current_user)):
+    """Update the current user's profile (name, username)."""
+    updates = {}
+    if body.first_name is not None:
+        updates["first_name"] = body.first_name.strip()
+    if body.last_name is not None:
+        updates["last_name"] = body.last_name.strip()
+    if body.username is not None:
+        new_username = body.username.strip().lower()
+        if not new_username:
+            raise HTTPException(status_code=400, detail="Username cannot be empty")
+        existing = await db.users.find_one({"username": new_username, "id": {"$ne": current_user["id"]}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        updates["username"] = new_username
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+    return {"success": True, "message": "Profile updated"}
+
+@api_router.post("/auth/change-password")
+async def change_password(body: ChangePasswordBody, current_user: dict = Depends(get_current_user)):
+    """Change the current user's password (requires current password)."""
+    user = await db.users.find_one({"id": current_user["id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not bcrypt.checkpw(body.current_password.encode(), user["hashed_password"].encode()):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    hashed = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.users.update_one({"id": current_user["id"]}, {"$set": {"hashed_password": hashed}})
+    return {"success": True, "message": "Password changed successfully"}
+
 # ==================== INSTANCE MANAGEMENT (SUPERADMIN) ====================
 
 @api_router.get("/admin/users")

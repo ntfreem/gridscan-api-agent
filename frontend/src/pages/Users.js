@@ -378,7 +378,7 @@ function InviteModal({ orgs, bots, token, onClose, onDone }) {
           <label style={T.label}>Assign to Workspace</label>
           <select
             value={selectedWsId}
-            onChange={e => setSelectedWsId(e.target.value)}
+            onChange={e => { setSelectedWsId(e.target.value); setSelectedOrgs([]); setSelectedBots([]); }}
             style={{ ...T.input, width: "100%", cursor: "pointer" }}
             data-testid="invite-workspace"
           >
@@ -413,25 +413,30 @@ function InviteModal({ orgs, bots, token, onClose, onDone }) {
         {/* Assign to Organisations */}
         <div style={{ marginBottom: "18px" }}>
           <label style={T.label}>Assign to Organisations</label>
-          {orgs.length === 0 ? (
-            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted }}>No organisations found.</p>
-          ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {orgs.map(o => (
-                <button key={o.id} onClick={() => toggleOrg(o.id)} data-testid={`org-toggle-${o.id}`} style={{
-                  display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px",
-                  borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
-                  border: `1px solid ${selectedOrgs.includes(o.id) ? "rgba(139,92,246,0.4)" : colors.border.default}`,
-                  backgroundColor: selectedOrgs.includes(o.id) ? "rgba(139,92,246,0.08)" : colors.bg.base,
-                  fontFamily: fonts.body, fontSize: "12px",
-                  color: selectedOrgs.includes(o.id) ? "#8B5CF6" : colors.text.secondary,
-                }}>
-                  {selectedOrgs.includes(o.id) && <CheckCircle size={12} />}
-                  {o.name}
-                </button>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const wsOrgs = selectedWsId ? orgs.filter(o => o.workspace_id === selectedWsId) : orgs;
+            return wsOrgs.length === 0 ? (
+              <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted }}>
+                {selectedWsId ? "No organisations in this workspace." : "No organisations found."}
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {wsOrgs.map(o => (
+                  <button key={o.id} onClick={() => toggleOrg(o.id)} data-testid={`org-toggle-${o.id}`} style={{
+                    display: "flex", alignItems: "center", gap: "6px", padding: "7px 12px",
+                    borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
+                    border: `1px solid ${selectedOrgs.includes(o.id) ? "rgba(139,92,246,0.4)" : colors.border.default}`,
+                    backgroundColor: selectedOrgs.includes(o.id) ? "rgba(139,92,246,0.08)" : colors.bg.base,
+                    fontFamily: fonts.body, fontSize: "12px",
+                    color: selectedOrgs.includes(o.id) ? "#8B5CF6" : colors.text.secondary,
+                  }}>
+                    {selectedOrgs.includes(o.id) && <CheckCircle size={12} />}
+                    {o.name}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Assign to Bots */}

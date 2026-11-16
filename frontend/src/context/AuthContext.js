@@ -365,13 +365,27 @@ export function AuthProvider({ children }) {
     } catch {}
   }, [selectedWorkspace]);
 
+  const refreshUser = useCallback(async () => {
+    const tk = localStorage.getItem("bf_token");
+    if (!tk) return;
+    try {
+      const res = await axios.get(`${BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${tk}` },
+        withCredentials: true,
+      });
+      const u = res.data;
+      setUser(u);
+      localStorage.setItem("bf_user", JSON.stringify(u));
+    } catch {}
+  }, []);
+
   const value = useMemo(() => ({
-    user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+    user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances, refreshUser,
     // Workspaces
     workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
     // v2
     orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs,
-  }), [user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances,
+  }), [user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances, refreshUser,
        workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
        orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs]);
 

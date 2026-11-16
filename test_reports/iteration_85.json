@@ -1,0 +1,105 @@
+{
+  "summary": "Iteration 85 - Profile Page & Invite Org Filtering Testing Complete. All 7 backend tests passed. All frontend UI tests verified Profile page functionality and InviteModal org filtering.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter85_profile_invite.py",
+    "/app/test_reports/pytest/iter85_profile_invite.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Profile page correctly displays Personal Information section with first_name, last_name, username fields",
+    "Email field is correctly disabled with 'Email cannot be changed' note",
+    "Change Password section has proper validation: passwords must match, minimum 6 characters",
+    "Profile update via PATCH /api/auth/profile works correctly and persists changes",
+    "Password change via POST /api/auth/change-password validates current password before allowing change",
+    "Duplicate username rejection works (400 response with 'Username already taken')",
+    "InviteModal correctly filters organisations by selected workspace (line 417 in Users.js)",
+    "Switching workspace in InviteModal clears previous org selections (line 381)",
+    "Invite endpoint stores org_ids on invitation record",
+    "Accept invite flow adds user to org member_ids (lines 3171-3176 in server.py)",
+    "User popover Profile link (data-testid='nav-profile') correctly navigates to /admin/profile"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter85_profile_invite.py"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "seed_data_creation": "Test users created during invite acceptance tests are cleaned up after each test",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Profile page at /admin/profile is fully functional. Key data-testids: profile-page, profile-info-section, profile-first-name, profile-last-name, profile-username, save-profile-btn, change-password-section, current-password, new-password, confirm-password, change-password-btn. User popover Profile link: data-testid='nav-profile'. InviteModal org filtering works via workspace_id filter on orgs array (line 417 in Users.js). Password for johndoe@example.com remains User@123.",
+  "features_tested": [
+    {
+      "feature": "Profile page loads for regular user with Personal Information and Change Password sections",
+      "status": "PASS",
+      "details": "All form fields present: first_name, last_name, username (editable), email (disabled)"
+    },
+    {
+      "feature": "Profile update via PATCH /api/auth/profile",
+      "status": "PASS",
+      "details": "Updates first_name, last_name, username. Changes persist after page reload."
+    },
+    {
+      "feature": "Profile API rejects duplicate username",
+      "status": "PASS",
+      "details": "Returns 400 with 'Username already taken' message"
+    },
+    {
+      "feature": "Password change via POST /api/auth/change-password",
+      "status": "PASS",
+      "details": "Validates current password, enforces 6 char minimum for new password"
+    },
+    {
+      "feature": "Password change rejects wrong current password",
+      "status": "PASS",
+      "details": "Returns 400 with 'Current password is incorrect'"
+    },
+    {
+      "feature": "Password change rejects short new password",
+      "status": "PASS",
+      "details": "Returns 400 with 'New password must be at least 6 characters'"
+    },
+    {
+      "feature": "Profile page accessible via user popover menu",
+      "status": "PASS",
+      "details": "User menu button opens popover with Profile link (data-testid='nav-profile')"
+    },
+    {
+      "feature": "InviteModal org filtering by workspace",
+      "status": "PASS",
+      "details": "Only orgs belonging to selected workspace appear in 'Assign to Organisations' section"
+    },
+    {
+      "feature": "InviteModal clears org selections when workspace changes",
+      "status": "PASS",
+      "details": "Switching workspace resets selectedOrgs to empty array (line 381)"
+    },
+    {
+      "feature": "Invite endpoint stores org_ids",
+      "status": "PASS",
+      "details": "POST /api/admin/users/invite stores org_ids on invitation record"
+    },
+    {
+      "feature": "Invite accept adds user to org member_ids",
+      "status": "PASS",
+      "details": "User added to organisations.member_ids when accepting invite with org_ids"
+    }
+  ],
+  "test_credentials": {
+    "platform_superadmin": "admin@bitbotpro.io / Admin@123",
+    "workspace_owner": "admin@bridgebot.tech / Admin@123",
+    "regular_user": "johndoe@example.com / User@123",
+    "development_workspace_id": "5346b610-1c2c-4bfe-86a5-de820e315ddf",
+    "default_org_id": "cb91e73c-b74b-45a3-aecc-f7823ee07d2c"
+  }
+}

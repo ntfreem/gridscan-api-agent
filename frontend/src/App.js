@@ -43,6 +43,7 @@ import SuggestionsInbox from "@/pages/SuggestionsInbox";
 import Organisations from "@/pages/Organisations";
 import WorkspaceSettings from "@/pages/WorkspaceSettings";
 import EnterpriseWorkspaces from "@/pages/EnterpriseWorkspaces";
+import Profile from "@/pages/Profile";
 
 import "@/App.css";
 
@@ -111,6 +112,9 @@ function AppRoutes() {
         <Route path="platform/workspaces" element={<AdminOnlyRoute><Organisations /></AdminOnlyRoute>} />
         <Route path="platform/analytics" element={<AdminOnlyRoute><Analytics /></AdminOnlyRoute>} />
         <Route path="platform/api-keys" element={<AdminOnlyRoute><ApiKeyAnalytics /></AdminOnlyRoute>} />
+
+        {/* Profile */}
+        <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         {/* Enterprise */}
         <Route path="enterprise/workspaces" element={<AdminOnlyRoute><EnterpriseWorkspaces /></AdminOnlyRoute>} />
