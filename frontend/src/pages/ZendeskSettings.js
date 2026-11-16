@@ -98,15 +98,25 @@ export default function ZendeskSettings() {
 
   const { selectedInstance } = useAuth();
 
+  // Stable instance ID: once config loads successfully with an instance_id, lock it for this session
+  const [lockedInstanceId, setLockedInstanceId] = useState(null);
+  const getHeaders = useCallback(() => {
+    const iid = lockedInstanceId || selectedInstance?.id || localStorage.getItem("bf_instance_id");
+    return iid ? { "X-Instance-ID": iid } : {};
+  }, [lockedInstanceId, selectedInstance]);
+
   const fetchConfig = useCallback(async () => {
     // Wait for instance to be selected (ensures X-Instance-ID header is set)
     if (!selectedInstance?.id) return;
     try {
+      const headers = { "X-Instance-ID": selectedInstance.id };
       const [cfgRes, oauthClientRes, cbRes] = await Promise.all([
-        api.get("/admin/zendesk-config"),
-        api.get("/admin/zendesk/oauth/client-config").catch(() => ({ data: { configured: false } })),
-        api.get("/admin/zendesk/oauth/callback-url").catch(() => ({ data: { callback_url: "" } })),
+        api.get("/admin/zendesk-config", { headers }),
+        api.get("/admin/zendesk/oauth/client-config", { headers }).catch(() => ({ data: { configured: false } })),
+        api.get("/admin/zendesk/oauth/callback-url", { headers }).catch(() => ({ data: { callback_url: "" } })),
       ]);
+      // Lock the instance_id that successfully returned the config
+      if (cfgRes.data.instance_id) setLockedInstanceId(cfgRes.data.instance_id);
       setCallbackUrl(cbRes.data.callback_url || "");
       setConfig(cfgRes.data);
       setAutoReply(cfgRes.data.auto_reply_enabled || false);
@@ -115,16 +125,17 @@ export default function ZendeskSettings() {
       setSubdomain("");
       setOauthClientIdMasked(oauthClientRes.data.client_id_masked || "");
       if (cfgRes.data.connected) {
+        const h = { "X-Instance-ID": cfgRes.data.instance_id || selectedInstance.id };
         try {
-          const wh = await api.get("/admin/zendesk-config/webhook-url");
+          const wh = await api.get("/admin/zendesk-config/webhook-url", { headers: h });
           setWebhookUrl(wh.data.webhook_url || "");
         } catch { /* ignore */ }
         try {
-          const tk = await api.get("/admin/zendesk-tickets");
+          const tk = await api.get("/admin/zendesk-tickets", { headers: h });
           setTickets(tk.data.tickets || []);
         } catch { /* ignore */ }
         try {
-          const sk = await api.get("/admin/zendesk/sidebar-key");
+          const sk = await api.get("/admin/zendesk/sidebar-key", { headers: h });
           setSidebarKey(sk.data.sidebar_api_key || "");
         } catch { /* ignore */ }
       }
@@ -149,7 +160,7 @@ export default function ZendeskSettings() {
       await api.post("/admin/zendesk/oauth/client-config", {
         client_id: oauthClientId.trim(),
         client_secret: oauthClientSecret.trim(),
-      });
+      }, { headers: getHeaders() });
       toast.success("OAuth credentials saved!");
       setOauthClientId("");
       setOauthClientSecret("");
@@ -165,7 +176,7 @@ export default function ZendeskSettings() {
   const handleRemoveOAuthClient = async () => {
     if (!window.confirm("Remove stored OAuth client credentials? You'll need to re-enter them to connect.")) return;
     try {
-      await api.delete("/admin/zendesk/oauth/client-config");
+      await api.delete("/admin/zendesk/oauth/client-config", { headers: getHeaders() });
       toast.success("OAuth credentials removed");
       await fetchConfig();
     } catch (e) {
@@ -182,7 +193,7 @@ export default function ZendeskSettings() {
     }
     setConnecting(true);
     try {
-      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub });
+      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub }, { headers: getHeaders() });
       window.location.href = res.data.redirect_url;
     } catch (e) {
       const detail = e.response?.data?.detail || "Failed to start Zendesk authorization.";
@@ -197,7 +208,7 @@ export default function ZendeskSettings() {
     if (!sub) return;
     setConnecting(true);
     try {
-      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub });
+      const res = await api.post("/admin/zendesk/oauth/start", { subdomain: sub }, { headers: getHeaders() });
       window.location.href = res.data.redirect_url;
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to start reconnection.");
@@ -212,7 +223,7 @@ export default function ZendeskSettings() {
         auto_reply_enabled: autoReply,
         agent_assist_enabled: agentAssist,
         is_active: isActive,
-      });
+      }, { headers: getHeaders() });
       toast.success("Settings saved");
       await fetchConfig();
     } catch (e) {
@@ -225,7 +236,7 @@ export default function ZendeskSettings() {
   const handleTest = async () => {
     setTesting(true);
     try {
-      const res = await api.post("/admin/zendesk-config/test");
+      const res = await api.post("/admin/zendesk-config/test", {}, { headers: getHeaders() });
       toast.success(`Connected! ${res.data.user_name} (${res.data.user_email}) on ${res.data.subdomain}.zendesk.com — Auth: ${res.data.auth_type === "oauth" ? "OAuth" : "API Token"}`);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Test failed");
@@ -238,7 +249,7 @@ export default function ZendeskSettings() {
     if (!window.confirm("Disconnect Zendesk from this instance? Suggestions and event logs will be removed.")) return;
     setDisconnecting(true);
     try {
-      await api.delete("/admin/zendesk-config");
+      await api.delete("/admin/zendesk-config", { headers: getHeaders() });
       toast.success("Zendesk disconnected");
       setWebhookUrl("");
       setTickets([]);
@@ -254,7 +265,7 @@ export default function ZendeskSettings() {
     const next = !isActive;
     setIsActive(next);
     try {
-      await api.put("/admin/zendesk-config", { is_active: next });
+      await api.put("/admin/zendesk-config", { is_active: next }, { headers: getHeaders() });
       toast.success(next ? "Zendesk integration activated" : "Zendesk integration paused");
       await fetchConfig();
     } catch (e) {
