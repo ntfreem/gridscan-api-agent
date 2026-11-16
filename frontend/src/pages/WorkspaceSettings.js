@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import v2 from "@/utils/v2api";
 import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import {
   Settings, Users, CreditCard, Zap, Loader2, Trash2, Plus, Shield, Edit2, Check, X,
-  Building2, Bot, ChevronRight, Crown,
+  Building2, Bot, ChevronRight, Crown, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,7 +61,7 @@ function RoleBadge({ role }) {
 }
 
 // ── General Tab ──
-function GeneralTab({ workspace, onRefresh }) {
+function GeneralTab({ workspace, onRefresh, onDelete }) {
   const [name, setName] = useState(workspace?.name || "");
   const [saving, setSaving] = useState(false);
 
@@ -110,6 +110,9 @@ function GeneralTab({ workspace, onRefresh }) {
           <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "12px 0 4px" }}>CREATED</p>
           <p style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.text.secondary, margin: 0 }}>{new Date(workspace.created_at).toLocaleDateString()}</p>
         </div>
+
+        {/* Danger Zone */}
+        <DangerZone workspace={workspace} onDelete={onDelete} />
       </div>
     </div>
   );
@@ -367,10 +370,80 @@ function DiscordAppsTab({ workspace }) {
   );
 }
 
+// ── Danger Zone (delete workspace) ──
+function DangerZone({ workspace, onDelete }) {
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (confirmName !== workspace.name) {
+      toast.error("Workspace name doesn't match");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await v2.deleteWorkspace(workspace.id);
+      toast.success(`Workspace "${workspace.name}" deleted`);
+      onDelete();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to delete workspace");
+    } finally { setDeleting(false); }
+  };
+
+  return (
+    <div data-testid="danger-zone" style={{
+      marginTop: "40px", padding: "20px", borderRadius: radius.lg,
+      border: "1px solid rgba(244,63,94,0.25)", backgroundColor: "rgba(244,63,94,0.04)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+        <AlertTriangle size={16} color="#F43F5E" />
+        <h3 style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "700", color: "#F43F5E", margin: 0 }}>
+          Danger Zone
+        </h3>
+      </div>
+      <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, margin: "0 0 16px", lineHeight: 1.6 }}>
+        Permanently delete this workspace and remove all members. Organisations must be deleted first.
+        This action <strong style={{ color: "#F43F5E" }}>cannot be undone</strong>.
+      </p>
+      <label style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, display: "block", marginBottom: "6px" }}>
+        Type <strong style={{ color: colors.text.primary }}>{workspace.name}</strong> to confirm
+      </label>
+      <div style={{ display: "flex", gap: "8px", maxWidth: "400px" }}>
+        <input
+          data-testid="delete-ws-confirm-input"
+          value={confirmName}
+          onChange={e => setConfirmName(e.target.value)}
+          placeholder={workspace.name}
+          style={{ ...T.input, flex: 1, borderColor: "rgba(244,63,94,0.3)" }}
+          onFocus={e => { e.target.style.borderColor = "#F43F5E"; e.target.style.boxShadow = "0 0 0 3px rgba(244,63,94,0.15)"; }}
+          onBlur={e => { e.target.style.borderColor = "rgba(244,63,94,0.3)"; e.target.style.boxShadow = "none"; }}
+        />
+        <button
+          data-testid="delete-ws-btn"
+          onClick={handleDelete}
+          disabled={deleting || confirmName !== workspace.name}
+          style={{
+            padding: "10px 18px", borderRadius: radius.md, border: "none",
+            backgroundColor: confirmName === workspace.name ? "#F43F5E" : "rgba(244,63,94,0.2)",
+            color: confirmName === workspace.name ? "#fff" : "rgba(244,63,94,0.5)",
+            fontFamily: fonts.body, fontSize: "13px", fontWeight: "600",
+            cursor: confirmName === workspace.name ? "pointer" : "not-allowed",
+            transition: "all 0.2s", display: "flex", alignItems: "center", gap: "6px",
+            opacity: deleting ? 0.5 : 1,
+          }}
+        >
+          <Trash2 size={13} /> {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ──
 export default function WorkspaceSettings() {
-  const { selectedWorkspace, refreshWorkspaces } = useAuth();
+  const { selectedWorkspace, refreshWorkspaces, selectWorkspace, workspaces } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Determine active tab from URL path
   const path = location.pathname;
@@ -403,7 +476,16 @@ export default function WorkspaceSettings() {
 
       {/* Content */}
       <div style={{ marginTop: "24px" }}>
-        {activeTab === "general" && <GeneralTab workspace={selectedWorkspace} onRefresh={refreshWorkspaces} />}
+        {activeTab === "general" && <GeneralTab workspace={selectedWorkspace} onRefresh={refreshWorkspaces}
+          onDelete={async () => {
+            await refreshWorkspaces();
+            const remaining = workspaces.filter(w => w.id !== selectedWorkspace.id);
+            if (remaining.length > 0) {
+              selectWorkspace(remaining[0]);
+            }
+            navigate("/admin");
+          }}
+        />}
         {activeTab === "members" && <MembersTab workspace={selectedWorkspace} />}
         {activeTab === "billing" && <BillingTab workspace={selectedWorkspace} />}
         {activeTab === "discord-apps" && <DiscordAppsTab workspace={selectedWorkspace} />}

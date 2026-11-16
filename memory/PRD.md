@@ -96,10 +96,21 @@ users                → +platform_role field
 - [x] Backend APIs: getUserOrgMemberships, updateOrgMembership, invite with workspace
 - [x] Tested: 13/13 backend + all UI passed (iteration_80.json)
 
-### Stage 3: Signup & Invitation System — PARTIAL
-- [x] Workspace invitation system (email + role + token) — backend done, UI done
-- [ ] Org invitation scoped to workspace (invite accept flow needs workspace auto-join)
-- [ ] Workspace/org switching UX improvements
+### Stage 2.8: Invite Auto-Join & Workspace Deletion — DONE ✅ (Nov 2026)
+- [x] Invite accept flow auto-joins user to pre-assigned workspace with correct role
+- [x] GET /invite/{token} now returns workspace_name and workspace_role
+- [x] Invite accept page shows workspace name + role badge when workspace is assigned
+- [x] If no workspace on invite, auto-creates a new workspace for the user (existing)
+- [x] Workspace Settings General tab: Danger Zone with type-to-confirm deletion
+- [x] Cascade protection: refuses to delete workspace with existing organisations
+- [x] After deletion, switches to remaining workspace and redirects to /admin
+- [x] Tested: 5/5 backend + all UI passed (iteration_81.json)
+
+### Stage 3: Signup & Invitation System — DONE ✅
+- [x] Workspace invitation system (email + role + token) — backend + UI done
+- [x] Invite accept auto-joins workspace with pre-configured role
+- [x] Invite details show workspace name and role on accept page
+- [ ] Workspace/org switching UX improvements (optional polish)
 
 ### Stage 4: Billing Integration — NOT STARTED
 - [ ] Stripe customer/subscription linked to workspace
@@ -130,14 +141,14 @@ users                → +platform_role field
 - Landing page, Analytics, Branding
 
 ## Backlog
-- P0: Complete invite accept flow to auto-join workspace
-- P0: Stages 4-6 of Customer Workspace Architecture
+- P0: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P1: GitHub Export (DO NOT start until instructed)
 - P2: WhatsApp integration
 - P2: APP_MODE env splitting
 - P2: Backend refactor — server.py modularization
 - P3: Users.js component splitting (file at 752 lines)
+- P3: Workspace/org switching UX polish
 
 ## Key URLs
 - Production: `https://bitbotpro.io`

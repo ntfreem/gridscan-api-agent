@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../utils/api";
 import { toast } from "sonner";
-import { Loader2, CheckCircle, AlertCircle, UserPlus, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, UserPlus, ArrowRight, Layers } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
 export default function InviteAccept() {
@@ -143,6 +143,24 @@ export default function InviteAccept() {
               <strong>{invite.invited_by_email}</strong> invited you as{" "}
               {invite.role === "superadmin" ? "an Admin" : "a Team Member"}
             </p>
+            {invite.workspace_name && (
+              <div data-testid="invite-workspace-info" style={{
+                marginTop: "12px", display: "inline-flex", alignItems: "center", gap: "6px",
+                padding: "6px 14px", borderRadius: "8px",
+                backgroundColor: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)",
+              }}>
+                <Layers size={12} color={colors.brand.light} />
+                <span style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.brand.light, fontWeight: "500" }}>
+                  {invite.workspace_name}
+                </span>
+                <span style={{
+                  fontFamily: fonts.mono, fontSize: "9px", textTransform: "uppercase",
+                  color: colors.text.muted, letterSpacing: "0.08em",
+                }}>
+                  {invite.workspace_role || "member"}
+                </span>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>

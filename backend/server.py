@@ -2985,6 +2985,14 @@ async def get_invite_details(token: str):
         expires = expires.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) > expires:
         raise HTTPException(status_code=400, detail="This invitation has expired")
+    # Resolve workspace name if assigned
+    ws_name = None
+    ws_id = invite.get("workspace_id")
+    ws_role = invite.get("workspace_role", "admin")
+    if ws_id:
+        ws = await db.workspaces.find_one({"id": ws_id}, {"_id": 0, "name": 1})
+        ws_name = ws["name"] if ws else None
+
     return {
         "email": invite["email"],
         "role": invite["role"],
@@ -2992,6 +3000,8 @@ async def get_invite_details(token: str):
         "first_name": invite.get("first_name", ""),
         "last_name": invite.get("last_name", ""),
         "username": invite.get("username", ""),
+        "workspace_name": ws_name,
+        "workspace_role": ws_role if ws_name else None,
     }
 
 @api_router.post("/invite/{token}/accept")
