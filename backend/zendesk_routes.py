@@ -502,6 +502,7 @@ async def delete_oauth_client_config(request: Request):
 @router.get("/admin/zendesk-config")
 async def get_zendesk_config(request: Request):
     instance_id = await _get_instance_access(request)
+    logger.info(f"[ZENDESK_GET] instance_id resolved to: {instance_id}, raw header: {request.headers.get('X-Instance-ID')}")
 
     # Provide OAuth configuration status
     client_id, _ = await _get_oauth_credentials_async()
@@ -613,8 +614,12 @@ async def delete_zendesk_config(request: Request):
 @router.post("/admin/zendesk-config/test")
 async def test_zendesk_connection(request: Request):
     instance_id = await _get_instance_access(request)
+    logger.info(f"[ZENDESK_TEST] instance_id resolved to: {instance_id}, raw header: {request.headers.get('X-Instance-ID')}")
     cfg = await _db.zendesk_config.find_one({"instance_id": instance_id})
     if not cfg or not cfg.get("subdomain"):
+        # Log all zendesk_config instance_ids to help debug
+        all_ids = [doc["instance_id"] async for doc in _db.zendesk_config.find({}, {"instance_id": 1, "_id": 0})]
+        logger.warning(f"[ZENDESK_TEST] No config for instance_id={instance_id}. Existing configs: {all_ids}")
         raise HTTPException(400, "No Zendesk connection found.")
 
     try:

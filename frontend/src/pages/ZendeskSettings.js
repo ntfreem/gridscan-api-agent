@@ -98,19 +98,19 @@ export default function ZendeskSettings() {
 
   const { selectedInstance } = useAuth();
 
-  // Stable instance ID: once config loads successfully with an instance_id, lock it for this session
-  const [lockedInstanceId, setLockedInstanceId] = useState(null);
   // Track which selectedInstance.id the latest fetch was for
   const fetchSeqRef = useRef(0);
 
+  // Derive action header from the config that was successfully loaded.
+  // This guarantees the Test/Save/Disconnect calls always use the same
+  // instance_id that the GET /zendesk-config returned data for.
   const getHeaders = useCallback(() => {
-    const iid = lockedInstanceId || selectedInstance?.id || localStorage.getItem("bf_instance_id");
+    const iid = config?.instance_id || selectedInstance?.id || localStorage.getItem("bf_instance_id");
     return iid ? { "X-Instance-ID": iid } : {};
-  }, [lockedInstanceId, selectedInstance]);
+  }, [config, selectedInstance]);
 
   // Reset state when the selected instance (bot) changes
   useEffect(() => {
-    setLockedInstanceId(null);
     setConfig(null);
     setWebhookUrl("");
     setTickets([]);
@@ -132,8 +132,6 @@ export default function ZendeskSettings() {
       ]);
       // If a newer fetch has started, discard this stale response
       if (seq !== fetchSeqRef.current) return;
-      // Lock the instance_id that successfully returned the config
-      if (cfgRes.data.instance_id) setLockedInstanceId(cfgRes.data.instance_id);
       setCallbackUrl(cbRes.data.callback_url || "");
       setConfig(cfgRes.data);
       setAutoReply(cfgRes.data.auto_reply_enabled || false);
