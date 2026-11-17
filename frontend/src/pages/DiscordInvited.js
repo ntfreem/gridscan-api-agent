@@ -5,6 +5,8 @@ import { CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts } from "../theme";
 
+import { API_BASE } from "../utils/apiBase";
+
 export default function DiscordInvited() {
   const [params] = useSearchParams();
   const guild = params.get("guild") || "your Discord server";
@@ -16,7 +18,7 @@ export default function DiscordInvited() {
     // Silently check if a session exists — use raw axios so 401 doesn't bounce to login
     const token = localStorage.getItem("bf_token");
     if (!token) return;
-    axios.get(`/api/auth/me`, {
+    axios.get(`${API_BASE}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       withCredentials: true,
     }).then(r => {

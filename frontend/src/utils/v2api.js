@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const BASE = "/api";
+import { API_BASE } from "./apiBase";
+
+const BASE = API_BASE;
 
 function headers() {
   const token = localStorage.getItem("bf_token");

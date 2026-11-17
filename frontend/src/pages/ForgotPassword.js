@@ -5,6 +5,12 @@ import { ArrowLeft, ArrowRight, Mail, KeyRound } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
+import { API_BASE } from "../utils/apiBase";
+
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const [step, setStep] = useState("email"); // email | code
@@ -19,7 +25,7 @@ export default function ForgotPassword() {
   const handleSendCode = async (e) => {
     e.preventDefault(); setError(""); setSuccess(""); setLoading(true);
     try {
-      const res = await axios.post(`/api/auth/forgot-password`, { email });
+      const res = await axios.post(`${API_BASE}/auth/forgot-password`, { email });
       setSuccess(res.data.message || "Reset code sent if email is registered.");
       setStep("code");
     } catch (err) { setError(err.response?.data?.detail || "Something went wrong."); }
@@ -29,10 +35,11 @@ export default function ForgotPassword() {
   const handleReset = async (e) => {
     e.preventDefault(); setError("");
     if (newPassword !== confirm) { setError("Passwords do not match"); return; }
-    if (newPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
+    const pwError = userPasswordError(newPassword, email);
+    if (pwError) { setError(pwError); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`/api/auth/reset-password`, { email, code, new_password: newPassword });
+      const res = await axios.post(`${API_BASE}/auth/reset-password`, { email, code, new_password: newPassword });
       setSuccess(res.data.message || "Password reset!");
       setStep("done");
       setTimeout(() => navigate("/login"), 2000);
@@ -43,7 +50,7 @@ export default function ForgotPassword() {
   const handleResend = async () => {
     setError(""); setLoading(true);
     try {
-      await axios.post(`/api/auth/forgot-password`, { email });
+      await axios.post(`${API_BASE}/auth/forgot-password`, { email });
       setSuccess("New reset code sent!");
       setCode("");
     } catch (err) { setError(err.response?.data?.detail || "Failed to resend."); }
@@ -106,8 +113,9 @@ export default function ForgotPassword() {
               <input data-testid="reset-code" type="text" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" maxLength={6}
                 style={{ ...T.input, fontFamily: fonts.mono, fontSize: "22px", letterSpacing: "0.3em", textAlign: "center", marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
               <label style={T.label}>New Password</label>
-              <input data-testid="reset-new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters"
-                style={{ ...T.input, marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
+              <input data-testid="reset-new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 12 characters"
+                style={{ ...T.input, marginBottom: "4px" }} onFocus={onFocus} onBlur={onBlur} required />
+              <PasswordRequirements password={newPassword} email={email} />
               <label style={T.label}>Confirm Password</label>
               <input data-testid="reset-confirm-password" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat new password"
                 style={{ ...T.input, marginBottom: "20px" }} onFocus={onFocus} onBlur={onBlur} required />

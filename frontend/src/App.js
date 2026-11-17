@@ -126,7 +126,7 @@ function AppRoutes() {
         <Route path="settings" element={<BotSettings />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="discord" element={<DiscordSettings />} />
-        <Route path="discord-app-setup" element={<ProtectedRoute><DiscordAppSetup /></ProtectedRoute>} />
+        <Route path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
         <Route path="embed" element={<EmbedCode />} />
         <Route path="api-integrations" element={<ApiIntegrations />} />
         <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />

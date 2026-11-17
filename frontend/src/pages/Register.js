@@ -1,13 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { ArrowRight } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
-const BASE = `/api`;
+import { API_BASE } from "../utils/apiBase";
+
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
+const BASE = API_BASE;
+
+export const INVITE_ONLY_MESSAGE =
+  "BitBot Pro accounts are by invitation only. Ask your workspace administrator to invite you, then use the link in the invitation email.";
 
 export default function Register() {
+  // "invite_only" in production (spec 008, P8): no public sign-up form.
+  const [mode, setMode] = useState(null);
+  useEffect(() => {
+    axios.get(`${BASE}/auth/registration-mode`)
+      .then(r => setMode(r.data?.mode === "open" ? "open" : "invite_only"))
+      .catch(() => setMode("invite_only"));   // fail closed: never show a form that cannot work
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -20,12 +36,14 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault(); setError("");
     if (password !== confirm) { setError("Passwords do not match"); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    const pwError = userPasswordError(password, email);
+    if (pwError) { setError(pwError); return; }
     if (!username.trim()) { setError("Username is required"); return; }
     setLoading(true);
     try {
-      await axios.post(`${BASE}/auth/register`, { email, password, username: username.trim() });
-      setSuccess("Account created! Check your email for the verification code.");
+      const res = await axios.post(`${BASE}/auth/register`, { email, password, username: username.trim() });
+      // Uniform answer (spec 008, S1): it never says whether the address already had an account.
+      setSuccess(res.data?.message || "If this email can be registered, a verification code has been sent.");
       setTimeout(() => navigate(`/verify?email=${encodeURIComponent(email)}`), 1800);
     } catch (err) { setError(err.response?.data?.detail || "Registration failed."); }
     finally { setLoading(false); }
@@ -52,6 +70,12 @@ export default function Register() {
         <h1 style={{ fontFamily: fonts.heading, fontSize: "24px", fontWeight: "700", color: colors.text.primary, textAlign: "center", margin: "0 0 6px" }}>Create account</h1>
         <p style={{ fontSize: "14px", color: colors.text.secondary, textAlign: "center", marginBottom: "28px" }}>Join BitBot Pro and start building</p>
 
+        {mode !== "open" ? (
+          <div data-testid="register-invite-only" style={{ fontSize: "14px", color: colors.text.secondary, textAlign: "center", lineHeight: 1.6 }}>
+            {mode === null ? "Loading…" : INVITE_ONLY_MESSAGE}
+            <p style={{ marginTop: "20px" }}><Link to="/login" style={{ color: colors.brand.light }}>Back to sign in</Link></p>
+          </div>
+        ) : (<>
         {error && <div style={T.err} data-testid="register-error">{error}</div>}
         {success && <div style={T.success} data-testid="register-success">{success}</div>}
 
@@ -64,7 +88,8 @@ export default function Register() {
             placeholder="Choose a unique username" style={{ ...T.input, marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
           <label style={T.label}>Password</label>
           <input data-testid="register-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="At least 6 characters" style={{ ...T.input, marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
+            placeholder="At least 12 characters" style={{ ...T.input, marginBottom: "4px" }} onFocus={onFocus} onBlur={onBlur} required />
+          <PasswordRequirements password={password} email={email} />
           <label style={T.label}>Confirm Password</label>
           <input data-testid="register-confirm" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
             placeholder="Repeat password" style={{ ...T.input, marginBottom: "20px" }} onFocus={onFocus} onBlur={onBlur} required />
@@ -76,6 +101,7 @@ export default function Register() {
         <p style={{ textAlign: "center", marginTop: "24px", fontSize: "13px", color: colors.text.secondary }}>
           Already have an account? <Link to="/login" style={{ color: colors.brand.light, textDecoration: "none", fontWeight: "600" }}>Sign in</Link>
         </p>
+        </>)}
       </div>
     </div>
   );

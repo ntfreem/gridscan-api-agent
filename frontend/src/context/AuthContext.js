@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 
-const BASE = `/api`;
+import { API_BASE } from "../utils/apiBase";
+
+const BASE = API_BASE;
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -199,6 +201,14 @@ export function AuthProvider({ children }) {
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrg, token]);
+
+  // Replace the stored JWT (e.g. the fresh token returned by change-password,
+  // which revokes every older token — spec 008, N5).
+  const updateToken = useCallback((tokenVal) => {
+    if (!tokenVal) return;
+    localStorage.setItem("bf_token", tokenVal);
+    setToken(tokenVal);
+  }, []);
 
   const login = useCallback((tokenVal, userVal, instancesVal) => {
     const inst = instancesVal || [];
@@ -398,12 +408,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(() => ({
-    user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances, refreshUser,
+    user, token, instances, selectedInstance, login, updateToken, selectInstance, logout, loading, refreshInstances, refreshUser,
     // Workspaces
     workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
     // v2
     orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs,
-  }), [user, token, instances, selectedInstance, login, selectInstance, logout, loading, refreshInstances, refreshUser,
+  }), [user, token, instances, selectedInstance, login, updateToken, selectInstance, logout, loading, refreshInstances, refreshUser,
        workspaces, selectedWorkspace, selectWorkspace, refreshWorkspaces,
        orgs, selectedOrg, selectOrg, bots, selectedBot, selectBot, refreshBots, refreshOrgs]);
 

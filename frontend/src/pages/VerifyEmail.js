@@ -5,7 +5,9 @@ import { MailCheck } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
-const BASE = `/api`;
+import { API_BASE } from "../utils/apiBase";
+
+const BASE = API_BASE;
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();

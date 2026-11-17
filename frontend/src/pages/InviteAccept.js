@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { Loader2, CheckCircle, AlertCircle, UserPlus, ArrowRight, Layers } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
 export default function InviteAccept() {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -42,8 +46,9 @@ export default function InviteAccept() {
       toast.error("Passwords don't match");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    const pwError = userPasswordError(password, invite?.email || "");
+    if (pwError) {
+      toast.error(pwError);
       return;
     }
     if (!username.trim()) {
@@ -191,8 +196,9 @@ export default function InviteAccept() {
 
             <label style={T.label}>Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="At least 6 characters" autoComplete="new-password" data-testid="invite-password-input"
-              style={{ ...T.input, marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} />
+              placeholder="At least 12 characters" autoComplete="new-password" data-testid="invite-password-input"
+              style={{ ...T.input, marginBottom: "4px" }} onFocus={onFocus} onBlur={onBlur} />
+            <PasswordRequirements password={password} email={invite?.email || ""} />
 
             <label style={T.label}>Confirm Password</label>
             <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}

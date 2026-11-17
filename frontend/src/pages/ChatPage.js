@@ -6,8 +6,15 @@ import { useSearchParams } from "react-router-dom";
 import { colors, fonts } from "../theme";
 import { streamChat } from "../utils/streamChat";
 import MarkdownMessage from "../components/MarkdownMessage";
+import { API_BASE } from "../utils/apiBase";
+import {
+  SCOPE_PAGE, normaliseBotId, saveSession, clearSession, restoreSession,
+  validateOutgoingMessage, MISSING_BOT_MESSAGE,
+} from "../utils/chatSession";
 
-const API = `/api`;
+const API = API_BASE;
+const SCOPE = SCOPE_PAGE;
+const pageStorage = () => { try { return window.localStorage; } catch { return null; } };
 
 function BubbleCopyBtn({ text }) {
   const [copied, setCopied] = useState(false);
@@ -34,22 +41,36 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
+  // {sessionId, sessionToken} issued by the server for THIS bot (spec 008 Stage 4).
+  const sessionRef = useRef(null);
   const [botConfig, setBotConfig] = useState({ name: "BitBot Pro Assistant" });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const streamRef = useRef(null);
   const [searchParams] = useSearchParams();
-  const instanceId = searchParams.get("instance");
+  const instanceId = normaliseBotId(searchParams.get("instance"));
+  const botRef = useRef(instanceId);
+  botRef.current = instanceId;
 
   useEffect(() => {
-    const id = instanceId || "default";
-    axios.get(`${API}/bot-info/${id}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
-    const savedSession = localStorage.getItem(`bf_chat_${instanceId || "default"}`);
-    if (savedSession) {
-      setSessionId(savedSession);
-      axios.get(`${API}/chat/history/${savedSession}`).then(r => setMessages(r.data.messages || [])).catch(() => {});
+    // Switching bots starts from that bot's own stored conversation (never another bot's).
+    if (streamRef.current) streamRef.current.abort();
+    sessionRef.current = null;
+    setMessages([]);
+    setIsLoading(false);
+    setIsStreaming(false);
+    if (!instanceId) {
+      setMessages([{ role: "assistant", content: MISSING_BOT_MESSAGE, timestamp: new Date().toISOString(), isError: true }]);
+      return undefined;
     }
+    axios.get(`${API}/bot-info/${encodeURIComponent(instanceId)}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
+    let cancelled = false;
+    restoreSession({ storage: pageStorage(), scope: SCOPE, botId: instanceId }).then(({ session: restored, messages: history }) => {
+      if (cancelled || botRef.current !== instanceId) return;
+      sessionRef.current = restored;
+      if (history.length) setMessages(history);
+    });
+    return () => { cancelled = true; };
   }, [instanceId]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, isStreaming]);
@@ -57,23 +78,26 @@ export default function ChatPage() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || isStreaming) return;
     const text = input.trim();
+    const problem = !instanceId ? MISSING_BOT_MESSAGE : validateOutgoingMessage(text);
+    if (problem) {
+      setMessages(prev => [...prev, { role: "assistant", content: problem, timestamp: new Date().toISOString(), isError: true }]);
+      return;
+    }
+    const sendBot = instanceId;
     setInput("");
     const userMsg = { role: "user", content: text, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
 
-    let sessionReceived = false;
     let firstTokenReceived = false;
     streamRef.current = streamChat({
       message: text,
-      sessionId,
-      instanceId,
-      onSession: (sid) => {
-        sessionReceived = true;
-        if (!sessionId) {
-          setSessionId(sid);
-          localStorage.setItem(`bf_chat_${instanceId || "default"}`, sid);
-        }
+      instanceId: sendBot,
+      session: sessionRef.current,
+      onSession: (sid, token) => {
+        // The server may start a new session (e.g. expired token): always keep the pair it sends.
+        if (!saveSession(pageStorage(), SCOPE, sendBot, sid, token)) return;
+        if (botRef.current === sendBot) sessionRef.current = { sessionId: sid, sessionToken: token };
       },
       onToken: (token) => {
         if (!firstTokenReceived) {
@@ -119,9 +143,9 @@ export default function ChatPage() {
         setTimeout(() => inputRef.current?.focus(), 50);
       },
     });
-  }, [input, isLoading, isStreaming, sessionId, instanceId]);
+  }, [input, isLoading, isStreaming, instanceId]);
 
-  const startNewChat = () => { localStorage.removeItem(`bf_chat_${instanceId || "default"}`); setSessionId(null); setMessages([]); if (streamRef.current) streamRef.current.abort(); };
+  const startNewChat = () => { clearSession(pageStorage(), SCOPE, instanceId); sessionRef.current = null; setMessages([]); if (streamRef.current) streamRef.current.abort(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   return (

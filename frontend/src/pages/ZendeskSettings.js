@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
+import { sidebarKeyView } from "../utils/sidebarKey";
+
 const card = {
   backgroundColor: colors.bg.panel, border: `1px solid ${colors.border.default}`,
   borderRadius: "12px", padding: "20px", marginBottom: "16px",
@@ -78,7 +80,8 @@ export default function ZendeskSettings() {
   const [callbackUrl, setCallbackUrl] = useState("");
 
   // Sidebar app
-  const [sidebarKey, setSidebarKey] = useState("");
+  const [sidebarKey, setSidebarKey] = useState("");       // plaintext: only right after creation/regeneration
+  const [sidebarKeyHint, setSidebarKeyHint] = useState(null);
   const [sidebarKeyCopied, setSidebarKeyCopied] = useState(false);
   const [regeneratingKey, setRegeneratingKey] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
@@ -154,7 +157,9 @@ export default function ZendeskSettings() {
         try {
           const sk = await api.get("/admin/zendesk/sidebar-key", { headers: h });
           if (seq !== fetchSeqRef.current) return;
-          setSidebarKey(sk.data.sidebar_api_key || "");
+          const view = sidebarKeyView(sk.data);
+          setSidebarKey(view.revealed || "");
+          setSidebarKeyHint(view.hint);
         } catch { /* ignore */ }
       }
     } catch {
@@ -873,6 +878,11 @@ export default function ZendeskSettings() {
               <p style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.body }}>
                 Paste this key into the app settings when installing. It authenticates sidebar requests to BitBot Pro.
               </p>
+              {sidebarKey && (
+                <p data-testid="zendesk-sidebar-key-once" style={{ margin: "0 0 6px", fontSize: "11px", color: "#FBBF24", fontFamily: fonts.body }}>
+                  Copy this key now. For security it is stored only as a hash and will not be shown again.
+                </p>
+              )}
               {sidebarKey ? (
                 <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
                   <input
@@ -903,8 +913,10 @@ export default function ZendeskSettings() {
                   </button>
                 </div>
               ) : (
-                <p style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.mono }}>
-                  Loading...
+                <p data-testid="zendesk-sidebar-key-hidden" style={{ margin: "0 0 8px", fontSize: "11px", color: colors.text.muted, fontFamily: fonts.body }}>
+                  {sidebarKeyHint
+                    ? <>A key is configured (<span style={{ fontFamily: fonts.mono }}>{sidebarKeyHint}</span>). It cannot be displayed again; regenerate it to get a new key.</>
+                    : "No key to display. Regenerate to create a new key."}
                 </p>
               )}
               <button
@@ -913,7 +925,9 @@ export default function ZendeskSettings() {
                   setRegeneratingKey(true);
                   try {
                     const res = await api.post("/admin/zendesk/sidebar-key/regenerate");
-                    setSidebarKey(res.data.sidebar_api_key);
+                    const view = sidebarKeyView(res.data);
+                    setSidebarKey(view.revealed || "");
+                    setSidebarKeyHint(view.hint);
                     toast.success("Sidebar API key regenerated");
                   } catch {
                     toast.error("Failed to regenerate key");

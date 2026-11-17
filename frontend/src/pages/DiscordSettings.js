@@ -6,6 +6,10 @@ import { toast } from "sonner";
 import { Zap, CheckCircle, AlertCircle, ExternalLink, RefreshCw, Radio, Hash, MessageSquare, AtSign, Link2, Server, Shield, Settings, Save, Eye, EyeOff, UserCheck, Megaphone, Plus, Trash2, Mail, ChevronDown } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
+import { API_ORIGIN } from "../utils/apiBase";
+
+import { isSuperadmin } from "../utils/roles";
+
 const LISTEN_MODES = [
   { key: "mention_only", icon: AtSign, label: "Mention Only", desc: "Responds when @tagged or in DMs" },
   { key: "all_channels", icon: Radio, label: "All Channels", desc: "Responds to every human message" },
@@ -61,16 +65,21 @@ function CredentialField({ label, value, onChange, placeholder, isSecret, testId
 }
 
 function AppCredentialsPanel() {
+  // Platform credentials: superadmins only (spec 008, N8). Workspace admins see the
+  // presence indicators on Integrations instead; the backend returns 403 to them.
+  const { user } = useAuth();
+  const canEdit = isSuperadmin(user);
   const [creds, setCreds] = useState({ client_id: "", client_secret: "", redirect_uri: "", bot_token: "" });
   const [existing, setExisting] = useState(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    if (!canEdit) return;
     api.get(`/discord/app-config`).then(r => {
       setExisting(r.data);
     }).catch(() => {});
-  }, []);
+  }, [canEdit]);
 
   const handleSave = async () => {
     const payload = {};
@@ -91,6 +100,8 @@ function AppCredentialsPanel() {
   };
 
   const allConfigured = existing?.has_client_id && existing?.has_client_secret && existing?.has_redirect_uri && existing?.has_bot_token;
+
+  if (!canEdit) return null;
 
   return (
     <div style={{ ...T.card, marginBottom: "20px", borderColor: allConfigured ? "rgba(52,211,153,0.2)" : colors.border.default }}>
@@ -153,9 +164,9 @@ function AppCredentialsPanel() {
           />
           <CredentialField
             label="Redirect URI" value={creds.redirect_uri} onChange={v => setCreds(p => ({ ...p, redirect_uri: v }))}
-            placeholder={existing?.redirect_uri || window.location.origin + "/api/discord/callback"}
+            placeholder={existing?.redirect_uri || (API_ORIGIN || window.location.origin) + "/api/discord/callback"}
             testId="app-redirect-uri"
-            hint={`Must match exactly in Discord Developer Portal > OAuth2 > Redirects. Suggested: ${window.location.origin}/api/discord/callback`}
+            hint={`Must match exactly in Discord Developer Portal > OAuth2 > Redirects. Suggested: ${API_ORIGIN || window.location.origin}/api/discord/callback`}
           />
           <CredentialField
             label="Bot Token" value={creds.bot_token} onChange={v => setCreds(p => ({ ...p, bot_token: v }))}
@@ -409,7 +420,7 @@ export default function DiscordSettings() {
   const [fetchingChannels, setFetchingChannels] = useState(false);
   const [inviting, setInviting] = useState(false);
   const pollRef = useRef(null);
-  const isAdmin = user?.role === "superadmin";
+  const isAdmin = isSuperadmin(user);
 
   useEffect(() => {
     const oauthStatus = searchParams.get("oauth");

@@ -4,8 +4,14 @@ import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import { toast } from "sonner";
 import { User, Lock, Save, Loader2, Check, Eye, EyeOff } from "lucide-react";
 
+import { API_ORIGIN } from "../utils/apiBase";
+
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
 export default function Profile() {
-  const { user, token, refreshUser } = useAuth();
+  const { user, token, refreshUser, updateToken, logout } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -29,7 +35,7 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/profile`, {
+      const res = await fetch(`${API_ORIGIN}/api/auth/profile`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ first_name: firstName, last_name: lastName, username }),
@@ -44,19 +50,26 @@ export default function Profile() {
   };
 
   const handleChangePassword = async () => {
-    if (newPw.length < 6) { toast.error("New password must be at least 6 characters"); return; }
+    const pwError = userPasswordError(newPw, user?.email || "");
+    if (pwError) { toast.error(pwError); return; }
     if (newPw !== confirmPw) { toast.error("Passwords don't match"); return; }
     setChangingPw(true);
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/change-password`, {
+      const res = await fetch(`${API_ORIGIN}/api/auth/change-password`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ current_password: currentPw, new_password: newPw }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success("Password changed");
+        // The backend revokes every existing session and returns a fresh token
+        // for this one (spec 008, N5): keep it so the user stays signed in.
+        if (data.token) updateToken(data.token);
+        toast.success("Password changed. Other sessions have been signed out.");
         setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      } else if (res.status === 401) {
+        toast.error("Your session has expired. Please sign in again.");
+        logout();
       } else toast.error(data.detail || "Failed to change password");
     } catch { toast.error("Failed to change password"); }
     finally { setChangingPw(false); }
@@ -172,7 +185,7 @@ export default function Profile() {
           <div style={{ position: "relative" }}>
             <input data-testid="new-password" type={showNewPw ? "text" : "password"}
               value={newPw} onChange={e => setNewPw(e.target.value)}
-              placeholder="At least 6 characters" style={{ ...T.input, width: "100%", paddingRight: "40px" }}
+              placeholder="At least 12 characters" style={{ ...T.input, width: "100%", paddingRight: "40px" }}
               onFocus={onFocus} onBlur={onBlur} />
             <button onClick={() => setShowNewPw(!showNewPw)} style={{
               position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
@@ -182,6 +195,8 @@ export default function Profile() {
             </button>
           </div>
         </div>
+
+        <PasswordRequirements password={newPw} email={user?.email || ""} />
 
         <div style={{ marginBottom: "18px" }}>
           <label style={T.label}>Confirm New Password</label>

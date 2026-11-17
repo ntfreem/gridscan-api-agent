@@ -10,6 +10,8 @@ import { colors, fonts, radius, T, onFocus, onBlur } from "@/theme";
 import { toast } from "sonner";
 import v2 from "@/utils/v2api";
 
+import { API_ORIGIN } from "../utils/apiBase";
+
 const PROVIDER_META = {
   discord: { label: "Discord", icon: Zap, color: "#5865F2" },
   telegram: { label: "Telegram", icon: Send, color: "#26A5E4" },
@@ -107,7 +109,7 @@ function StepCard({ step, title, children }) {
 function DiscordSetupPanel({ onSave, onCancel, saving, editAccount }) {
   const [name, setName] = useState(editAccount?.name || "");
   const [creds, setCreds] = useState({ client_id: "", client_secret: "", bot_token: "" });
-  const suggestedRedirect = `${window.location.origin}/api/discord/callback`;
+  const suggestedRedirect = `${API_ORIGIN || window.location.origin}/api/discord/callback`;
 
   const existing = editAccount?.credentials_display || {};
   const hasClientId = !!existing.client_id;
@@ -331,7 +333,7 @@ function ZendeskSetupPanel({ onSave, onCancel, saving, editAccount, orgId, onDis
   const isEdit = !!editAccount;
   const isConnected = editAccount?.status === "connected";
   const creds = editAccount?.credentials_masked || {};
-  const callbackUrl = `${window.location.origin}/api/zendesk/oauth/callback`;
+  const callbackUrl = `${API_ORIGIN || window.location.origin}/api/zendesk/oauth/callback`;
 
   const normalizeSubdomain = (raw) => {
     let s = raw.trim().replace(/\/+$/, "");

@@ -5,6 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import BridgeBotLogo from "../components/BridgeBotLogo";
 import { colors, fonts, radius, T, onFocus, onBlur } from "../theme";
 
+import { API_BASE } from "../utils/apiBase";
+
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
 export default function ResetPassword() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,9 +25,10 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault(); setError("");
     if (newPassword !== confirm) { setError("Passwords do not match"); return; }
-    if (newPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
+    const pwError = userPasswordError(newPassword, email);
+    if (pwError) { setError(pwError); return; }
     setLoading(true);
-    try { const res = await axios.post(`/api/auth/reset-password`, { email, code, new_password: newPassword }); setSuccess(res.data.message || "Password reset!"); setTimeout(() => navigate("/login"), 2000); }
+    try { const res = await axios.post(`${API_BASE}/auth/reset-password`, { email, code, new_password: newPassword }); setSuccess(res.data.message || "Password reset!"); setTimeout(() => navigate("/login"), 2000); }
     catch (err) { setError(err.response?.data?.detail || "Reset failed."); }
     finally { setLoading(false); }
   };
@@ -42,7 +49,8 @@ export default function ResetPassword() {
           <label style={T.label}>Reset Code</label>
           <input data-testid="reset-code" type="text" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" maxLength={6} style={{ ...T.input, fontFamily: fonts.mono, fontSize: "22px", letterSpacing: "0.3em", textAlign: "center", marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
           <label style={T.label}>New Password</label>
-          <input data-testid="reset-new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ ...T.input, marginBottom: "14px" }} onFocus={onFocus} onBlur={onBlur} required />
+          <input data-testid="reset-new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 12 characters" style={{ ...T.input, marginBottom: "4px" }} onFocus={onFocus} onBlur={onBlur} required />
+          <PasswordRequirements password={newPassword} email={email} />
           <label style={T.label}>Confirm Password</label>
           <input data-testid="reset-confirm-password" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat new password" style={{ ...T.input, marginBottom: "20px" }} onFocus={onFocus} onBlur={onBlur} required />
           <button data-testid="reset-submit" type="submit" style={{ ...T.btnPrimary, width: "100%", justifyContent: "center", padding: "12px", opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? "Resetting..." : "Reset Password"}</button>

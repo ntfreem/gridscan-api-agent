@@ -5,8 +5,16 @@ import BridgeBotLogo from "../components/BridgeBotLogo";
 import { useSearchParams } from "react-router-dom";
 import { streamChat } from "../utils/streamChat";
 import MarkdownMessage from "../components/MarkdownMessage";
+import { API_BASE } from "../utils/apiBase";
+import {
+  SCOPE_WIDGET, normaliseBotId, saveSession, clearSession, restoreSession,
+  validateOutgoingMessage, MISSING_BOT_MESSAGE,
+} from "../utils/chatSession";
 
-const API = `/api`;
+const API = API_BASE;
+const SCOPE = SCOPE_WIDGET;
+// Per-tab storage for embedded widgets; guarded because sandboxed iframes may block it.
+const widgetStorage = () => { try { return window.sessionStorage; } catch { return null; } };
 
 function BubbleCopyBtn({ text }) {
   const [copied, setCopied] = useState(false);
@@ -25,14 +33,17 @@ export default function ChatWidget() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
+  // {sessionId, sessionToken} issued by the server for THIS bot (spec 008 Stage 4).
+  const sessionRef = useRef(null);
   const [botConfig, setBotConfig] = useState({ name: "Assistant" });
   const [logoUrl, setLogoUrl] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const streamRef = useRef(null);
   const [searchParams] = useSearchParams();
-  const instanceId = searchParams.get("instance");
+  const instanceId = normaliseBotId(searchParams.get("instance"));
+  const botRef = useRef(instanceId);
+  botRef.current = instanceId;
   const mode = searchParams.get("mode") || "popup";
   const welcomeParam = searchParams.get("welcome") || "";
 
@@ -75,10 +86,11 @@ export default function ChatWidget() {
   // Load embed config (custom CSS + welcome message) for this instance
   useEffect(() => {
     if (instanceId) {
-      axios.get(`${API}/embed/config/${instanceId}`).then(r => {
+      axios.get(`${API}/embed/config/${encodeURIComponent(instanceId)}`).then(r => {
         const cfg = r.data || {};
         // Inject custom stylesheet if configured
-        if (cfg.custom_css_url) {
+        // https only (the backend also rejects other schemes) — spec 008, P9.
+        if (typeof cfg.custom_css_url === "string" && cfg.custom_css_url.startsWith("https://")) {
           const link = document.createElement("link");
           link.rel = "stylesheet";
           link.href = cfg.custom_css_url;
@@ -114,18 +126,26 @@ export default function ChatWidget() {
   }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const iid = instanceId || "default";
+    // A new bot means a new, separate conversation: never carry a session across bots.
+    sessionRef.current = null;
+    if (!instanceId) {
+      setMessages([{ role: "assistant", content: MISSING_BOT_MESSAGE, timestamp: new Date().toISOString(), isError: true }]);
+      return undefined;
+    }
+    const iid = encodeURIComponent(instanceId);
     axios.get(`${API}/bot-info/${iid}`).then(r => { if (r.data?.name) setBotConfig(r.data); }).catch(() => {});
     const img = new Image();
     img.onload = () => setLogoUrl(`${API}/bot-logo/${iid}`);
     img.onerror = () => setLogoUrl(null);
     img.src = `${API}/bot-logo/${iid}`;
 
-    const saved = sessionStorage.getItem(`widget_session_${instanceId || "default"}`);
-    if (saved) {
-      setSessionId(saved);
-      axios.get(`${API}/chat/history/${saved}`).then(r => setMessages(r.data.messages || [])).catch(() => {});
-    }
+    let cancelled = false;
+    restoreSession({ storage: widgetStorage(), scope: SCOPE, botId: instanceId }).then(({ session: restored, messages: history }) => {
+      if (cancelled || botRef.current !== instanceId) return;
+      sessionRef.current = restored;
+      if (history.length) setMessages(history);
+    });
+    return () => { cancelled = true; };
   }, [instanceId]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading, isStreaming]);
@@ -134,22 +154,26 @@ export default function ChatWidget() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading || isStreaming) return;
     const text = input.trim();
+    const problem = !instanceId ? MISSING_BOT_MESSAGE : validateOutgoingMessage(text);
+    if (problem) {
+      setMessages(prev => [...prev, { role: "assistant", content: problem, timestamp: new Date().toISOString(), isError: true }]);
+      return;
+    }
+    const sendBot = instanceId;
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: text, timestamp: new Date().toISOString() }]);
     setIsLoading(true);
 
-    let sessionReceived = false;
     let firstTokenReceived = false;
     streamRef.current = streamChat({
       message: text,
-      sessionId,
-      instanceId,
-      onSession: (sid) => {
-        sessionReceived = true;
-        if (!sessionId) {
-          setSessionId(sid);
-          sessionStorage.setItem(`widget_session_${instanceId || "default"}`, sid);
-        }
+      instanceId: sendBot,
+      session: sessionRef.current,
+      onSession: (sid, token) => {
+        // The server may start a new session (e.g. expired token): always keep the pair it sends.
+        if (!saveSession(widgetStorage(), SCOPE, sendBot, sid, token)) return;
+        if (botRef.current !== sendBot) return; // user switched bots meanwhile
+        sessionRef.current = { sessionId: sid, sessionToken: token };
       },
       onToken: (token) => {
         if (!firstTokenReceived) {
@@ -193,9 +217,9 @@ export default function ChatWidget() {
         setIsLoading(false);
       },
     });
-  }, [input, isLoading, isStreaming, sessionId, instanceId]);
+  }, [input, isLoading, isStreaming, instanceId]);
 
-  const reset = () => { sessionStorage.removeItem(`widget_session_${instanceId || "default"}`); setSessionId(null); setMessages([]); if (streamRef.current) streamRef.current.abort(); };
+  const reset = () => { clearSession(widgetStorage(), SCOPE, instanceId); sessionRef.current = null; setMessages([]); if (streamRef.current) streamRef.current.abort(); };
   const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   const isFullpage = mode === "fullpage";

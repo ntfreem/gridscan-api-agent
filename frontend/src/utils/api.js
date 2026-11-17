@@ -1,7 +1,9 @@
 import axios from "axios";
 
+import { API_BASE } from "./apiBase";
+
 const api = axios.create({
-  baseURL: `/api`,
+  baseURL: API_BASE,
   withCredentials: true, // Send httpOnly cookie when same-origin
 });
 

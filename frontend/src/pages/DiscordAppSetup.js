@@ -7,6 +7,12 @@ import {
 } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
+import { useAuth } from "../context/AuthContext";
+
+import { isSuperadmin } from "../utils/roles";
+
+import { API_ORIGIN } from "../utils/apiBase";
+
 function CredentialField({ label, value, onChange, placeholder, isSecret, testId, hint }) {
   const [show, setShow] = useState(false);
   return (
@@ -110,7 +116,9 @@ export default function DiscordAppSetup() {
   const [clearing, setClearing] = useState(false);
   const [purging, setPurging] = useState(false);
 
-  const suggestedRedirect = `${window.location.origin}/api/discord/callback`;
+  const { user } = useAuth();
+  // The OAuth callback is an API route: it lives on the API origin, not the frontend.
+  const suggestedRedirect = `${API_ORIGIN || window.location.origin}/api/discord/callback`;
 
   const loadConfig = async () => {
     try {
@@ -207,6 +215,17 @@ export default function DiscordAppSetup() {
   const updatedDisplay = existing?.updated_at
     ? new Date(existing.updated_at).toLocaleString()
     : "Never";
+
+  // Platform-wide credentials and purge: superadmins only (spec 008, N8). The route
+  // is AdminOnlyRoute and the backend enforces it; this is defence in depth.
+  if (!isSuperadmin(user)) {
+    return (
+      <div style={T.page} data-testid="discord-app-setup-forbidden">
+        <h1 style={T.h1}>Discord App Setup</h1>
+        <p style={T.subtitle}>Only platform superadmins can manage the platform Discord application.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={T.page} data-testid="discord-app-setup-page">

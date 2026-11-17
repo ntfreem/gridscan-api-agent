@@ -5,6 +5,8 @@ import { Copy, Check, Code2, Globe, Monitor, Paintbrush, MessageCircle, Layout, 
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 import api from "../utils/api";
 
+import { API_BASE } from "../utils/apiBase";
+
 function CodeBlock({ code, label, testId }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -106,6 +108,7 @@ export default function EmbedCode() {
   const [defaultOpen, setDefaultOpen] = useState(false);
   const [savedDefaultOpen, setSavedDefaultOpen] = useState(false);
 
+  // Widget UI = frontend origin (this site); embed.js/config/logo = API origin (spec 008, E5).
   const origin = window.location.origin;
 
   // Build theme query string from non-empty values
@@ -114,7 +117,7 @@ export default function EmbedCode() {
     .map(([k, v]) => `${k}=${encodeURIComponent(v.trim())}`)
     .join("&");
   const welcomeQuery = welcomeMessage ? `&welcome=${encodeURIComponent(welcomeMessage)}` : "";
-  const widgetUrl = `${origin}/widget?instance=${instanceId}&mode=${activeMethod}${themeQuery ? "&" + themeQuery : ""}${welcomeQuery}`;
+  const widgetUrl = `${origin}/widget?instance=${encodeURIComponent(instanceId || "")}&mode=${activeMethod}${themeQuery ? "&" + themeQuery : ""}${welcomeQuery}`;
 
   // Load embed config
   useEffect(() => {
@@ -162,7 +165,7 @@ export default function EmbedCode() {
 
   const getSnippets = () => {
     const cssParam = savedCssUrl ? `&css=${encodeURIComponent(savedCssUrl)}` : "";
-    const scriptSrc = `${origin}/api/embed.js`;
+    const scriptSrc = `${API_BASE}/embed.js`;
 
     if (activeMethod === "popup") {
       return {
@@ -520,7 +523,7 @@ export default function EmbedCode() {
             </div>
             {[
               { label: "Widget URL", url: widgetUrl, desc: `Direct link to the ${activeMethod} mode widget with theme` },
-              { label: "Embed Script", url: `${origin}/api/embed.js`, desc: "JavaScript loader URL — add data-* attributes for config" },
+              { label: "Embed Script", url: `${API_BASE}/embed.js`, desc: "JavaScript loader URL — add data-* attributes for config" },
             ].map(({ label, url, desc }) => (
               <div key={label} style={{ marginBottom: "12px", padding: "12px 14px", backgroundColor: colors.bg.base, border: `1px solid ${colors.border.subtle}`, borderRadius: "10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Save, Eye, EyeOff, Plus, X, ExternalLink, MessageSquare, Lightbulb, Cpu, Zap, DollarSign, Key, Copy, Trash2, Shield, ShieldOff, ToggleLeft, ToggleRight, Upload, Image as ImageIcon, RefreshCw, BookmarkPlus } from "lucide-react";
 import { colors, fonts, T, onFocus, onBlur } from "../theme";
 
+import { API_BASE } from "../utils/apiBase";
+
 export default function BotSettings() {
   const { selectedOrg, selectedBot } = useAuth();
   const botId = selectedBot?.id;
@@ -141,9 +143,9 @@ export default function BotSettings() {
     // Probe for bot logo
     if (botId) {
       const img = new Image();
-      img.onload = () => setLogoUrl(`/api/bot-logo/${botId}?t=${Date.now()}`);
+      img.onload = () => setLogoUrl(`${API_BASE}/bot-logo/${botId}?t=${Date.now()}`);
       img.onerror = () => setLogoUrl(null);
-      img.src = `/api/bot-logo/${botId}?t=${Date.now()}`;
+      img.src = `${API_BASE}/bot-logo/${botId}?t=${Date.now()}`;
     }
   }, [orgId, botId]);
 
@@ -205,7 +207,7 @@ export default function BotSettings() {
       const form = new FormData();
       form.append("file", file);
       await api.post("/admin/bot-logo", form, { headers: { "Content-Type": "multipart/form-data" } });
-      setLogoUrl(`/api/bot-logo/${botId}?t=${Date.now()}`);
+      setLogoUrl(`${API_BASE}/bot-logo/${botId}?t=${Date.now()}`);
       toast.success("Logo uploaded");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Upload failed");
@@ -670,17 +672,16 @@ export default function BotSettings() {
             <div style={{ marginTop: "14px", padding: "12px", backgroundColor: colors.bg.base, borderRadius: "8px", border: `1px solid ${colors.border.subtle}` }}>
               <p style={{ margin: "0 0 6px", fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Usage Example</p>
               <code style={{ fontFamily: fonts.mono, fontSize: "11px", color: colors.text.secondary, lineHeight: "1.6", whiteSpace: "pre-wrap", display: "block" }}>
-{`# Standard request
-curl -X POST ${window.location.origin}/api/v1/chat \\
-  -H "Authorization: Bearer bbk_your_key_here" \\
+{`# Public chat API (same contract as the website widget; no API key)
+curl -X POST ${API_BASE}/chat/send \\
   -H "Content-Type: application/json" \\
-  -d '{"message": "Hello", "session_id": "optional-id"}'
+  -d '{"message": "Hello", "instance_id": "${botId}"}'
 
-# Streaming (SSE) — tokens arrive in real time
-curl -N -X POST ${window.location.origin}/api/v1/chat/stream \\
-  -H "Authorization: Bearer bbk_your_key_here" \\
-  -H "Content-Type: application/json" \\
-  -d '{"message": "Hello", "session_id": "optional-id"}'`}
+# Continue the conversation: send back BOTH values from the previous response
+#   "session_id": "web_...", "session_token": "v1...."
+# Streaming (SSE): POST ${API_BASE}/chat/stream (same body; the first
+# "session" event carries session_id and session_token).
+# Note: API-key-authenticated endpoints are not available on this server yet.`}
               </code>
             </div>
           </div>

@@ -9,7 +9,13 @@ import {
   Clock, X, Eye, Lock, ChevronDown, Search, Users as UsersIcon, Edit2, Building2, Layers,
 } from "lucide-react";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+import { API_ORIGIN } from "../utils/apiBase";
+
+import { userPasswordError } from "../utils/passwordPolicy";
+
+import PasswordRequirements from "../components/PasswordRequirements";
+
+const API = API_ORIGIN;
 
 export default function Users() {
   const { user: currentUser, token, selectedWorkspace, workspaces } = useAuth();
@@ -309,7 +315,7 @@ function InviteModal({ orgs, bots, token, onClose, onDone }) {
     if (!email.trim()) { toast.error("Email is required"); return; }
     setSending(true);
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users/invite`, {
+      const res = await fetch(`${API_ORIGIN}/api/admin/users/invite`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -483,10 +489,11 @@ function ResetPasswordModal({ user, token, onClose }) {
   const [saving, setSaving] = useState(false);
 
   const handleReset = async () => {
-    if (newPw.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    const pwError = userPasswordError(newPw, user.email || "");
+    if (pwError) { toast.error(pwError); return; }
     setSaving(true);
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users/${user.id}/reset-password`, {
+      const res = await fetch(`${API_ORIGIN}/api/admin/users/${user.id}/reset-password`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: newPw }),
@@ -520,7 +527,7 @@ function ResetPasswordModal({ user, token, onClose }) {
             type={showPw ? "text" : "password"}
             value={newPw}
             onChange={e => setNewPw(e.target.value)}
-            placeholder="Minimum 6 characters"
+            placeholder="At least 12 characters"
             style={{ ...T.input, width: "100%", paddingRight: "40px" }}
             data-testid="reset-pw-input"
             onFocus={onFocus} onBlur={onBlur}
@@ -530,10 +537,11 @@ function ResetPasswordModal({ user, token, onClose }) {
             background: "none", border: "none", cursor: "pointer", color: colors.text.muted, padding: "4px",
           }}><Eye size={16} /></button>
         </div>
+        <PasswordRequirements password={newPw} email={user.email || ""} />
 
-        <button onClick={handleReset} disabled={saving || newPw.length < 6} data-testid="confirm-reset-pw-btn" style={{
+        <button onClick={handleReset} disabled={saving || newPw.length < 12} data-testid="confirm-reset-pw-btn" style={{
           ...T.btnPrimary, width: "100%", justifyContent: "center",
-          opacity: (saving || newPw.length < 6) ? 0.6 : 1,
+          opacity: (saving || newPw.length < 12) ? 0.6 : 1,
         }}>
           <Lock size={14} /> {saving ? "Resetting..." : "Reset Password"}
         </button>
@@ -569,7 +577,7 @@ function EditUserModal({ user, workspaces, allWsMemberships, token, onClose, onD
     const label = newRole === "admin" ? "workspace admin" : "regular member";
     setSaving(prev => ({ ...prev, [ws.id]: true }));
     try {
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/users/${user.id}/role`, {
+      const res = await fetch(`${API_ORIGIN}/api/admin/users/${user.id}/role`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ role: newRole, workspace_id: ws.id }),

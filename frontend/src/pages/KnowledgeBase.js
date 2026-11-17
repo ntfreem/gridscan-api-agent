@@ -8,6 +8,8 @@ import { Plus, Trash2, Globe, FileText, HelpCircle, ToggleLeft, ToggleRight, Loa
 import { colors, fonts, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 import ApiIntegrations from "./ApiIntegrations";
 
+import { API_ORIGIN } from "../utils/apiBase";
+
 const typeIcon = { faq: HelpCircle, url: Globe, document: FileText, github: Github };
 const typeColor = { faq: colors.brand.blue, url: colors.brand.success, document: colors.text.secondary, github: "rgba(139,92,246,0.9)" };
 
@@ -503,7 +505,7 @@ export default function KnowledgeBase() {
   const consumeSSE = async (url, payload, { onProgress, onComplete, onError }) => {
     const token = localStorage.getItem("bf_token");
     const instanceHeader = selectedInstance?.id || "";
-    const resp = await fetch(`${process.env.REACT_APP_BACKEND_URL}${url}`, {
+    const resp = await fetch(`${API_ORIGIN}${url}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
