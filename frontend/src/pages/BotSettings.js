@@ -22,7 +22,7 @@ export default function BotSettings() {
 
   // LLM provider per-instance configuration
   const [llm, setLlm] = useState({
-    provider: "emergent",
+    provider: "anthropic",
     model: "",
     anthropic_api_key: "",
     openai_api_key: "",
@@ -34,7 +34,13 @@ export default function BotSettings() {
     allowed_anthropic_models: ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
     allowed_openai_models: ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini"],
     default_models: { emergent: "claude-sonnet-4-6", anthropic: "claude-sonnet-4-6", openai: "gpt-4o", ollama: "llama3.1" },
+    llm_configured: null,       // null until loaded from the API
+    emergent_available: false,
+    ollama_enabled: false,      // only when the server allowlists Ollama endpoints (spec 010)
   });
+  // The saved provider (not the unsaved dropdown value) decides whether the
+  // legacy Emergent option is still offered for this bot.
+  const [savedProvider, setSavedProvider] = useState(null);
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmTesting, setLlmTesting] = useState(false);
   const [llmTestResult, setLlmTestResult] = useState(null);
@@ -54,8 +60,11 @@ export default function BotSettings() {
   useEffect(() => {
     if (!botId || !orgId) return;
     v2.getLlmConfig(orgId, botId).then(r => {
-      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
-    }).catch(() => {});
+      if (r.data) {
+        setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
+        setSavedProvider(r.data.provider || null);
+      }
+    }).catch((e) => toast.error(e.response?.data?.detail || "Failed to load AI provider settings"));
     api.get(`/analytics/llm-cost`).then(r => setCostData(r.data)).catch(() => {});
     api.get(`/admin/api-keys`).then(r => setApiKeys(r.data || [])).catch(() => {});
   }, [orgId, botId]);
@@ -74,7 +83,10 @@ export default function BotSettings() {
       await v2.putLlmConfig(orgId, botId, payload);
       toast.success(`Provider saved: ${llm.provider}`);
       const r = await v2.getLlmConfig(orgId, botId);
-      if (r.data) setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
+      if (r.data) {
+        setLlm(p => ({ ...p, ...r.data, anthropic_api_key: "", openai_api_key: "" }));
+        setSavedProvider(r.data.provider || null);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save LLM config");
     } finally { setLlmSaving(false); }
@@ -165,7 +177,7 @@ export default function BotSettings() {
       });
       await v2.updateBot(orgId, botId, { name: config.name.trim() });
       toast.success("Settings saved");
-    } catch { toast.error("Failed to save settings"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to save settings"); }
     finally { setSaving(false); }
   };
 
@@ -362,7 +374,22 @@ export default function BotSettings() {
               <Cpu size={14} color={colors.brand.light} />
               <p style={{ ...T.sectionTitle, margin: 0 }}>LLM Provider</p>
             </div>
-            <p style={T.sectionSub}>Pick where this instance&apos;s AI calls go. <strong>Emergent</strong> uses the platform&apos;s Universal Key (default). <strong>Anthropic Direct</strong> / <strong>OpenAI Direct</strong> bill against your own accounts. <strong>Ollama</strong> calls a self-hosted model.</p>
+            <p style={T.sectionSub}>Pick where this bot&apos;s AI calls go. <strong>Anthropic</strong> and <strong>OpenAI</strong> use your own API key and bill your own account. {llm.ollama_enabled && <><strong>Ollama</strong> calls a server approved by the platform operator.</>}</p>
+
+            {llm.llm_configured === false && (
+              <div data-testid="llm-key-required-banner" role="alert" style={{
+                margin: "0 0 14px", padding: "10px 12px", fontSize: "12px", lineHeight: 1.5,
+                color: colors.text.primary, backgroundColor: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.35)", borderRadius: "6px", fontFamily: fonts.body,
+                display: "flex", gap: "8px", alignItems: "flex-start",
+              }}>
+                <Key size={14} color="#F59E0B" style={{ flexShrink: 0, marginTop: "2px" }} />
+                <span>
+                  <strong>AI chat is not set up yet.</strong> Add your own Anthropic or OpenAI API key below and save.
+                  Until then this bot cannot answer messages.
+                </span>
+              </div>
+            )}
 
             <label style={T.label}>Provider</label>
             <select
@@ -371,10 +398,18 @@ export default function BotSettings() {
               data-testid="llm-provider-select"
               style={{ ...T.input, cursor: "pointer" }}
             >
-              <option value="emergent">Emergent Universal Key (default)</option>
-              <option value="anthropic">Anthropic Direct (BYO key)</option>
-              <option value="openai">OpenAI Direct (BYO key)</option>
-              <option value="ollama">Ollama (self-hosted)</option>
+              <option value="anthropic">Anthropic (your API key)</option>
+              <option value="openai">OpenAI (your API key)</option>
+              {(llm.ollama_enabled || savedProvider === "ollama") && (
+                <option value="ollama">
+                  {llm.ollama_enabled ? "Ollama (approved server)" : "Ollama (disabled on this server)"}
+                </option>
+              )}
+              {(llm.emergent_available || savedProvider === "emergent") && (
+                <option value="emergent">
+                  {llm.emergent_available ? "Emergent Universal Key (legacy)" : "Emergent Universal Key (legacy, unavailable here)"}
+                </option>
+              )}
             </select>
 
             <label style={{ ...T.label, marginTop: "14px" }}>Model</label>
@@ -417,12 +452,14 @@ export default function BotSettings() {
             <p style={T.hint}>
               {llm.provider === "anthropic" && "Allowed: Haiku 4.5 (cheapest), Sonnet 4.5 (balanced), Opus 4.5 (best quality)."}
               {llm.provider === "openai" && "Choose from available OpenAI models. GPT-4o is a great starting point."}
-              {llm.provider === "emergent" && "Model name only — Emergent supplies the key automatically. Leave blank to use Opus → Sonnet fallback."}
+              {llm.provider === "emergent" && (llm.emergent_available
+                ? "Model name only — Emergent supplies the key automatically. Leave blank to use Opus → Sonnet fallback."
+                : "The Emergent Universal Key is not available on this deployment. Switch to Anthropic or OpenAI and add your own API key.")}
               {llm.provider === "ollama" && "Any model installed on your Ollama server."}
             </p>
             {/^(sk-|bbk_)/i.test(llm.model || "") && (
               <p data-testid="llm-model-key-warning" style={{ margin: "6px 0 0", padding: "6px 10px", fontSize: "11px", color: colors.brand.error, backgroundColor: "rgba(244,63,94,0.08)", border: `1px solid rgba(244,63,94,0.3)`, borderRadius: "6px", fontFamily: fonts.body }}>
-                That looks like an API key, not a model name. Clear this field — Emergent does not need a key here.
+                That looks like an API key, not a model name. Clear this field and paste the key into the API key field instead.
               </p>
             )}
 
@@ -470,12 +507,12 @@ export default function BotSettings() {
                 <input
                   value={llm.ollama_base_url}
                   onChange={e => setLlm(p => ({ ...p, ollama_base_url: e.target.value }))}
-                  placeholder="http://localhost:11434"
+                  placeholder="https://ollama.example.com"
                   data-testid="llm-ollama-url-input"
                   onFocus={onFocus} onBlur={onBlur}
                   style={T.input}
                 />
-                <p style={T.hint}>Where your Ollama server is reachable from the BitBot Pro backend. Leave blank to fall back to <code>OLLAMA_BASE_URL</code> env (default localhost:11434).</p>
+                <p style={T.hint}>Must exactly match a server approved by the platform operator (<code>OLLAMA_ALLOWED_BASE_URLS</code>). Private and internal addresses are never allowed.</p>
               </>
             )}
 

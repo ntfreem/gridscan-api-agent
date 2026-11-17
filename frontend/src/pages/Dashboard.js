@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { colors, fonts, radius, T, rowEnter, rowLeave } from "../theme";
 import v2 from "../utils/v2api";
+import { toast } from "sonner";
 
 const PROVIDER_META = {
   discord: { label: "Discord", icon: Zap, color: "#5865F2" },
@@ -73,7 +74,7 @@ function PlatformBadge({ platform }) {
 }
 
 export default function Dashboard() {
-  const { selectedOrg, user } = useAuth();
+  const { selectedOrg, user, orgs } = useAuth();
   const navigate = useNavigate();
   const orgId = selectedOrg?.id;
 
@@ -85,7 +86,7 @@ export default function Dashboard() {
     setLoading(true);
     v2.orgOverview(orgId)
       .then(res => setData(res.data))
-      .catch(() => {})
+      .catch((e) => toast.error(e.response?.data?.detail || "Failed to load overview"))
       .finally(() => setLoading(false));
   }, [orgId]);
 
@@ -102,11 +103,22 @@ export default function Dashboard() {
       <div style={{ ...T.page, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", paddingTop: "80px" }}>
         <Building2 size={36} color={colors.border.default} style={{ marginBottom: "12px" }} />
         <p style={{ fontFamily: fonts.heading, fontSize: "20px", fontWeight: "700", color: colors.text.primary, margin: "0 0 6px" }}>
-          No organisation selected
+          {(orgs || []).length === 0 ? "No organisations yet" : "No organisation selected"}
         </p>
-        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary }}>
-          Select an organisation from the sidebar to see its dashboard.
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.secondary, maxWidth: "460px", lineHeight: 1.6 }}>
+          {(orgs || []).length === 0
+            ? "Bots live inside an organisation (Workspace → Organisation → Bot). Create an organisation to add your first bot."
+            : "Select an organisation from the sidebar to see its dashboard."}
         </p>
+        {(orgs || []).length === 0 && (
+          <button
+            data-testid="dashboard-create-org-btn"
+            onClick={() => navigate("/admin/organisations?create=1&next=/admin/bots")}
+            style={{ ...T.btnPrimary, marginTop: "16px", padding: "8px 16px", fontSize: "12px" }}
+          >
+            Create organisation
+          </button>
+        )}
       </div>
     );
   }

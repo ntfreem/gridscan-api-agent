@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2, Plus, Pencil, Check, X, Loader2,
   Bot, Link2, Network, Users, ArrowRight,
@@ -10,10 +10,14 @@ import { toast } from "sonner";
 import v2 from "../utils/v2api";
 
 export default function Organisations() {
-  const { orgs, selectedOrg, selectOrg, refreshOrgs } = useAuth();
+  const { orgs, selectedOrg, selectOrg, refreshOrgs, selectedWorkspace } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Onboarding deep link from the Bots page: /admin/organisations?create=1&next=/admin/bots
+  const nextPath = searchParams.get("next");
+  const safeNext = nextPath && nextPath.startsWith("/admin/") ? nextPath : null;
 
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(searchParams.get("create") === "1");
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,12 +31,20 @@ export default function Organisations() {
     if (!name) { toast.error("Name is required"); return; }
     setSaving(true);
     try {
-      await v2.createOrg({ name, description: newDesc.trim() });
-      toast.success(`"${name}" created`);
+      const res = await v2.createOrg({
+        name,
+        description: newDesc.trim(),
+        ...(selectedWorkspace?.id && { workspace_id: selectedWorkspace.id }),
+      });
       setCreating(false);
       setNewName("");
       setNewDesc("");
+      // Refresh first, then select: refreshOrgs would otherwise restore the
+      // previously selected org over the new one.
       await refreshOrgs();
+      if (res?.data?.id) selectOrg(res.data);
+      toast.success(`"${name}" created and selected`);
+      if (safeNext) navigate(safeNext);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Failed to create organisation");
     } finally {
@@ -143,8 +155,9 @@ export default function Organisations() {
             <p style={{ fontFamily: fonts.heading, fontSize: "16px", color: colors.text.secondary, margin: "0 0 8px" }}>
               No organisations yet
             </p>
-            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 16px" }}>
-              Create your first organisation to get started.
+            <p style={{ fontFamily: fonts.body, fontSize: "12px", color: colors.text.muted, margin: "0 0 16px", lineHeight: 1.6 }}>
+              Bots live inside an organisation: <strong>Workspace → Organisation → Bot</strong>.
+              <br />Create your first organisation{selectedWorkspace?.name ? ` in ${selectedWorkspace.name}` : ""} to start adding bots.
             </p>
             <button data-testid="create-first-org" onClick={() => setCreating(true)} style={T.btn}>
               <Plus size={14} /> Create Organisation

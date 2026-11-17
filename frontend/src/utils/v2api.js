@@ -4,12 +4,14 @@ import { API_BASE } from "./apiBase";
 
 const BASE = API_BASE;
 
-function headers() {
+// Org-scoped calls pass the org from the URL so X-Org-ID always matches it:
+// the API rejects a mismatched header (spec 009, R1.2/R1.8).
+function headers(orgId) {
   const token = localStorage.getItem("bf_token");
-  const orgId = localStorage.getItem("bf_org_id");
+  const org = orgId || localStorage.getItem("bf_org_id");
   return {
     Authorization: `Bearer ${token}`,
-    ...(orgId && { "X-Org-ID": orgId }),
+    ...(org && { "X-Org-ID": org }),
   };
 }
 
@@ -17,48 +19,48 @@ const v2 = {
   // Orgs
   listOrgs: () => axios.get(`${BASE}/v2/orgs`, { headers: headers() }),
   createOrg: (data) => axios.post(`${BASE}/v2/orgs`, data, { headers: headers() }),
-  getOrg: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
-  updateOrg: (orgId, data) => axios.put(`${BASE}/v2/orgs/${orgId}`, data, { headers: headers() }),
-  orgOverview: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/overview`, { headers: headers() }),
-  getOrgMembers: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/members`, { headers: headers() }),
+  getOrg: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}`, { headers: headers(orgId) }),
+  updateOrg: (orgId, data) => axios.put(`${BASE}/v2/orgs/${orgId}`, data, { headers: headers(orgId) }),
+  orgOverview: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/overview`, { headers: headers(orgId) }),
+  getOrgMembers: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/members`, { headers: headers(orgId) }),
 
   // Bots
-  listBots: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots`, { headers: headers() }),
-  createBot: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots`, data, { headers: headers() }),
-  getBot: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, { headers: headers() }),
-  updateBot: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, data, { headers: headers() }),
-  getBotSettings: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, { headers: headers() }),
-  updateBotSettings: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, data, { headers: headers() }),
-  deleteBot: (orgId, botId) => axios.delete(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, { headers: headers() }),
-  deleteOrg: (orgId) => axios.delete(`${BASE}/v2/orgs/${orgId}`, { headers: headers() }),
-  cloneBot: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/clone`, {}, { headers: headers() }),
-  saveAsTemplate: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/save-as-template`, data || {}, { headers: headers() }),
-  getLlmConfig: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, { headers: headers() }),
-  putLlmConfig: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, data, { headers: headers() }),
-  testLlmConfig: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config/test`, {}, { headers: headers() }),
+  listBots: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots`, { headers: headers(orgId) }),
+  createBot: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots`, data, { headers: headers(orgId) }),
+  getBot: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, { headers: headers(orgId) }),
+  updateBot: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, data, { headers: headers(orgId) }),
+  getBotSettings: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, { headers: headers(orgId) }),
+  updateBotSettings: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/settings`, data, { headers: headers(orgId) }),
+  deleteBot: (orgId, botId) => axios.delete(`${BASE}/v2/orgs/${orgId}/bots/${botId}`, { headers: headers(orgId) }),
+  deleteOrg: (orgId) => axios.delete(`${BASE}/v2/orgs/${orgId}`, { headers: headers(orgId) }),
+  cloneBot: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/clone`, {}, { headers: headers(orgId) }),
+  saveAsTemplate: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/save-as-template`, data || {}, { headers: headers(orgId) }),
+  getLlmConfig: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, { headers: headers(orgId) }),
+  putLlmConfig: (orgId, botId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config`, data, { headers: headers(orgId) }),
+  testLlmConfig: (orgId, botId) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/llm-config/test`, {}, { headers: headers(orgId) }),
 
   // Templates
-  listTemplates: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/templates`, { headers: headers() }),
-  createBotFromTemplate: (orgId, templateId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/templates/${templateId}/create-bot`, data || {}, { headers: headers() }),
-  deleteTemplate: (orgId, templateId) => axios.delete(`${BASE}/v2/orgs/${orgId}/templates/${templateId}`, { headers: headers() }),
+  listTemplates: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/templates`, { headers: headers(orgId) }),
+  createBotFromTemplate: (orgId, templateId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/templates/${templateId}/create-bot`, data || {}, { headers: headers(orgId) }),
+  deleteTemplate: (orgId, templateId) => axios.delete(`${BASE}/v2/orgs/${orgId}/templates/${templateId}`, { headers: headers(orgId) }),
 
   // Accounts
-  listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers() }),
-  createAccount: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts`, data, { headers: headers() }),
-  deleteAccount: (orgId, accountId) => axios.delete(`${BASE}/v2/orgs/${orgId}/accounts/${accountId}`, { headers: headers() }),
-  getAccount: (orgId, accId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, { headers: headers() }),
-  updateAccount: (orgId, accId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, data, { headers: headers() }),
-  disconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/disconnect`, {}, { headers: headers() }),
-  reconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/reconnect`, {}, { headers: headers() }),
-  testAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/test`, {}, { headers: headers() }),
+  listAccounts: (orgId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts`, { headers: headers(orgId) }),
+  createAccount: (orgId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts`, data, { headers: headers(orgId) }),
+  deleteAccount: (orgId, accountId) => axios.delete(`${BASE}/v2/orgs/${orgId}/accounts/${accountId}`, { headers: headers(orgId) }),
+  getAccount: (orgId, accId) => axios.get(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, { headers: headers(orgId) }),
+  updateAccount: (orgId, accId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/accounts/${accId}`, data, { headers: headers(orgId) }),
+  disconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/disconnect`, {}, { headers: headers(orgId) }),
+  reconnectAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/reconnect`, {}, { headers: headers(orgId) }),
+  testAccount: (orgId, accId) => axios.post(`${BASE}/v2/orgs/${orgId}/accounts/${accId}/test`, {}, { headers: headers(orgId) }),
 
   // Connections
-  listConnections: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, { headers: headers() }),
-  createConnection: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, data, { headers: headers() }),
-  getConnection: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, { headers: headers() }),
-  updateConnection: (orgId, botId, connId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, data, { headers: headers() }),
-  toggleConnection: (orgId, botId, connId) => axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/toggle`, {}, { headers: headers() }),
-  connectionActivity: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/activity`, { headers: headers() }),
+  listConnections: (orgId, botId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, { headers: headers(orgId) }),
+  createConnection: (orgId, botId, data) => axios.post(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections`, data, { headers: headers(orgId) }),
+  getConnection: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, { headers: headers(orgId) }),
+  updateConnection: (orgId, botId, connId, data) => axios.put(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}`, data, { headers: headers(orgId) }),
+  toggleConnection: (orgId, botId, connId) => axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/toggle`, {}, { headers: headers(orgId) }),
+  connectionActivity: (orgId, botId, connId) => axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/connections/${connId}/activity`, { headers: headers(orgId) }),
 
   // Suggestions
   listSuggestions: (orgId, botId, params = {}) => {
@@ -67,10 +69,10 @@ const v2 = {
     if (params.connection_id) qs.set("connection_id", params.connection_id);
     if (params.limit) qs.set("limit", params.limit);
     if (params.skip) qs.set("skip", params.skip);
-    return axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions?${qs}`, { headers: headers() });
+    return axios.get(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions?${qs}`, { headers: headers(orgId) });
   },
   updateSuggestion: (orgId, botId, suggestionId, data) =>
-    axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions/${suggestionId}`, data, { headers: headers() }),
+    axios.patch(`${BASE}/v2/orgs/${orgId}/bots/${botId}/suggestions/${suggestionId}`, data, { headers: headers(orgId) }),
 
   // Platform Admin
   platformStats: () => axios.get(`${BASE}/v2/platform/stats`, { headers: headers() }),

@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Bot, Plus, Network, Loader2, Zap, Copy, LayoutTemplate, Trash2, ArrowRight } from "lucide-react";
+import { Bot, Plus, Network, Loader2, Zap, Copy, LayoutTemplate, Trash2, ArrowRight, Building2, Key } from "lucide-react";
 import { colors, fonts, radius, T } from "@/theme";
 import { toast } from "sonner";
 import v2 from "@/utils/v2api";
 
 export default function BotList() {
-  const { selectedOrg, selectBot, refreshBots } = useAuth();
+  const { selectedOrg, selectBot, refreshBots, orgs, selectedWorkspace } = useAuth();
   const navigate = useNavigate();
   const [bots, setBots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export default function BotList() {
     setLoading(true);
     v2.listBots(selectedOrg.id)
       .then(r => setBots(r.data.bots || []))
-      .catch(() => toast.error("Failed to load bots"))
+      .catch((e) => toast.error(e.response?.data?.detail || "Failed to load bots"))
       .finally(() => setLoading(false));
   }, [selectedOrg]);
 
@@ -37,12 +37,16 @@ export default function BotList() {
     setTemplatesLoading(true);
     v2.listTemplates(selectedOrg.id)
       .then(r => setTemplates(r.data.templates || []))
-      .catch(() => toast.error("Failed to load templates"))
+      .catch((e) => toast.error(e.response?.data?.detail || "Failed to load templates"))
       .finally(() => setTemplatesLoading(false));
   }, [selectedOrg, tab]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
+    if (!selectedOrg?.id) {
+      toast.error("Select or create an organisation before creating a bot.");
+      return;
+    }
     setCreating(true);
     try {
       const res = await v2.createBot(selectedOrg.id, { name: newName.trim() });
@@ -54,6 +58,9 @@ export default function BotList() {
       selectBot(res.data);
       navigate(`/admin/bots/${res.data.id}`);
       toast.success(`Bot "${res.data.name}" created`);
+      if (res.data.llm_configured === false) {
+        toast.info("Add your Anthropic or OpenAI API key in the bot's Behaviour settings before AI chat will work.", { duration: 8000 });
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to create bot");
     } finally {
@@ -130,11 +137,40 @@ export default function BotList() {
     }
   };
 
-  if (!selectedOrg) return (
-    <div style={T.page}>
-      <p style={{ ...T.sectionSub, textAlign: "center", marginTop: "60px" }}>Select an organisation to view bots.</p>
-    </div>
-  );
+  if (!selectedOrg) {
+    const hasOrgs = (orgs || []).length > 0;
+    return (
+      <div style={T.page} data-testid="bot-list-no-org">
+        <p style={T.overline}>AI Bots</p>
+        <h1 style={{ ...T.h1, marginBottom: "20px" }}>Bots</h1>
+        <div style={{ ...T.card, textAlign: "center", padding: "48px 24px" }}>
+          <Building2 size={32} color={colors.text.muted} style={{ marginBottom: "12px" }} />
+          <p style={{ ...T.sectionTitle, marginBottom: "8px" }}>
+            {hasOrgs ? "Select an organisation" : "Create an organisation first"}
+          </p>
+          <p style={{ ...T.sectionSub, maxWidth: "460px", margin: "0 auto 8px", lineHeight: 1.6 }}>
+            Bots belong to an organisation, and organisations belong to a workspace:
+          </p>
+          <p data-testid="hierarchy-hint" style={{ fontFamily: fonts.mono, fontSize: "12px", color: colors.brand.light, margin: "0 0 20px" }}>
+            Workspace{selectedWorkspace?.name ? ` (${selectedWorkspace.name})` : ""} → Organisation → Bot
+          </p>
+          <p style={{ ...T.sectionSub, maxWidth: "460px", margin: "0 auto 20px" }}>
+            {hasOrgs
+              ? "Choose the organisation you want to work in, then create bots inside it."
+              : "This workspace has no organisations yet. Create one, and it will be selected automatically so you can add your first bot."}
+          </p>
+          <button
+            data-testid={hasOrgs ? "go-select-org-btn" : "go-create-org-btn"}
+            onClick={() => navigate(hasOrgs ? "/admin/organisations" : "/admin/organisations?create=1&next=/admin/bots")}
+            style={{ ...T.btnPrimary, padding: "8px 16px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            {hasOrgs ? <ArrowRight size={14} /> : <Plus size={14} />}
+            {hasOrgs ? "Choose organisation" : "Create organisation"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const tabStyle = (active) => ({
     background: "none",
@@ -259,6 +295,13 @@ export default function BotList() {
                         {bot.active_connection_count || 0}/{bot.connection_count || 0} active
                       </span>
                     </div>
+                    {bot.llm_configured === false && (
+                      <div data-testid={`bot-llm-missing-${bot.id}`} title="Add an Anthropic or OpenAI API key in Behaviour settings"
+                        style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        <Key size={12} color="#F59E0B" />
+                        <span style={{ fontFamily: fonts.mono, fontSize: "11px", color: "#F59E0B" }}>AI key needed</span>
+                      </div>
+                    )}
                     {bot.knowledge_gate && (
                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <Zap size={12} color={colors.text.muted} />
