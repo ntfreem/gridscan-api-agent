@@ -1,61 +1,73 @@
 /**
- * Source-level regression guards for spec 008 Stage 9b frontend requirements.
+ * Source-level regression guards for the Spec 012 frontend (Phase 6B).
+ * Replaces the spec 008 Stage 9b guards, whose legacy pages were removed (spec §14).
  */
 import fs from "fs";
 import path from "path";
 
 const SRC = path.resolve(__dirname, "../..");
-const read = (p) => fs.readFileSync(path.join(SRC, p), "utf8");
 
-test("platform Discord app setup is superadmin-only (route + page)", () => {
-  expect(read("App.js")).toMatch(/path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup \/><\/AdminOnlyRoute>}/);
-  const page = read("pages/DiscordAppSetup.js");
-  expect(page).toMatch(/if \(!isSuperadmin\(user\)\)/);
-  const settings = read("pages/DiscordSettings.js");
-  expect(settings).toMatch(/if \(!canEdit\) return null;/);
+function sourceFiles(dir = SRC) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (["__tests__", "testing", "contract"].includes(entry.name)) continue;
+      out.push(...sourceFiles(full));
+    } else if (/\.(js|jsx)$/.test(entry.name) && !/\.test\.js$/.test(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const files = sourceFiles();
+const read = (f) => fs.readFileSync(f, "utf8");
+const rel = (f) => path.relative(SRC, f);
+
+test("the source tree was found", () => {
+  expect(files.length).toBeGreaterThan(20);
 });
 
-test("password change keeps the user signed in with the fresh token", () => {
-  const profile = read("pages/Profile.js");
-  expect(profile).toMatch(/if \(data\.token\) updateToken\(data\.token\)/);
-  expect(read("context/AuthContext.js")).toMatch(/const updateToken = useCallback/);
-});
-
-test("no page still enforces the old 6-character rule", () => {
-  for (const f of fs.readdirSync(path.join(SRC, "pages"))) {
-    const text = read(`pages/${f}`);
-    expect([f, /length < 6|at least 6 characters|Minimum 6 characters/i.test(text)]).toEqual([f, false]);
+test("no client-supplied tenant header is ever sent (spec §1.6)", () => {
+  for (const f of files) {
+    // a header name as a string literal (comments stating that none is sent are fine)
+    expect([rel(f), /["'`]X-(Instance|Org|Workspace|Enterprise)-ID["'`]/i.test(read(f))]).toEqual([rel(f), false]);
   }
 });
 
-test("every password-setting form uses the shared policy and requirements", () => {
-  for (const f of ["Register.js", "ResetPassword.js", "ForgotPassword.js", "Profile.js", "InviteAccept.js", "Users.js"]) {
-    const text = read(`pages/${f}`);
-    expect([f, text.includes("userPasswordError("), text.includes("<PasswordRequirements")]).toEqual([f, true, true]);
+test("no session or token is kept in web storage", () => {
+  for (const f of files) {
+    if (rel(f).startsWith("components/ui/")) continue;            // shadcn primitives (sidebar state only)
+    expect([rel(f), /(localStorage|sessionStorage)\.setItem\(/.test(read(f))]).toEqual([rel(f), false]);
   }
 });
 
-test("embed snippets load embed.js from the API origin and the widget from this site", () => {
-  const embed = read("pages/EmbedCode.js");
-  expect(embed).toMatch(/const scriptSrc = `\$\{API_BASE\}\/embed\.js`;/);
-  expect(embed).toMatch(/const origin = window\.location\.origin;/);
-  expect(embed).toMatch(/\$\{origin\}\/widget\?instance=/);
+test("the removed legacy modules are not imported anywhere", () => {
+  const removed = /from ["'](@\/|\.\.?\/)+(context\/AuthContext|utils\/api|utils\/v2api|utils\/chatSession|utils\/streamChat|components\/AdminLayout|pages\/(ChatWidget|ChatPage|Dashboard|Login|Register))["']/;
+  for (const f of files) {
+    expect([rel(f), removed.test(read(f))]).toEqual([rel(f), false]);
+  }
 });
 
-test("sidebar keys are displayed only via sidebarKeyView", () => {
-  const z = read("pages/ZendeskSettings.js");
-  expect(z.match(/sidebarKeyView\(/g)).toHaveLength(2);
-  expect(z).not.toMatch(/setSidebarKey\((sk|res)\.data\.sidebar_api_key/);
+test("no page enforces the old 6-character password rule", () => {
+  for (const f of files) {
+    expect([rel(f), /length < 6|at least 6 characters|Minimum 6 characters/i.test(read(f))]).toEqual([rel(f), false]);
+  }
 });
 
-test("widget only loads https stylesheets", () => {
-  expect(read("pages/ChatWidget.js")).toMatch(/cfg\.custom_css_url\.startsWith\("https:\/\/"\)/);
+test("legacy paths only redirect; the React chat widget is retired (W2)", () => {
+  const app = read(path.join(SRC, "App.js"));
+  expect(app).toMatch(/path="\/admin\/\*" element={<Navigate to="\/app" replace \/>}/);
+  expect(app).toMatch(/path="\/widget" element={<RetiredChatNotice \/>}/);
+  expect(app).toMatch(/path="\/chat" element={<RetiredChatNotice \/>}/);
+  expect(app).toMatch(/path="\/reset-password" element={<KeepHashRedirect to="\/app\/reset-password" \/>}/);
+  expect(app).not.toMatch(/AuthProvider|AdminOnlyRoute|ProtectedRoute/);
 });
 
-test("registration page follows the backend registration mode and fails closed", () => {
-  const reg = read("pages/Register.js");
-  expect(reg).toMatch(/\/auth\/registration-mode/);
-  expect(reg).toMatch(/\.catch\(\(\) => setMode\("invite_only"\)\)/);
-  expect(reg).toMatch(/mode !== "open" \?/);
-  expect(reg).not.toMatch(/Account created! Check your email/);
+test("public pages describe Spec 012, not the retired features", () => {
+  for (const name of ["pages/Docs.js", "pages/LandingPage.js"]) {
+    const text = read(path.join(SRC, name));
+    expect([name, /workspace|Emergent Universal Key|bbk_|Developer Portal/i.test(text)]).toEqual([name, false]);
+  }
 });

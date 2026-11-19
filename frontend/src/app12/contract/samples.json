@@ -1,0 +1,2100 @@
+{
+ "_ids": {
+  "bot": "a35e3430-0378-4218-b691-f96dd409ba20",
+  "enterprise": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+  "instance_discord": "03289afc-ef56-427c-ae2d-85ddd06987c7",
+  "instance_telegram": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+  "instance_web": "e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+  "integration": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+  "organisation": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+  "source": "a4b8769e-7169-45f8-80e8-e4333e5ba368"
+ },
+ "_oauth_statuses": [
+  "account_mismatch",
+  "application_changed",
+  "bot_not_present",
+  "cancelled",
+  "changed",
+  "channel_selection_required",
+  "client_changed",
+  "connected",
+  "integration_deleting",
+  "invalid_request",
+  "invalid_state",
+  "not_authorised",
+  "not_connectable",
+  "not_server_manager",
+  "oauth_failed",
+  "share_link_inactive",
+  "share_link_used",
+  "wrong_server"
+ ],
+ "audit_enterprise": {
+  "body": {
+   "events": [
+    {
+     "action": "invitation.create",
+     "actor_id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.864282+00:00",
+     "details": {
+      "delivery": "email",
+      "invitation_id": "5cb970c2-417d-45e3-8105-521bf91915dd",
+      "role": "viewer"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "f58c6112-a8f0-46de-b565-c26606d4c1b8",
+     "target_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "target_level": "enterprise"
+    },
+    {
+     "action": "knowledge.source_create",
+     "actor_id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.857120+00:00",
+     "details": {
+      "owner": "enterprises"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "626b721c-012c-41ce-859c-b4f62ae5a068",
+     "target_id": "a4b8769e-7169-45f8-80e8-e4333e5ba368",
+     "target_level": "knowledge"
+    },
+    {
+     "action": "integration.create",
+     "actor_id": "b59eeaab-2275-4ea3-8077-5dca792876ce",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.850604+00:00",
+     "details": {
+      "type": "zendesk"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "396e5089-f1c3-4a1e-b0ae-5a3490661673",
+     "target_id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "target_level": "integration"
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/audit",
+  "status": 200
+ },
+ "bot": {
+  "body": {
+   "available": true,
+   "created_at": "2026-11-19T06:15:54.642942+00:00",
+   "description": "",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "a35e3430-0378-4218-b691-f96dd409ba20",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.642942+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "logo": null,
+   "name": "Bot A",
+   "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "overrides": {},
+   "role": "owner",
+   "type": "bots",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.642942+00:00",
+   "version": 1
+  },
+  "path": "/bots/a35e3430-0378-4218-b691-f96dd409ba20",
+  "status": 200
+ },
+ "bots": {
+  "body": {
+   "bots": [
+    {
+     "created_at": "2026-11-19T06:15:54.642942+00:00",
+     "description": "",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "a35e3430-0378-4218-b691-f96dd409ba20",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.642942+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "logo": null,
+     "name": "Bot A",
+     "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "overrides": {},
+     "type": "bots",
+     "updated_at": "2026-11-19T06:15:54.642942+00:00",
+     "version": 1
+    }
+   ]
+  },
+  "path": "/organisations/1c797cb1-ca86-4ec6-831b-3e87b87ec6ff/bots",
+  "status": 200
+ },
+ "config_bot": {
+  "body": {
+   "available": true,
+   "blocked": {
+    "ai": "no AI credential is configured"
+   },
+   "conflicts": [],
+   "credentials": {},
+   "overridable": {
+    "ai.credential_id": true,
+    "ai.model": true,
+    "ai.provider": true,
+    "behaviour.fallback_message": true,
+    "behaviour.instructions": true,
+    "behaviour.language": true,
+    "behaviour.persona": true,
+    "behaviour.tone_examples": true,
+    "behaviour.tone_instructions": true,
+    "knowledge.approved_sources": true,
+    "knowledge.human_handoff": true,
+    "knowledge.insufficient_fallback": true,
+    "knowledge.min_evidence_score": true,
+    "knowledge.mode": true,
+    "knowledge.require_citations": true,
+    "limits.end_user_msgs_per_minute": true,
+    "tools.api_calls_enabled": true,
+    "widget.custom_css_url": true,
+    "widget.default_open": true,
+    "widget.theme": true,
+    "widget.title": true,
+    "widget.welcome_message": true
+   },
+   "permissions": {
+    "archive": true,
+    "create_child": true,
+    "delete": true,
+    "edit_config": true,
+    "edit_policy": false,
+    "manage_billing": false,
+    "manage_channel": true,
+    "manage_credentials": true,
+    "manage_members": true,
+    "manage_owners": false,
+    "read": true,
+    "suspend": true,
+    "use_credential": true
+   },
+   "policy": {
+    "ai.allowed_models": null,
+    "ai.allowed_providers": [
+     "anthropic",
+     "openai"
+    ],
+    "channels.allowed": null,
+    "credentials.allow_enterprise_credentials": true,
+    "delegation.bot_admins_manage_members": true,
+    "delegation.org_admins_manage_credentials": true,
+    "delegation.org_admins_manage_members": true,
+    "integrations.allowed": null,
+    "knowledge.access_scope": "enterprise",
+    "knowledge.allowed_sources": [],
+    "knowledge.document_acl_required": false,
+    "knowledge.general_fallback_allowed": false,
+    "knowledge.min_evidence_floor": 0.0,
+    "knowledge.minimum_mode": "general",
+    "knowledge.require_citations": false,
+    "knowledge.semantic_verification": false,
+    "limits.max_end_user_msgs_per_minute": 60,
+    "limits.max_monthly_ai_messages": null,
+    "retention.conversation_days": 730,
+    "security.require_webhook_signatures": true,
+    "tools.external_api_calls_allowed": true,
+    "webchat.allowed_embed_origins": null,
+    "webchat.public_access_allowed": true,
+    "zendesk.public_replies_allowed": true
+   },
+   "policy_sources": {
+    "ai.allowed_models": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "ai.allowed_providers": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "channels.allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "credentials.allow_enterprise_credentials": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.bot_admins_manage_members": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.org_admins_manage_credentials": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.org_admins_manage_members": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "integrations.allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.access_scope": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.allowed_sources": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.document_acl_required": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.general_fallback_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.min_evidence_floor": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.minimum_mode": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.require_citations": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.semantic_verification": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "limits.max_end_user_msgs_per_minute": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "limits.max_monthly_ai_messages": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "retention.conversation_days": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "security.require_webhook_signatures": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "tools.external_api_calls_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "webchat.allowed_embed_origins": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "webchat.public_access_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "zendesk.public_replies_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    }
+   },
+   "role": "owner",
+   "runnable": false,
+   "runtime_blockers": [],
+   "sources": {
+    "ai.credential_id": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "ai.model": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "ai.provider": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.fallback_message": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.instructions": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.language": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.persona": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.tone_examples": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.tone_instructions": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.approved_sources": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.human_handoff": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.insufficient_fallback": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.min_evidence_score": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.mode": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.require_citations": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "limits.end_user_msgs_per_minute": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "tools.api_calls_enabled": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "widget.custom_css_url": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "widget.default_open": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "widget.theme": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "widget.title": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "widget.welcome_message": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    }
+   },
+   "target": {
+    "id": "a35e3430-0378-4218-b691-f96dd409ba20",
+    "type": "bot"
+   },
+   "unavailable_reason": null,
+   "values": {
+    "ai.credential_id": null,
+    "ai.model": "claude-sonnet-4-6",
+    "ai.provider": "anthropic",
+    "behaviour.fallback_message": "Sorry, I can't help with that right now.",
+    "behaviour.instructions": "",
+    "behaviour.language": "en",
+    "behaviour.persona": "You are a helpful, accurate assistant.",
+    "behaviour.tone_examples": [],
+    "behaviour.tone_instructions": "",
+    "knowledge.approved_sources": null,
+    "knowledge.human_handoff": false,
+    "knowledge.insufficient_fallback": "I'm sorry, I can't answer that from the information I have been given.",
+    "knowledge.min_evidence_score": 0.5,
+    "knowledge.mode": "general",
+    "knowledge.require_citations": false,
+    "limits.end_user_msgs_per_minute": 10,
+    "tools.api_calls_enabled": false,
+    "widget.custom_css_url": "",
+    "widget.default_open": false,
+    "widget.theme": {},
+    "widget.title": "",
+    "widget.welcome_message": ""
+   }
+  },
+  "path": "/bots/a35e3430-0378-4218-b691-f96dd409ba20/config",
+  "status": 200
+ },
+ "conversations": {
+  "body": {
+   "conversations": []
+  },
+  "path": "/instances/e485f8eb-69b5-4abf-bbb5-5d173dc3750d/conversations",
+  "status": 200
+ },
+ "credentials_enterprise": {
+  "body": {
+   "credentials": [
+    {
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "fingerprint": "sha256:96be92d977",
+     "id": "1f3b66c4-51e5-4213-8b52-6c1c6c45e468",
+     "metadata": {},
+     "name": "Anthropic A",
+     "organisation_id": null,
+     "owner": "enterprise",
+     "provider": "anthropic",
+     "rotated_at": null,
+     "status": "active",
+     "usable_by": []
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/credentials",
+  "status": 200
+ },
+ "deletion_job": {
+  "body": {
+   "attempts": 2,
+   "completed_at": null,
+   "deleted": {
+    "bot_owned": 2,
+    "credentials": 0,
+    "descendants": 4,
+    "invitations": 0,
+    "memberships": 2,
+    "release_bindings": 4,
+    "runtime_data": 2,
+    "target": 1
+   },
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "error": null,
+   "external_actions": [
+    {
+     "action": "discord_leave_guild",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": "no_adapter",
+     "history": [],
+     "id": "discord_leave_guild:910000000000000001:111111111111111111",
+     "mandatory": false,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111"
+     }
+    },
+    {
+     "action": "discord_routing_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": "no_adapter",
+     "history": [],
+     "id": "discord_routing_removal:03289afc-ef56-427c-ae2d-85ddd06987c7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111",
+      "instance_id": "03289afc-ef56-427c-ae2d-85ddd06987c7"
+     }
+    },
+    {
+     "action": "telegram_delete_webhook",
+     "attempts": 0,
+     "credential_id": "3ca18abf-ceb0-4bd3-aa60-2ff385de7b19",
+     "error_class": "no_adapter",
+     "history": [],
+     "id": "telegram_delete_webhook:b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "instance_id": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+      "telegram_bot_id": "123456789"
+     }
+    },
+    {
+     "action": "zendesk_webhook_subscription_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": "no_adapter",
+     "history": [],
+     "id": "zendesk_webhook_subscription_removal:0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "integration_id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+      "subdomain": null,
+      "webhook_id": null
+     }
+    }
+   ],
+   "id": "organisation:1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "preview_counts": {
+    "api_endpoints": 0,
+    "bot_instances": 3,
+    "bot_integrations": 1,
+    "bot_logos": 0,
+    "bots": 1,
+    "channel_state": 0,
+    "chat_requests": 0,
+    "chat_sessions": 0,
+    "conversations": 0,
+    "credentials": 1,
+    "discord_share_links": 1,
+    "invitations": 0,
+    "knowledge_chunks": 0,
+    "knowledge_documents": 0,
+    "knowledge_files": 0,
+    "knowledge_sources": 0,
+    "memberships": 2,
+    "oauth_states": 1,
+    "organisations": 1,
+    "outbound_deliveries": 0,
+    "suggestions": 0,
+    "usage_counters": 0,
+    "usage_events": 0,
+    "usage_ledger": 0,
+    "zendesk_app_keys": 1,
+    "zendesk_events": 0
+   },
+   "requested_at": "2026-11-19T06:15:55.555265+00:00",
+   "requested_by": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+   "status": "awaiting_external_cleanup",
+   "steps_done": [
+    "release_bindings",
+    "invitations",
+    "memberships",
+    "runtime_data",
+    "bot_owned",
+    "credentials",
+    "descendants",
+    "target"
+   ],
+   "target_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "target_level": "organisation"
+  },
+  "status": 200
+ },
+ "deletion_preview": {
+  "body": {
+   "backups_note": "Copies in database backups persist until the backups age out.",
+   "confirm_name": "Org A",
+   "counts": {
+    "api_endpoints": 0,
+    "bot_instances": 3,
+    "bot_integrations": 1,
+    "bot_logos": 0,
+    "bots": 1,
+    "channel_state": 0,
+    "chat_requests": 0,
+    "chat_sessions": 0,
+    "conversations": 0,
+    "credentials": 1,
+    "discord_share_links": 1,
+    "invitations": 0,
+    "knowledge_chunks": 0,
+    "knowledge_documents": 0,
+    "knowledge_files": 0,
+    "knowledge_sources": 0,
+    "memberships": 2,
+    "oauth_states": 1,
+    "organisations": 1,
+    "outbound_deliveries": 0,
+    "suggestions": 0,
+    "usage_counters": 0,
+    "usage_events": 0,
+    "usage_ledger": 0,
+    "zendesk_app_keys": 1,
+    "zendesk_events": 0
+   },
+   "digest": "36490ad71f09137091b4d8c230aa9961a7c0c224cb6dda97a18867b66e5f57d3",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "expires_at": "2026-11-19T06:20:55.547072+00:00",
+   "external_actions": [
+    {
+     "action": "discord_leave_guild",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "discord_leave_guild:910000000000000001:111111111111111111",
+     "mandatory": false,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111"
+     }
+    },
+    {
+     "action": "discord_routing_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "discord_routing_removal:03289afc-ef56-427c-ae2d-85ddd06987c7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111",
+      "instance_id": "03289afc-ef56-427c-ae2d-85ddd06987c7"
+     }
+    },
+    {
+     "action": "telegram_delete_webhook",
+     "attempts": 0,
+     "credential_id": "3ca18abf-ceb0-4bd3-aa60-2ff385de7b19",
+     "error_class": null,
+     "history": [],
+     "id": "telegram_delete_webhook:b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "instance_id": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+      "telegram_bot_id": "123456789"
+     }
+    },
+    {
+     "action": "zendesk_webhook_subscription_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "zendesk_webhook_subscription_removal:0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "integration_id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+      "subdomain": null,
+      "webhook_id": null
+     }
+    }
+   ],
+   "level": "organisation",
+   "preview_token": "VvYkhFcm6RxHCw99H1UE6sEiIRKBKhTYbplNCDTo5vo",
+   "target_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff"
+  },
+  "status": 200
+ },
+ "deletion_start": {
+  "body": {
+   "attempts": 1,
+   "completed_at": null,
+   "deleted": {
+    "invitations": 0,
+    "memberships": 2,
+    "release_bindings": 4
+   },
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "error": null,
+   "external_actions": [
+    {
+     "action": "discord_leave_guild",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "discord_leave_guild:910000000000000001:111111111111111111",
+     "mandatory": false,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111"
+     }
+    },
+    {
+     "action": "discord_routing_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "discord_routing_removal:03289afc-ef56-427c-ae2d-85ddd06987c7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "application_enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+      "application_id": "910000000000000001",
+      "guild_id": "111111111111111111",
+      "instance_id": "03289afc-ef56-427c-ae2d-85ddd06987c7"
+     }
+    },
+    {
+     "action": "telegram_delete_webhook",
+     "attempts": 0,
+     "credential_id": "3ca18abf-ceb0-4bd3-aa60-2ff385de7b19",
+     "error_class": null,
+     "history": [],
+     "id": "telegram_delete_webhook:b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "instance_id": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+      "telegram_bot_id": "123456789"
+     }
+    },
+    {
+     "action": "zendesk_webhook_subscription_removal",
+     "attempts": 0,
+     "credential_id": null,
+     "error_class": null,
+     "history": [],
+     "id": "zendesk_webhook_subscription_removal:0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "mandatory": true,
+     "next_attempt_at": null,
+     "resolution": null,
+     "state": "pending",
+     "target": {
+      "integration_id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+      "subdomain": null,
+      "webhook_id": null
+     }
+    }
+   ],
+   "id": "organisation:1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "preview_counts": {
+    "api_endpoints": 0,
+    "bot_instances": 3,
+    "bot_integrations": 1,
+    "bot_logos": 0,
+    "bots": 1,
+    "channel_state": 0,
+    "chat_requests": 0,
+    "chat_sessions": 0,
+    "conversations": 0,
+    "credentials": 1,
+    "discord_share_links": 1,
+    "invitations": 0,
+    "knowledge_chunks": 0,
+    "knowledge_documents": 0,
+    "knowledge_files": 0,
+    "knowledge_sources": 0,
+    "memberships": 2,
+    "oauth_states": 1,
+    "organisations": 1,
+    "outbound_deliveries": 0,
+    "suggestions": 0,
+    "usage_counters": 0,
+    "usage_events": 0,
+    "usage_ledger": 0,
+    "zendesk_app_keys": 1,
+    "zendesk_events": 0
+   },
+   "requested_at": "2026-11-19T06:15:55.555265+00:00",
+   "requested_by": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+   "status": "pending",
+   "steps_done": [
+    "release_bindings",
+    "invitations",
+    "memberships"
+   ],
+   "target_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "target_level": "organisation"
+  },
+  "status": 202
+ },
+ "deliveries_tg": {
+  "body": {
+   "deliveries": []
+  },
+  "path": "/instances/b9d043e0-2fad-4232-99e7-f11b14cae7b1/deliveries",
+  "status": 200
+ },
+ "discord_app_platform": {
+  "body": {
+   "application_id": "910000000000000001",
+   "bot_user_id": "930000000000000001",
+   "bot_username": "bot",
+   "client_secret_fingerprint": "sha256:7658eb075c",
+   "configured": true,
+   "configured_at": "2026-11-19T06:15:54.640359+00:00",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "gateway": {
+    "state": "stopped"
+   },
+   "gateway_desired": "stopped",
+   "intents": 37379,
+   "oauth_scopes": "bot identify guilds",
+   "permissions": 67193856,
+   "redirect_uri": "https://api.bitbotpro.io/api/hooks/discord/oauth/callback",
+   "restart_requested_at": null,
+   "secret_rotated_at": null,
+   "status": "enabled",
+   "token_fingerprint": "sha256:749356ff1a",
+   "token_rotated_at": null
+  },
+  "path": "/platform/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/discord-application",
+  "status": 200
+ },
+ "discord_channels": {
+  "body": {
+   "channels": [
+    {
+     "id": "222222222222222221",
+     "name": "general",
+     "state": "available"
+    },
+    {
+     "id": "222222222222222222",
+     "name": "help",
+     "state": "available"
+    },
+    {
+     "id": "222222222222222223",
+     "name": "news",
+     "state": "available"
+    }
+   ],
+   "guild_id": "111111111111111111",
+   "whole_server_available": true
+  },
+  "path": "/instances/03289afc-ef56-427c-ae2d-85ddd06987c7/channel/discord/channels",
+  "status": 200
+ },
+ "discord_enterprise": {
+  "body": {
+   "available": true,
+   "configured": true
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/discord",
+  "status": 200
+ },
+ "discord_handoffs": {
+  "body": {
+   "handoffs": []
+  },
+  "path": "/instances/03289afc-ef56-427c-ae2d-85ddd06987c7/channel/discord/handoffs",
+  "status": 200
+ },
+ "discord_install_url": {
+  "body": {
+   "expires_at": "2026-11-19T06:25:55.087862+00:00",
+   "url": "https://discord.com/oauth2/authorize?client_id=910000000000000001&scope=bot+identify+guilds&permissions=67193856&response_type=code&redirect_uri=https%3A%2F%2Fapi.bitbotpro.io%2Fapi%2Fhooks%2Fdiscord%2Foauth%2Fcallback&state=G-KcMckcp09cc4BZcNIwwMNbtlSk5opGVsehjaOeaiI"
+  },
+  "status": 200
+ },
+ "discord_share_create": {
+  "body": {
+   "created_at": "2026-11-19T06:15:55.081781+00:00",
+   "expected_guild_id": null,
+   "expires_at": "2026-11-26T06:15:55.081781+00:00",
+   "id": "c91906de-11c9-43bd-b8d9-7d80dc53d8fb",
+   "invited": false,
+   "status": "active",
+   "url": "https://api.bitbotpro.io/api/public/discord/install/g_iyVrfLD7BqskAtmEhdAmz-GuoHCZQ02c6Kmtffx9g",
+   "used_at": null,
+   "used_for_guild": null
+  },
+  "status": 201
+ },
+ "discord_share_links": {
+  "body": {
+   "share_links": []
+  },
+  "path": "/instances/03289afc-ef56-427c-ae2d-85ddd06987c7/channel/discord/share-links",
+  "status": 200
+ },
+ "discord_status": {
+  "body": {
+   "application": {
+    "available": true,
+    "configured": true
+   },
+   "channel_ids": [],
+   "connected": true,
+   "dm_enabled": false,
+   "gateway": {
+    "state": "stopped"
+   },
+   "guild_id": "111111111111111111",
+   "listen_mode": "mention_only",
+   "passive_mode": false,
+   "pending_channel_selection": false,
+   "type": "discord"
+  },
+  "path": "/instances/03289afc-ef56-427c-ae2d-85ddd06987c7/channel/status",
+  "status": 200
+ },
+ "embed_snippet": {
+  "body": {
+   "public_id": "pk_-rovxdFKpZr0OeNSTYHiecp1oIpGLux2",
+   "script": "<script src=\"https://api.bitbotpro.io/api/embed.js\" data-instance=\"pk_-rovxdFKpZr0OeNSTYHiecp1oIpGLux2\" data-mode=\"popup\" async></script>",
+   "widget_url": "https://api.bitbotpro.io/api/public/widget/pk_-rovxdFKpZr0OeNSTYHiecp1oIpGLux2"
+  },
+  "path": "/instances/e485f8eb-69b5-4abf-bbb5-5d173dc3750d/embed-snippet",
+  "status": 200
+ },
+ "enterprise": {
+  "body": {
+   "available": true,
+   "created_at": "2026-11-19T06:15:54.642125+00:00",
+   "id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.642125+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "name": "Ent A",
+   "overrides": {},
+   "plan": "free",
+   "policy": {},
+   "role": "owner",
+   "slug": "ent-a-9d433a",
+   "type": "enterprises",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.642125+00:00",
+   "version": 1
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+  "status": 200
+ },
+ "enterprises": {
+  "body": {
+   "enterprises": [
+    {
+     "id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.642125+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "name": "Ent A",
+     "role": "owner",
+     "slug": "ent-a-9d433a"
+    }
+   ]
+  },
+  "path": "/enterprises",
+  "status": 200
+ },
+ "instance_discord": {
+  "body": {
+   "available": true,
+   "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+   "channel": {
+    "application_id": "910000000000000001",
+    "channel_ids": [],
+    "dm_enabled": false,
+    "guild_id": "111111111111111111",
+    "handoff_cooldown_minutes": 15,
+    "handoff_followup_message": "Is there anything else I can help with?",
+    "listen_mode": "mention_only",
+    "mention_overrides_channels": true,
+    "passive_mode": false,
+    "reply_style": "natural",
+    "staff_role_name": "",
+    "type": "discord"
+   },
+   "created_at": "2026-11-19T06:15:54.658981+00:00",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "03289afc-ef56-427c-ae2d-85ddd06987c7",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.658981+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "name": "Discord A",
+   "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "overrides": {},
+   "role": "owner",
+   "type": "instances",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.660529+00:00",
+   "version": 2
+  },
+  "path": "/instances/03289afc-ef56-427c-ae2d-85ddd06987c7",
+  "status": 200
+ },
+ "instance_telegram": {
+  "body": {
+   "available": true,
+   "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+   "channel": {
+    "chat_ids": [],
+    "credential_id": "3ca18abf-ceb0-4bd3-aa60-2ff385de7b19",
+    "listen_mode": "mention_or_command",
+    "type": "telegram"
+   },
+   "created_at": "2026-11-19T06:15:54.658054+00:00",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.658054+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "name": "TG A",
+   "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "overrides": {},
+   "role": "owner",
+   "type": "instances",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.658054+00:00",
+   "version": 1
+  },
+  "path": "/instances/b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+  "status": 200
+ },
+ "instance_web": {
+  "body": {
+   "available": true,
+   "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+   "channel": {
+    "allowed_origins": [],
+    "public_id": "pk_-rovxdFKpZr0OeNSTYHiecp1oIpGLux2",
+    "type": "webchat"
+   },
+   "created_at": "2026-11-19T06:15:54.657178+00:00",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.657178+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "name": "Web A",
+   "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "overrides": {},
+   "role": "owner",
+   "type": "instances",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.657178+00:00",
+   "version": 1
+  },
+  "path": "/instances/e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+  "status": 200
+ },
+ "instances": {
+  "body": {
+   "instances": [
+    {
+     "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+     "channel": {
+      "allowed_origins": [],
+      "public_id": "pk_-rovxdFKpZr0OeNSTYHiecp1oIpGLux2",
+      "type": "webchat"
+     },
+     "created_at": "2026-11-19T06:15:54.657178+00:00",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.657178+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "name": "Web A",
+     "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "overrides": {},
+     "type": "instances",
+     "updated_at": "2026-11-19T06:15:54.657178+00:00",
+     "version": 1
+    },
+    {
+     "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+     "channel": {
+      "chat_ids": [],
+      "credential_id": "3ca18abf-ceb0-4bd3-aa60-2ff385de7b19",
+      "listen_mode": "mention_or_command",
+      "type": "telegram"
+     },
+     "created_at": "2026-11-19T06:15:54.658054+00:00",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "b9d043e0-2fad-4232-99e7-f11b14cae7b1",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.658054+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "name": "TG A",
+     "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "overrides": {},
+     "type": "instances",
+     "updated_at": "2026-11-19T06:15:54.658054+00:00",
+     "version": 1
+    },
+    {
+     "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+     "channel": {
+      "application_id": "910000000000000001",
+      "channel_ids": [],
+      "dm_enabled": false,
+      "guild_id": "111111111111111111",
+      "handoff_cooldown_minutes": 15,
+      "handoff_followup_message": "Is there anything else I can help with?",
+      "listen_mode": "mention_only",
+      "mention_overrides_channels": true,
+      "passive_mode": false,
+      "reply_style": "natural",
+      "staff_role_name": "",
+      "type": "discord"
+     },
+     "created_at": "2026-11-19T06:15:54.658981+00:00",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "03289afc-ef56-427c-ae2d-85ddd06987c7",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.658981+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "name": "Discord A",
+     "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "overrides": {},
+     "type": "instances",
+     "updated_at": "2026-11-19T06:15:54.660529+00:00",
+     "version": 2
+    }
+   ]
+  },
+  "path": "/bots/a35e3430-0378-4218-b691-f96dd409ba20/instances",
+  "status": 200
+ },
+ "integration": {
+  "body": {
+   "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+   "connection": {
+    "status": "not_connected"
+   },
+   "created_at": "2026-11-19T06:15:54.850120+00:00",
+   "credential_id": null,
+   "deletion": null,
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+   "name": "Support desk",
+   "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "overrides": {},
+   "settings": {
+    "reply_mode": "agent_assist",
+    "ticket_groups": [],
+    "ticket_tags": []
+   },
+   "sidebar_key": {
+    "configured": false,
+    "hint": null
+   },
+   "status": "enabled",
+   "type": "zendesk",
+   "updated_at": "2026-11-19T06:15:54.850120+00:00",
+   "version": 1,
+   "webhook": {
+    "provisioned": false,
+    "rotated_at": "2026-11-19T06:15:54.850120+00:00",
+    "signing_secret_configured": false
+   }
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7",
+  "status": 200
+ },
+ "integration_config": {
+  "body": {
+   "conflicts": [],
+   "overridable": [
+    "behaviour.fallback_message",
+    "behaviour.instructions",
+    "behaviour.language",
+    "behaviour.persona",
+    "behaviour.tone_instructions",
+    "knowledge.approved_sources",
+    "knowledge.human_handoff",
+    "knowledge.insufficient_fallback",
+    "knowledge.min_evidence_score",
+    "knowledge.mode",
+    "knowledge.require_citations"
+   ],
+   "overrides": {},
+   "runtime_blockers": [
+    "no Zendesk credential is configured"
+   ],
+   "sources": {
+    "behaviour.fallback_message": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.instructions": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.language": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.persona": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "behaviour.tone_instructions": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.approved_sources": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.human_handoff": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.insufficient_fallback": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.min_evidence_score": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.mode": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.require_citations": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    }
+   },
+   "values": {
+    "behaviour.fallback_message": "Sorry, I can't help with that right now.",
+    "behaviour.instructions": "",
+    "behaviour.language": "en",
+    "behaviour.persona": "You are a helpful, accurate assistant.",
+    "behaviour.tone_instructions": "",
+    "knowledge.approved_sources": null,
+    "knowledge.human_handoff": false,
+    "knowledge.insufficient_fallback": "I'm sorry, I can't answer that from the information I have been given.",
+    "knowledge.min_evidence_score": 0.5,
+    "knowledge.mode": "general",
+    "knowledge.require_citations": false
+   }
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/config",
+  "status": 200
+ },
+ "integrations": {
+  "body": {
+   "integrations": [
+    {
+     "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+     "connection": {
+      "status": "not_connected"
+     },
+     "created_at": "2026-11-19T06:15:54.850120+00:00",
+     "credential_id": null,
+     "deletion": null,
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "name": "Support desk",
+     "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "overrides": {},
+     "settings": {
+      "reply_mode": "agent_assist",
+      "ticket_groups": [],
+      "ticket_tags": []
+     },
+     "sidebar_key": {
+      "configured": false,
+      "hint": null
+     },
+     "status": "enabled",
+     "type": "zendesk",
+     "updated_at": "2026-11-19T06:15:54.850120+00:00",
+     "version": 1,
+     "webhook": {
+      "provisioned": false,
+      "rotated_at": "2026-11-19T06:15:54.850120+00:00",
+      "signing_secret_configured": false
+     }
+    }
+   ]
+  },
+  "path": "/bots/a35e3430-0378-4218-b691-f96dd409ba20/integrations",
+  "status": 200
+ },
+ "invitation_lookup_bad": {
+  "body": {
+   "detail": "Authentication required."
+  },
+  "status": 401
+ },
+ "invitation_register": {
+  "body": {
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "scope_type": "enterprise",
+   "user": {
+    "email": "registering.person@example.test",
+    "id": "a093de34-9d9b-47b9-a375-fd7fbaadd5d6",
+    "is_platform_superadmin": false,
+    "name": "New Person"
+   }
+  },
+  "status": 201
+ },
+ "invitation_register_used": {
+  "body": {
+   "detail": "Not found."
+  },
+  "status": 404
+ },
+ "invitation_register_weak": {
+  "body": {
+   "detail": "Password does not meet the requirements: password must be at least 12 characters; password has too few distinct characters."
+  },
+  "status": 422
+ },
+ "invitations": {
+  "body": {
+   "invitations": [
+    {
+     "created_at": "2026-11-19T06:15:54.864120+00:00",
+     "email": "new.person@example.test",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "expires_at": "2026-11-26T06:15:54.864120+00:00",
+     "id": "5cb970c2-417d-45e3-8105-521bf91915dd",
+     "invited_by": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+     "role": "viewer",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_level": "enterprise",
+     "status": "pending"
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/invitations",
+  "status": 200
+ },
+ "knowledge_documents": {
+  "body": {
+   "documents": []
+  },
+  "path": "/knowledge/sources/a4b8769e-7169-45f8-80e8-e4333e5ba368/documents",
+  "status": 200
+ },
+ "knowledge_sources": {
+  "body": {
+   "sources": [
+    {
+     "acl_groups": [],
+     "created_at": "2026-11-19T06:15:54.857018+00:00",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "a4b8769e-7169-45f8-80e8-e4333e5ba368",
+     "name": "Policies",
+     "organisation_id": null,
+     "status": "active",
+     "updated_at": "2026-11-19T06:15:54.857018+00:00"
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/knowledge/sources",
+  "status": 200
+ },
+ "member_candidates": {
+  "body": {
+   "candidates": [
+    {
+     "email": "member2@example.test",
+     "id": "6c67b30c-8188-4e11-9663-81dab833ad00",
+     "name": "member2"
+    }
+   ],
+   "note": "Only people who already belong to this Enterprise are listed. Invite anyone else by e-mail."
+  },
+  "path": "/organisations/1c797cb1-ca86-4ec6-831b-3e87b87ec6ff/member-candidates?q=mem",
+  "status": 200
+ },
+ "members_enterprise": {
+  "body": {
+   "members": [
+    {
+     "email": "owner@example.test",
+     "name": "owner",
+     "role": "owner",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise",
+     "user_id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c"
+    },
+    {
+     "email": "admin@example.test",
+     "name": "admin",
+     "role": "admin",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise",
+     "user_id": "b59eeaab-2275-4ea3-8077-5dca792876ce"
+    },
+    {
+     "email": "editor@example.test",
+     "name": "editor",
+     "role": "editor",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise",
+     "user_id": "2937a031-55c5-49a0-bd86-cbf01f0b7778"
+    },
+    {
+     "email": "viewer@example.test",
+     "name": "viewer",
+     "role": "viewer",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise",
+     "user_id": "ab0df342-b0e3-4da0-accb-b72bebc57b25"
+    },
+    {
+     "email": "member2@example.test",
+     "name": "member2",
+     "role": "viewer",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise",
+     "user_id": "6c67b30c-8188-4e11-9663-81dab833ad00"
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/members",
+  "status": 200
+ },
+ "organisation": {
+  "body": {
+   "available": true,
+   "created_at": "2026-11-19T06:15:54.642482+00:00",
+   "description": "",
+   "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+   "id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+   "lifecycle": {
+    "authority": null,
+    "changed_at": "2026-11-19T06:15:54.642482+00:00",
+    "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "reason": "",
+    "state": "active"
+   },
+   "name": "Org A",
+   "overrides": {},
+   "policy": {},
+   "role": "owner",
+   "type": "organisations",
+   "unavailable_reason": null,
+   "updated_at": "2026-11-19T06:15:54.642482+00:00",
+   "version": 1
+  },
+  "path": "/organisations/1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+  "status": 200
+ },
+ "organisations": {
+  "body": {
+   "organisations": [
+    {
+     "created_at": "2026-11-19T06:15:54.642482+00:00",
+     "description": "",
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "lifecycle": {
+      "authority": null,
+      "changed_at": "2026-11-19T06:15:54.642482+00:00",
+      "changed_by": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+      "reason": "",
+      "state": "active"
+     },
+     "name": "Org A",
+     "overrides": {},
+     "policy": {},
+     "type": "organisations",
+     "updated_at": "2026-11-19T06:15:54.642482+00:00",
+     "version": 1
+    }
+   ]
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/organisations",
+  "status": 200
+ },
+ "platform_audit": {
+  "body": {
+   "events": [
+    {
+     "action": "invitation.create",
+     "actor_id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.864282+00:00",
+     "details": {
+      "delivery": "email",
+      "invitation_id": "5cb970c2-417d-45e3-8105-521bf91915dd",
+      "role": "viewer"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "f58c6112-a8f0-46de-b565-c26606d4c1b8",
+     "target_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "target_level": "enterprise"
+    },
+    {
+     "action": "knowledge.source_create",
+     "actor_id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.857120+00:00",
+     "details": {
+      "owner": "enterprises"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "626b721c-012c-41ce-859c-b4f62ae5a068",
+     "target_id": "a4b8769e-7169-45f8-80e8-e4333e5ba368",
+     "target_level": "knowledge"
+    },
+    {
+     "action": "integration.create",
+     "actor_id": "b59eeaab-2275-4ea3-8077-5dca792876ce",
+     "actor_superadmin": false,
+     "at": "2026-11-19T06:15:54.850604+00:00",
+     "details": {
+      "type": "zendesk"
+     },
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "id": "396e5089-f1c3-4a1e-b0ae-5a3490661673",
+     "target_id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+     "target_level": "integration"
+    }
+   ]
+  },
+  "path": "/platform/audit",
+  "status": 200
+ },
+ "platform_credentials": {
+  "body": {
+   "credentials": []
+  },
+  "path": "/platform/credentials",
+  "status": 200
+ },
+ "platform_users": {
+  "body": {
+   "next": "editor@example.test",
+   "users": [
+    {
+     "created_at": "2026-11-19T06:15:54.640359+00:00",
+     "email": "admin@example.test",
+     "id": "b59eeaab-2275-4ea3-8077-5dca792876ce",
+     "is_platform_superadmin": false,
+     "name": "admin",
+     "status": "active"
+    },
+    {
+     "created_at": "2026-11-19T06:15:54.640359+00:00",
+     "email": "bot_editor@example.test",
+     "id": "5d5f1b76-d717-43a9-a215-6a7886048801",
+     "is_platform_superadmin": false,
+     "name": "bot_editor",
+     "status": "active"
+    },
+    {
+     "created_at": "2026-11-19T06:15:54.640359+00:00",
+     "email": "editor@example.test",
+     "id": "2937a031-55c5-49a0-bd86-cbf01f0b7778",
+     "is_platform_superadmin": false,
+     "name": "editor",
+     "status": "active"
+    }
+   ]
+  },
+  "path": "/platform/users?limit=3",
+  "status": 200
+ },
+ "platform_workers": {
+  "body": {
+   "deletion_jobs": {
+    "awaiting_external_cleanup": 0,
+    "cleanup_failed": 0,
+    "completed": 0,
+    "failed": 0,
+    "pending": 0,
+    "running": 0
+   },
+   "deliveries": {
+    "failed_before_send": 0,
+    "pending": 0,
+    "retry": 0,
+    "sending": 0,
+    "uncertain": 0
+   },
+   "workers": []
+  },
+  "path": "/platform/workers",
+  "status": 200
+ },
+ "policy_enterprise": {
+  "body": {
+   "conflicts": [],
+   "effective": {
+    "ai.allowed_models": null,
+    "ai.allowed_providers": [
+     "anthropic",
+     "openai"
+    ],
+    "channels.allowed": null,
+    "credentials.allow_enterprise_credentials": true,
+    "delegation.bot_admins_manage_members": true,
+    "delegation.org_admins_manage_credentials": true,
+    "delegation.org_admins_manage_members": true,
+    "integrations.allowed": null,
+    "knowledge.access_scope": "enterprise",
+    "knowledge.allowed_sources": [],
+    "knowledge.document_acl_required": false,
+    "knowledge.general_fallback_allowed": false,
+    "knowledge.min_evidence_floor": 0.0,
+    "knowledge.minimum_mode": "general",
+    "knowledge.require_citations": false,
+    "knowledge.semantic_verification": false,
+    "limits.max_end_user_msgs_per_minute": 60,
+    "limits.max_monthly_ai_messages": null,
+    "retention.conversation_days": 730,
+    "security.require_webhook_signatures": true,
+    "tools.external_api_calls_allowed": true,
+    "webchat.allowed_embed_origins": null,
+    "webchat.public_access_allowed": true,
+    "zendesk.public_replies_allowed": true
+   },
+   "own": {},
+   "sources": {
+    "ai.allowed_models": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "ai.allowed_providers": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "channels.allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "credentials.allow_enterprise_credentials": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.bot_admins_manage_members": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.org_admins_manage_credentials": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "delegation.org_admins_manage_members": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "integrations.allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.access_scope": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.allowed_sources": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.document_acl_required": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.general_fallback_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.min_evidence_floor": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.minimum_mode": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.require_citations": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "knowledge.semantic_verification": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "limits.max_end_user_msgs_per_minute": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "limits.max_monthly_ai_messages": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "retention.conversation_days": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "security.require_webhook_signatures": {
+     "kind": "platform",
+     "level": null,
+     "object_id": null
+    },
+    "tools.external_api_calls_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "webchat.allowed_embed_origins": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "webchat.public_access_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    },
+    "zendesk.public_replies_allowed": {
+     "kind": "default",
+     "level": null,
+     "object_id": null
+    }
+   }
+  },
+  "path": "/enterprises/8bc4119f-631a-48d3-95cb-7de5a3bd4e50/policy",
+  "status": 200
+ },
+ "runtime_config": {
+  "body": {
+   "ai": {
+    "credential": null,
+    "model": "claude-sonnet-4-6",
+    "provider": "anthropic",
+    "provider_available": false
+   },
+   "ancestry": {
+    "bot_id": "a35e3430-0378-4218-b691-f96dd409ba20",
+    "bot_instance_id": "e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+    "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+    "organisation_id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff"
+   },
+   "available": true,
+   "blocked": {
+    "ai": "no AI credential is configured"
+   },
+   "channel": "webchat",
+   "instance_id": "e485f8eb-69b5-4abf-bbb5-5d173dc3750d",
+   "knowledge": {
+    "approved_sources": 0,
+    "general_fallback_allowed": false,
+    "mode": "general",
+    "require_citations": false,
+    "retrieval_engine": true,
+    "strict": false
+   },
+   "limits": {
+    "end_user_msgs_per_minute": 10,
+    "max_monthly_ai_messages": null
+   },
+   "runnable": false,
+   "runtime_blockers": [],
+   "unavailable_reason": null
+  },
+  "path": "/instances/e485f8eb-69b5-4abf-bbb5-5d173dc3750d/runtime-config",
+  "status": 200
+ },
+ "session": {
+  "body": {
+   "email_verified": true,
+   "user": {
+    "email": "owner@example.test",
+    "id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+    "is_platform_superadmin": false,
+    "name": "owner"
+   }
+  },
+  "path": "/auth/session",
+  "status": 200
+ },
+ "session_root": {
+  "body": {
+   "email_verified": true,
+   "user": {
+    "email": "root@example.test",
+    "id": "ad72466e-60b1-444f-b322-bb0c942aad5c",
+    "is_platform_superadmin": true,
+    "name": "root"
+   }
+  },
+  "path": "/auth/session",
+  "status": 200
+ },
+ "sidebar_key_create": {
+  "body": {
+   "hint": "5n8o",
+   "message": "Copy this key now; it will not be shown again.",
+   "sidebar_key": "bbz_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "status": 200
+ },
+ "telegram_status": {
+  "body": {
+   "bot_username": null,
+   "connected": false,
+   "registered": false,
+   "registered_at": null,
+   "sync_error": null
+  },
+  "path": "/instances/b9d043e0-2fad-4232-99e7-f11b14cae7b1/channel/status",
+  "status": 200
+ },
+ "usage_integration": {
+  "body": {
+   "ai_messages": {
+    "rejected": 0,
+    "released": 0,
+    "reserved": 0,
+    "reserving": 0,
+    "settled": 0,
+    "uncertain": 0
+   },
+   "billing_note": "settled = billed; uncertain = may have been billed, awaiting review; reserved/reserving = in progress; released/rejected = not billed. Preview traffic is counted and billed like live traffic and reported separately.",
+   "period": "2026-11",
+   "preview": {
+    "settled": 0
+   },
+   "quotas": [
+    {
+     "id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "limit": null,
+     "scope": "enterprise",
+     "used": 0
+    },
+    {
+     "id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "limit": null,
+     "scope": "organisation",
+     "used": 0
+    }
+   ],
+   "target": {
+    "id": "0102f9e4-8594-458b-b0f8-32d67b7722f7",
+    "type": "integrations"
+   },
+   "verification": {
+    "settled": 0
+   }
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/usage",
+  "status": 200
+ },
+ "usage_org": {
+  "body": {
+   "ai_messages": {
+    "rejected": 0,
+    "released": 0,
+    "reserved": 0,
+    "reserving": 0,
+    "settled": 0,
+    "uncertain": 0
+   },
+   "billing_note": "settled = billed; uncertain = may have been billed, awaiting review; reserved/reserving = in progress; released/rejected = not billed. Preview traffic is counted and billed like live traffic and reported separately.",
+   "period": "2026-11",
+   "preview": {
+    "settled": 0
+   },
+   "quotas": [
+    {
+     "id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "limit": null,
+     "scope": "enterprise",
+     "used": 0
+    },
+    {
+     "id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+     "limit": null,
+     "scope": "organisation",
+     "used": 0
+    }
+   ],
+   "target": {
+    "id": "1c797cb1-ca86-4ec6-831b-3e87b87ec6ff",
+    "type": "organisations"
+   },
+   "verification": {
+    "settled": 0
+   }
+  },
+  "path": "/organisations/1c797cb1-ca86-4ec6-831b-3e87b87ec6ff/usage",
+  "status": 200
+ },
+ "users_me": {
+  "body": {
+   "email": "owner@example.test",
+   "id": "70ea22ce-0fa8-4844-ba91-0ad79c692c3c",
+   "is_platform_superadmin": false,
+   "memberships": [
+    {
+     "enterprise_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "role": "owner",
+     "scope_id": "8bc4119f-631a-48d3-95cb-7de5a3bd4e50",
+     "scope_type": "enterprise"
+    }
+   ],
+   "name": "owner"
+  },
+  "path": "/users/me",
+  "status": 200
+ },
+ "webchat_status": {
+  "body": {
+   "detail": "Not found."
+  },
+  "path": "/instances/e485f8eb-69b5-4abf-bbb5-5d173dc3750d/channel/status",
+  "status": 404
+ },
+ "zendesk_deliveries": {
+  "body": {
+   "deliveries": []
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/deliveries",
+  "status": 200
+ },
+ "zendesk_events": {
+  "body": {
+   "events": []
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/events",
+  "status": 200
+ },
+ "zendesk_suggestions": {
+  "body": {
+   "suggestions": []
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/suggestions",
+  "status": 200
+ },
+ "zendesk_webhook": {
+  "body": {
+   "provisioned_webhook_id": null,
+   "signature_required": true,
+   "signing_secret_configured": false,
+   "url": "https://api.bitbotpro.io/api/hooks/zendesk/0102f9e4-8594-458b-b0f8-32d67b7722f7/<path-secret>"
+  },
+  "path": "/integrations/0102f9e4-8594-458b-b0f8-32d67b7722f7/zendesk/webhook",
+  "status": 200
+ }
+}

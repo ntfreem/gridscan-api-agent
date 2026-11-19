@@ -246,8 +246,8 @@ function Navbar() {
 
         {/* Desktop CTAs */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }} className="landing-nav-ctas">
-          <Link to="/login" style={{ ...linkStyle, color: C.elec }} data-testid="nav-signin">Sign In</Link>
-          <PrimaryBtn to="/register" testId="nav-signup" style={{ padding: "9px 20px", fontSize: 13 }}>
+          <Link to="/app/login" style={{ ...linkStyle, color: C.elec }} data-testid="nav-signin">Sign In</Link>
+          <PrimaryBtn to="/app/login" testId="nav-signup" style={{ padding: "9px 20px", fontSize: 13 }}>
             Get Started <ArrowRight size={14} />
           </PrimaryBtn>
         </div>
@@ -278,8 +278,8 @@ function Navbar() {
               : <a key={l.label} href={l.href} onClick={() => setOpen(false)} style={{ ...linkStyle, display: "block", padding: "10px 0" }}>{l.label}</a>
           ))}
           <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-            <Link to="/login" onClick={() => setOpen(false)} style={{ ...linkStyle, color: C.elec }}>Sign In</Link>
-            <PrimaryBtn to="/register" testId="nav-signup-mobile" style={{ padding: "9px 18px", fontSize: 13 }}>
+            <Link to="/app/login" onClick={() => setOpen(false)} style={{ ...linkStyle, color: C.elec }}>Sign In</Link>
+            <PrimaryBtn to="/app/login" testId="nav-signup-mobile" style={{ padding: "9px 18px", fontSize: 13 }}>
               Get Started
             </PrimaryBtn>
           </div>
@@ -336,7 +336,7 @@ function HeroSection() {
             </p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 32 }}>
-              <PrimaryBtn to="/register" testId="hero-signup-btn">
+              <PrimaryBtn to="/app/login" testId="hero-signup-btn">
                 Start Building Free <ArrowRight size={16} />
               </PrimaryBtn>
               <GhostBtn to="/chat" testId="hero-demo-btn">
@@ -421,7 +421,7 @@ function ChannelsSection() {
     },
     {
       icon: Code2, name: "REST API", color: C.cyan,
-      desc: "Query your bot programmatically from any application. Full API key management and usage analytics.",
+      desc: "A public chat API for every web instance, restricted to the origins you allow, with usage reporting per instance.",
     },
   ];
 
@@ -1107,7 +1107,7 @@ function HowItWorksSection() {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 48 }}>
-          <PrimaryBtn to="/register" testId="how-signup-btn">
+          <PrimaryBtn to="/app/login" testId="how-signup-btn">
             Start Building <ArrowRight size={16} />
           </PrimaryBtn>
         </div>
@@ -1147,7 +1147,7 @@ function FaqSection() {
     },
     {
       q: "Which AI providers are supported?",
-      a: "BitBot Pro uses Claude and GPT models through the Emergent Universal Key. You can also bring your own OpenAI API key (BYOK) for direct OpenAI access.",
+      a: "BitBot Pro uses Anthropic Claude and OpenAI GPT models with your organisation's own provider API keys, which are stored encrypted and never shown again.",
     },
   ];
 
@@ -1234,7 +1234,7 @@ function CtaSection() {
           Knowledge-powered answers, live API data, and connected conversation channels — all from one platform.
         </SectionSub>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 14, marginTop: 36 }}>
-          <PrimaryBtn to="/register" testId="cta-signup-btn">
+          <PrimaryBtn to="/app/login" testId="cta-signup-btn">
             Start Building Free <ArrowRight size={16} />
           </PrimaryBtn>
           <GhostBtn to="/chat" testId="cta-demo-btn">
@@ -1275,8 +1275,6 @@ function Footer() {
               <h5 style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.15em", margin: "0 0 12px" }}>Product</h5>
               {[
                 { label: "Documentation", to: "/docs" },
-                { label: "Changelog", to: "/admin/changelog" },
-                { label: "Live Demo", to: "/chat" },
               ].map(l => (
                 <Link key={l.label} to={l.to} style={{ display: "block", fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text2, textDecoration: "none", marginBottom: 8 }}>
                   {l.label}
@@ -1286,8 +1284,7 @@ function Footer() {
             <div>
               <h5 style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.15em", margin: "0 0 12px" }}>Account</h5>
               {[
-                { label: "Sign In", to: "/login" },
-                { label: "Create Account", to: "/register" },
+                { label: "Sign In", to: "/app/login" },
               ].map(l => (
                 <Link key={l.label} to={l.to} style={{ display: "block", fontFamily: "IBM Plex Sans, sans-serif", fontSize: 13, color: C.text2, textDecoration: "none", marginBottom: 8 }}>
                   {l.label}

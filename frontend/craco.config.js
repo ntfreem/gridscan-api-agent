@@ -4,7 +4,8 @@ require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build
-const isDevServer = process.env.NODE_ENV !== "production";
+// (Jest runs with NODE_ENV=test: no visual-edits instrumentation in tests)
+const isDevServer = process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test";
 
 // Environment variable overrides
 const config = {
@@ -23,6 +24,20 @@ if (config.enableHealthCheck) {
 }
 
 let webpackConfig = {
+  // Jest (yarn test): resolve the "@/..." alias like webpack does.
+  jest: {
+    configure: (jestConfig) => ({
+      ...jestConfig,
+      moduleNameMapper: {
+        ...(jestConfig.moduleNameMapper || {}),
+        "^@/(.*)$": "<rootDir>/src/$1",
+        // react-router 7 only publishes an "exports" map, which Jest 27 (react-scripts 5) cannot resolve
+        "^react-router-dom$": "<rootDir>/node_modules/react-router-dom/dist/index.js",
+        "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js",
+        "^react-router$": "<rootDir>/node_modules/react-router/dist/development/index.js",
+      },
+    }),
+  },
   eslint: {
     configure: {
       extends: ["plugin:react-hooks/recommended"],

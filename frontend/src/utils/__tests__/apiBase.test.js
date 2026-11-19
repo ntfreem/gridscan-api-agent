@@ -49,15 +49,3 @@ test("no source file sends requests to a relative /api path", () => {
   }
   expect(offenders).toEqual([]);
 });
-
-test("chat pages use the token-based session helpers and no 'default' bot fallback", () => {
-  for (const name of ["pages/ChatWidget.js", "pages/ChatPage.js"]) {
-    const text = fs.readFileSync(path.join(SRC, name), "utf8");
-    expect(text).not.toMatch(/\|\| "default"/);
-    expect(text).not.toMatch(/(widget_session_|bf_chat_)/);
-    expect(text).toMatch(/saveSession\(/);
-    expect(text).toMatch(/restoreSession\(/);
-    expect(text).toMatch(/normaliseBotId\(/);
-    expect(text).not.toMatch(/chat\/history/); // history only through chatSession.fetchHistory
-  }
-});

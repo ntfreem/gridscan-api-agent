@@ -1,147 +1,81 @@
+/**
+ * BitBotPro frontend (Spec 012 release candidate, Phase 6B).
+ *
+ * The admin application is `src/app12` at /app/* (spec §12). The legacy pages, the
+ * localStorage session and the legacy tenant-header API layer were removed in Phase 6B
+ * (spec §14, specs/012-clean-hierarchy/legacy-inventory.md). Old paths redirect to
+ * their Spec 012 replacements so bookmarks and e-mailed links still land somewhere
+ * sensible; the retired React chat widget (W2) shows a notice instead of a blank page.
+ */
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import AdminLayout from "@/components/AdminLayout";
-import Dashboard from "@/pages/Dashboard";
-import KnowledgeBase from "@/pages/KnowledgeBase";
-import Conversations from "@/pages/Conversations";
-import BotSettings from "@/pages/BotSettings";
-import Analytics from "@/pages/Analytics";
-import DiscordSettings from "@/pages/DiscordSettings";
-import DiscordAppSetup from "@/pages/DiscordAppSetup";
-import DiscordInvited from "@/pages/DiscordInvited";
-import EmbedCode from "@/pages/EmbedCode";
-import ChatPage from "@/pages/ChatPage";
-import ChatWidget from "@/pages/ChatWidget";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import VerifyEmail from "@/pages/VerifyEmail";
-import InstanceSelect from "@/pages/InstanceSelect";
-import Users from "@/pages/Users";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
 import Docs from "@/pages/Docs";
-import ApiIntegrations from "@/pages/ApiIntegrations";
-import ApiKeyAnalytics from "@/pages/ApiKeyAnalytics";
-import TelegramSettings from "@/pages/TelegramSettings";
-import InviteAccept from "@/pages/InviteAccept";
-import ZendeskSettings from "@/pages/ZendeskSettings";
-import ChangelogPage from "@/pages/ChangelogPage";
-import SetupGuide from "@/pages/SetupGuide";
-import KnowledgeContentViewer from "@/pages/KnowledgeContentViewer";
 import LandingPage from "@/pages/LandingPage";
-
-// v2 pages
-import BotList from "@/pages/BotList";
-import BotOverview from "@/pages/BotOverview";
-import ConnectedAccounts from "@/pages/ConnectedAccounts";
-import IntegrationsPage from "@/pages/IntegrationsPage";
-import ProviderApps from "@/pages/ProviderApps";
-import Workspaces from "@/pages/Workspaces";
-import SuggestionsInbox from "@/pages/SuggestionsInbox";
-import Organisations from "@/pages/Organisations";
-import WorkspaceSettings from "@/pages/WorkspaceSettings";
-import EnterpriseWorkspaces from "@/pages/EnterpriseWorkspaces";
-import Profile from "@/pages/Profile";
-
+import App12, { OAuthResultPage } from "@/app12/App12";
 import "@/App.css";
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  return user ? children : <Navigate to="/login" replace />;
+/** Redirect that keeps the URL fragment (reset links carry `#token=…`, never sent to a server). */
+export function KeepHashRedirect({ to }) {
+  const { hash } = useLocation();
+  return <Navigate to={`${to}${hash || ""}`} replace />;
 }
 
-function AdminOnlyRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-  return user.role === "superadmin" ? children : <Navigate to="/admin" replace />;
+/** W2 (approved, P5-H): the API-hosted widget is the only chat widget. */
+export function RetiredChatNotice() {
+  return (
+    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+                   background: "#030712", color: "#e2e8f0", fontFamily: "system-ui, sans-serif", padding: 16 }}>
+      <div role="status" style={{ maxWidth: 420, textAlign: "center" }}>
+        <h1 style={{ fontSize: 20, marginBottom: 8 }}>This chat window has moved</h1>
+        <p style={{ fontSize: 14, color: "#cbd5e1" }}>
+          The website owner needs to update their BitBotPro chat embed code. Please contact them, or try again later.
+        </p>
+      </div>
+    </main>
+  );
 }
 
-function PublicOnlyRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  return !user ? children : <Navigate to="/admin" replace />;
+export function NotFoundPage() {
+  return (
+    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+                   background: "#030712", color: "#e2e8f0", fontFamily: "system-ui, sans-serif", padding: 16 }}>
+      <div style={{ textAlign: "center" }}>
+        <h1 style={{ fontSize: 20, marginBottom: 8 }}>Page not found</h1>
+        <a href="/" style={{ color: "#67e8f9" }}>Go to the home page</a>
+      </div>
+    </main>
+  );
 }
 
-function AppRoutes() {
+export function AppRoutes() {
   useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
 
   return (
     <Routes>
-      {/* Public auth pages */}
-      <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-      <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
-      <Route path="/verify" element={<VerifyEmail />} />
-      <Route path="/forgot-password" element={<PublicOnlyRoute><ForgotPassword /></PublicOnlyRoute>} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/select-instance" element={<ProtectedRoute><InstanceSelect /></ProtectedRoute>} />
-      <Route path="/discord/invited" element={<DiscordInvited />} />
-      <Route path="/invite/:token" element={<InviteAccept />} />
-
-      {/* Admin area */}
-      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-        {/* Organisation-level */}
-        <Route index element={<Dashboard />} />
-        <Route path="organisations" element={<Organisations />} />
-        <Route path="bots" element={<BotList />} />
-        <Route path="accounts/:provider" element={<ConnectedAccounts />} />
-        <Route path="team" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-
-        {/* Workspace Settings */}
-        <Route path="workspace/settings" element={<WorkspaceSettings />} />
-        <Route path="workspace/members" element={<WorkspaceSettings />} />
-        <Route path="workspace/billing" element={<WorkspaceSettings />} />
-        <Route path="workspace/discord-apps" element={<WorkspaceSettings />} />
-
-        {/* Bot-scoped routes */}
-        <Route path="bots/:botId" element={<BotOverview />} />
-        <Route path="bots/:botId/behaviour" element={<BotSettings />} />
-        <Route path="bots/:botId/knowledge" element={<KnowledgeBase />} />
-        <Route path="bots/:botId/integrations" element={<IntegrationsPage />} />
-        <Route path="bots/:botId/conversations" element={<Conversations />} />
-        <Route path="bots/:botId/playground" element={<EmbedCode />} />
-        <Route path="bots/:botId/suggestions" element={<SuggestionsInbox />} />
-
-        {/* Platform Admin */}
-        <Route path="platform/provider-apps" element={<AdminOnlyRoute><ProviderApps /></AdminOnlyRoute>} />
-        <Route path="platform/workspaces" element={<AdminOnlyRoute><Organisations /></AdminOnlyRoute>} />
-        <Route path="platform/analytics" element={<AdminOnlyRoute><Analytics /></AdminOnlyRoute>} />
-        <Route path="platform/api-keys" element={<AdminOnlyRoute><ApiKeyAnalytics /></AdminOnlyRoute>} />
-
-        {/* Profile */}
-        <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-
-        {/* Enterprise */}
-        <Route path="enterprise/workspaces" element={<AdminOnlyRoute><EnterpriseWorkspaces /></AdminOnlyRoute>} />
-
-        {/* Legacy routes — redirect to new paths */}
-        <Route path="knowledge" element={<KnowledgeBase />} />
-        <Route path="knowledge/view" element={<KnowledgeContentViewer />} />
-        <Route path="conversations" element={<Conversations />} />
-        <Route path="settings" element={<BotSettings />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="discord" element={<DiscordSettings />} />
-        <Route path="discord-app-setup" element={<AdminOnlyRoute><DiscordAppSetup /></AdminOnlyRoute>} />
-        <Route path="embed" element={<EmbedCode />} />
-        <Route path="api-integrations" element={<ApiIntegrations />} />
-        <Route path="api-key-analytics" element={<ApiKeyAnalytics />} />
-        <Route path="telegram" element={<TelegramSettings />} />
-        <Route path="zendesk" element={<ZendeskSettings />} />
-        <Route path="changelog" element={<ChangelogPage />} />
-        <Route path="setup-guide" element={<SetupGuide />} />
-        <Route path="users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-      </Route>
+      {/* Spec 012 admin app (Phase 5) */}
+      <Route path="/app/*" element={<App12 />} />
+      <Route path="/oauth/:provider/result" element={<OAuthResultPage />} />
 
       {/* Public pages */}
-      <Route path="/chat" element={<ChatPage />} />
-      <Route path="/widget" element={<ChatWidget />} />
-      <Route path="/docs" element={<Docs />} />
       <Route path="/" element={<LandingPage />} />
+      <Route path="/docs" element={<Docs />} />
+      <Route path="/chat" element={<RetiredChatNotice />} />
+      <Route path="/widget" element={<RetiredChatNotice />} />
+
+      {/* Legacy paths → Spec 012 replacements */}
+      <Route path="/login" element={<Navigate to="/app/login" replace />} />
+      <Route path="/register" element={<Navigate to="/app/login" replace />} />
+      <Route path="/verify" element={<Navigate to="/app/login" replace />} />
+      <Route path="/forgot-password" element={<Navigate to="/app/forgot-password" replace />} />
+      <Route path="/reset-password" element={<KeepHashRedirect to="/app/reset-password" />} />
+      <Route path="/invite/:token" element={<Navigate to="/app/login" replace />} />
+      <Route path="/select-instance" element={<Navigate to="/app" replace />} />
+      <Route path="/discord/invited" element={<Navigate to="/app" replace />} />
+      <Route path="/admin/*" element={<Navigate to="/app" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
@@ -150,9 +84,7 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
+        <AppRoutes />
       </BrowserRouter>
       <Toaster />
     </div>

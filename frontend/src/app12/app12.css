@@ -1,0 +1,7 @@
+/* Spec 012 admin app only (Phase 6A accessibility fix): the shared primary blue
+   (217 91% 60%) gives white button text 3.6:1 contrast; WCAG AA needs 4.5:1.
+   #1d4ed8 gives 6.7:1. Legacy pages keep the global theme. */
+.app12 {
+  --primary: 224 76% 48%;
+  --ring: 224 76% 48%;
+}
