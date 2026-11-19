@@ -191,17 +191,25 @@ users                → +platform_role field
 - Discord Integration Isolation (platform vs custom)
 - Landing page, Analytics, Branding
 
+### Stage 7: Spec 012 Frontend GitHub Release — DONE ✅ (Feb 2026)
+- [x] Cloned GitHub repo (commit aa55976b) with Spec 012 frontend code
+- [x] `yarn install --frozen-lockfile` — all dependencies resolved cleanly
+- [x] `yarn build` with `REACT_APP_API_BASE_URL=https://api.bitbotpro.io` — compiled successfully (165.79 KB JS, 10.55 KB CSS gzipped)
+- [x] 105/105 tests pass across 11 test suites (flows, components, phase6a, registration, legacyRoutes, client, util, w2)
+- [x] Architecture verified: session-cookie auth (no localStorage), CSRF headers, 155 contract routes, 59 sample responses
+- [x] Legacy routes redirect correctly, retired chat widget shows notice
+- [x] Full Completion Report generated at /app/docs/SPEC_012_COMPLETION_REPORT.md
+- [x] Ready for production cutover — awaiting explicit user authorization
+
 ## Backlog
-- P0: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)
-- P1: GitHub Export to begin self-hosting migration with Claude Code
+- P0: Production deployment of Spec 012 frontend (awaiting user authorization)
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P2: WhatsApp integration
-- P2: APP_MODE env splitting
-- P2: Backend refactor — server.py modularization
+- P2: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)
 - P2: OpenAPI improvements (add security schemes, response models)
-- P3: Users.js component splitting (file at 752 lines)
 - P3: Workspace/org switching UX polish
 
 ## Key URLs
 - Production: `https://bitbotpro.io`
+- API (Self-Hosted): `https://api.bitbotpro.io`
 - Preview: `https://rag-search-dev.preview.emergentagent.com`
