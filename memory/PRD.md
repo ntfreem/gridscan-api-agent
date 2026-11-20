@@ -204,44 +204,38 @@ users                → +platform_role field
 ### Stage 8: Frontend Design Restoration — Phase 1 (Foundation) — IN PROGRESS (Feb 2026)
 User requested restoring the original Emergent frontend design while connecting to the Spec 012 backend.
 
-**Phase 1 — Foundation (complete):**
+**Phase 1 — Foundation (complete, user approved):**
 - [x] Restored `theme.js` — original neon-blue design system (colors, fonts, radius, shadows, style tokens)
 - [x] Restored `BridgeBotLogo.js` — animated logo component with pupil drift
 - [x] Built `SessionContext.js` — Spec 012 session-cookie auth (no localStorage), CSRF headers, Enterprise→Org→Bot hierarchy state
 - [x] Built `AdminLayout.js` — original Emergent sidebar with Enterprise/Organisation/Bot selectors, responsive mobile menu, environment banner
-- [x] Built `Login.js` — original design, session-cookie auth, error handling
-- [x] Built `ForgotPassword.js` — email input + "check your email" confirmation
-- [x] Built `ResetPassword.js` — URL fragment token extraction, password validation
-- [x] Built `Dashboard.js` — stat cards (bots, instances, orgs), bot list, quick actions
-- [x] Built `BotList.js` — bot listing + create modal for selected org
-- [x] Built `BotOverview.js` — single bot detail with navigation cards + instance list
+- [x] Built `Login.js`, `ForgotPassword.js`, `ResetPassword.js` — original design, session-cookie auth
+- [x] Built `Dashboard.js` — stat cards, bot list, quick actions
 - [x] Built preview proxy (`server.py`) — forwards /api to api.bitbotpro.io with cookie/CSRF forwarding
-- [x] OAuth result page for Discord/Zendesk callbacks
-- [x] Placeholder pages for Phase 2/3 features (Knowledge, Credentials, Members, Analytics, Platform, etc.)
-- [x] Route structure: /login, /forgot-password, /reset-password, /admin/*, /oauth/:provider/result
-- [x] Auth redirect: unauthenticated /admin → /login
-- [x] Legacy route redirects: /app/* → /admin
-- [x] Verified proxy: session check (401), login with CSRF (401 "Invalid email or password"), cookie forwarding
-- [ ] Awaiting test account credentials from user to verify authenticated flows
+- [x] User approved Phase 1 design ✅
 
-**Phase 2 — Core Management (upcoming):**
-- Enterprise & Organisation management
-- Bot configuration (AI settings, behaviour modes)
-- Credentials CRUD (AI provider keys, test connection)
-- Knowledge management (sources, file upload, URL/website crawling)
-- External API integrations, OpenAPI importing
-- Account management (change password, delete account)
-- Invitation acceptance flow
-
+**Phase 2 — Core Management (complete):**
+- [x] `CredentialsPage.js` — AI provider keys CRUD, test connection, revoke, delete, scope (org/enterprise)
+- [x] `KnowledgePage.js` — knowledge sources, file upload, URL/website/crawl import, document management
+- [x] `BotSettingsPage.js` — bot name, logo, AI config (credential selection, provider, model, temperature, max tokens, persona)
+- [x] `BotInstancesPage.js` — channel instances (Discord/Telegram/Webchat), create with channel picker
+- [x] `BotKnowledgePage.js` — bot-specific knowledge sources and document management
+- [x] `BotIntegrationsPage.js` — Zendesk and external API integrations CRUD
+- [x] `InstancePage.js` — instance detail with connection status, connect/disconnect/test, webchat embed snippet
+- [x] `AccountPage.js` — profile, change password, sign out everywhere, delete account
+- [x] All pages use real Spec 012 API endpoints (no mock data)
+- [x] All 12+ admin routes compile and return 200
+- [ ] Awaiting user review and authenticated testing
 **Phase 3 — Integrations & Monitoring (upcoming):**
-- Discord, Telegram, Webchat, Zendesk instance panels
 - Members, invitations, roles management
 - Usage/analytics, audit logs
 - Platform superadmin pages
+- Discord application management
 - Webchat configuration, preview and embeddable widget
+- Full invitation acceptance flow
 
 ## Backlog
-- P0: Phase 2 & 3 of frontend restoration (pending user approval of Phase 1)
+- P0: Phase 3 of frontend restoration (pending user approval of Phase 2)
 - P0: Production deployment of restored frontend (awaiting user authorization)
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P2: WhatsApp integration

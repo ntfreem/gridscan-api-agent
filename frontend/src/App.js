@@ -1,11 +1,5 @@
 /**
  * BitBotPro Frontend — Original Emergent design with Spec 012 backend.
- *
- * Session-cookie authentication, Enterprise → Organisation → Bot hierarchy.
- * Routes:
- *   /login, /forgot-password, /reset-password — public auth
- *   /admin/* — protected admin area with sidebar layout
- *   /oauth/:provider/result — OAuth callback landing
  */
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,11 +11,17 @@ import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import BotList from "@/pages/BotList";
 import BotOverview from "@/pages/BotOverview";
+import BotSettingsPage from "@/pages/BotSettingsPage";
+import BotKnowledgePage from "@/pages/BotKnowledgePage";
+import BotInstancesPage from "@/pages/BotInstancesPage";
+import BotIntegrationsPage from "@/pages/BotIntegrationsPage";
+import CredentialsPage from "@/pages/CredentialsPage";
+import KnowledgePage from "@/pages/KnowledgePage";
+import AccountPage from "@/pages/AccountPage";
+import InstancePage from "@/pages/InstancePage";
 import {
-  KnowledgePage, CredentialsPage, MembersPage, AnalyticsPage,
-  PlatformPage, DiscordAppsPage, AccountPage,
-  BotSettingsPage, BotKnowledgePage, BotInstancesPage, BotIntegrationsPage,
-  InstancePage, NotFoundPage, InvitationsPage,
+  MembersPage, AnalyticsPage, PlatformPage, DiscordAppsPage,
+  NotFoundPage, InvitationsPage,
 } from "@/pages/Placeholders";
 import { Loader2 } from "lucide-react";
 import { colors, fonts } from "@/theme";

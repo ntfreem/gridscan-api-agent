@@ -1,10 +1,8 @@
 /**
- * Placeholder pages for Phase 1 — these will be fully built in Phases 2 & 3.
- * Each page follows the original Emergent design language.
+ * Placeholder pages for Phase 3 features (not yet built).
  */
 import { colors, fonts, T } from "../theme";
-import { useSession } from "../context/SessionContext";
-import { BookOpen, Key, Users, BarChart2, Shield, Zap, User, Settings, Network, Headphones } from "lucide-react";
+import { Users, BarChart2, Shield, Zap } from "lucide-react";
 
 function PlaceholderPage({ icon: Icon, title, subtitle, testId }) {
   return (
@@ -28,14 +26,6 @@ function PlaceholderPage({ icon: Icon, title, subtitle, testId }) {
   );
 }
 
-export function KnowledgePage() {
-  return <PlaceholderPage icon={BookOpen} title="Knowledge" subtitle="Knowledge source management coming in Phase 2." testId="knowledge-page" />;
-}
-
-export function CredentialsPage() {
-  return <PlaceholderPage icon={Key} title="Credentials" subtitle="AI and integration credential management coming in Phase 2." testId="credentials-page" />;
-}
-
 export function MembersPage() {
   return <PlaceholderPage icon={Users} title="Members" subtitle="Team and access management coming in Phase 3." testId="members-page" />;
 }
@@ -52,47 +42,6 @@ export function DiscordAppsPage() {
   return <PlaceholderPage icon={Zap} title="Discord Applications" subtitle="Discord application management coming in Phase 3." testId="discord-apps-page" />;
 }
 
-export function AccountPage() {
-  const { user } = useSession();
-  return (
-    <div style={T.page} data-testid="account-page">
-      <p style={T.overline}>Account</p>
-      <h1 style={T.h1}>My Account</h1>
-      <div style={T.card}>
-        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.primary, marginBottom: "8px" }}>
-          <strong>Name:</strong> {user?.name || "—"}
-        </p>
-        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.primary, marginBottom: "8px" }}>
-          <strong>Email:</strong> {user?.email || "—"}
-        </p>
-        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary }}>
-          Full account management (change password, delete account) coming in Phase 2.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-export function BotSettingsPage() {
-  return <PlaceholderPage icon={Settings} title="Bot Settings" subtitle="Bot configuration and AI behaviour settings coming in Phase 2." testId="bot-settings-page" />;
-}
-
-export function BotKnowledgePage() {
-  return <PlaceholderPage icon={BookOpen} title="Bot Knowledge" subtitle="Bot knowledge base management coming in Phase 2." testId="bot-knowledge-page" />;
-}
-
-export function BotInstancesPage() {
-  return <PlaceholderPage icon={Network} title="Bot Instances" subtitle="Channel instances management coming in Phase 2." testId="bot-instances-page" />;
-}
-
-export function BotIntegrationsPage() {
-  return <PlaceholderPage icon={Headphones} title="Integrations" subtitle="Zendesk and external integration management coming in Phase 3." testId="bot-integrations-page" />;
-}
-
-export function InstancePage() {
-  return <PlaceholderPage icon={Network} title="Instance" subtitle="Instance configuration coming in Phase 3." testId="instance-page" />;
-}
-
 export function NotFoundPage() {
   return (
     <div style={{ ...T.page, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: "100vh" }}>
@@ -103,5 +52,5 @@ export function NotFoundPage() {
 }
 
 export function InvitationsPage() {
-  return <PlaceholderPage icon={Users} title="Accept Invitation" subtitle="Invitation acceptance flow coming in Phase 2." testId="invitations-page" />;
+  return <PlaceholderPage icon={Users} title="Accept Invitation" subtitle="Invitation acceptance flow coming in Phase 3." testId="invitations-page" />;
 }
