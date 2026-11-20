@@ -214,7 +214,7 @@ User requested restoring the original Emergent frontend design while connecting 
 - [x] Built preview proxy (`server.py`) — forwards /api to api.bitbotpro.io with cookie/CSRF forwarding
 - [x] User approved Phase 1 design ✅
 
-**Phase 2 — Core Management (complete):**
+**Phase 2 — Core Management (complete, deployed):**
 - [x] `CredentialsPage.js` — AI provider keys CRUD, test connection, revoke, delete, scope (org/enterprise)
 - [x] `KnowledgePage.js` — knowledge sources, file upload, URL/website/crawl import, document management
 - [x] `BotSettingsPage.js` — bot name, logo, AI config (credential selection, provider, model, temperature, max tokens, persona)
@@ -224,24 +224,19 @@ User requested restoring the original Emergent frontend design while connecting 
 - [x] `InstancePage.js` — instance detail with connection status, connect/disconnect/test, webchat embed snippet
 - [x] `AccountPage.js` — profile, change password, sign out everywhere, delete account
 - [x] All pages use real Spec 012 API endpoints (no mock data)
-- [x] All 12+ admin routes compile and return 200
-- [ ] Awaiting user review and authenticated testing
-**Phase 3 — Integrations & Monitoring (upcoming):**
-- Members, invitations, roles management
-- Usage/analytics, audit logs
-- Platform superadmin pages
-- Discord application management
-- Webchat configuration, preview and embeddable widget
-- Full invitation acceptance flow
+
+**Phase 3 — Integrations & Monitoring (complete, deployed):**
+- [x] `MembersPage.js` — Members/invitations with role management, search, add, invite, revoke
+- [x] `PlatformPage.js` — Platform superadmin (enterprises CRUD, user search, grant/revoke SA, audit, workers)
+- [x] `DiscordAppsPage.js` — Per-enterprise Discord app setup (app ID, token, enable/disable, gateway)
+- [x] `AnalyticsPage.js` — Usage stats, period selection, audit events
+- [x] All 21 pages compiled and deployed to production
 
 ## Backlog
-- P0: Phase 3 of frontend restoration (pending user approval of Phase 2)
-- P0: Production deployment of restored frontend (awaiting user authorization)
+- P1: Real-world testing on bitbotpro.io with test data
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P2: WhatsApp integration
-- P2: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)
 - P2: OpenAPI improvements (add security schemes, response models)
-- P3: Workspace/org switching UX polish
 
 ## Key URLs
 - Production: `https://bitbotpro.io`
