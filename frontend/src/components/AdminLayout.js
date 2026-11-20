@@ -370,6 +370,10 @@ export default function AdminLayout() {
           <SideNavLink to="/admin/members" icon={Users} label="Members" onClick={closeMobile} />
           <SideNavLink to="/admin/analytics" icon={BarChart2} label="Analytics" onClick={closeMobile} />
 
+          {/* Developer tools */}
+          <SectionLabel icon={Code2} label="Developer" />
+          <SideNavLink to="/admin/api-scraper" icon={Zap} label="API Scraper" onClick={closeMobile} />
+
           {/* Superadmin */}
           {isSuperAdmin && (
             <>

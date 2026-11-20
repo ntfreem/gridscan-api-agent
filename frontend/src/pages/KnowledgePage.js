@@ -1,11 +1,13 @@
 /**
  * Knowledge management — sources, document uploads, website importing, crawling.
+ * Grouped documents by domain for URL/crawl sources with expandable sections.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSession } from "../context/SessionContext";
 import {
   BookOpen, Plus, Trash2, Upload, Globe, FileText, ChevronDown, ChevronRight,
   Loader2, CheckCircle, XCircle, RefreshCw, Eye, Download, AlertTriangle,
+  ExternalLink, FolderOpen,
 } from "lucide-react";
 import { colors, fonts, radius, T, onFocus, onBlur, rowEnter, rowLeave } from "../theme";
 import { toast } from "sonner";
@@ -108,6 +110,165 @@ function DocumentRow({ doc, api, onRefresh }) {
         {deleting ? <Loader2 size={12} color={colors.text.muted} style={{ animation: "spin 1s linear infinite" }} /> :
           <Trash2 size={12} color={colors.text.muted} />}
       </button>
+    </div>
+  );
+}
+
+function DomainGroup({ domain, docs, api, onRefresh }) {
+  const [expanded, setExpanded] = useState(false);
+  const readyCount = docs.filter(d => d.state === "ready").length;
+  const processingCount = docs.filter(d => d.state === "processing").length;
+  const errorCount = docs.filter(d => d.state === "error").length;
+
+  return (
+    <div style={{ marginBottom: "4px" }}>
+      <div data-testid={`domain-group-${domain}`}
+        style={{
+          display: "flex", alignItems: "center", gap: "8px",
+          padding: "8px 12px", borderRadius: radius.sm,
+          cursor: "pointer", transition: "background-color 0.1s",
+          backgroundColor: expanded ? colors.bg.hover : "transparent",
+        }}
+        onClick={() => setExpanded(!expanded)}
+        onMouseEnter={e => { if (!expanded) e.currentTarget.style.backgroundColor = colors.bg.hover; }}
+        onMouseLeave={e => { if (!expanded) e.currentTarget.style.backgroundColor = "transparent"; }}
+      >
+        {expanded ? <ChevronDown size={12} color={colors.brand.light} /> : <ChevronRight size={12} color={colors.text.muted} />}
+        <Globe size={12} color="#60A5FA" />
+        <span style={{
+          fontFamily: fonts.body, fontSize: "12px", fontWeight: "500",
+          color: colors.text.primary, flex: 1,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {domain}
+        </span>
+        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+          {readyCount > 0 && (
+            <span style={{
+              fontFamily: fonts.mono, fontSize: "9px", fontWeight: "600",
+              padding: "1px 6px", borderRadius: radius.full,
+              color: colors.brand.success, backgroundColor: "rgba(52,211,153,0.1)",
+            }}>{readyCount}</span>
+          )}
+          {processingCount > 0 && (
+            <span style={{
+              fontFamily: fonts.mono, fontSize: "9px", fontWeight: "600",
+              padding: "1px 6px", borderRadius: radius.full,
+              color: colors.brand.warning, backgroundColor: "rgba(251,191,36,0.1)",
+            }}>{processingCount}</span>
+          )}
+          {errorCount > 0 && (
+            <span style={{
+              fontFamily: fonts.mono, fontSize: "9px", fontWeight: "600",
+              padding: "1px 6px", borderRadius: radius.full,
+              color: colors.brand.error, backgroundColor: "rgba(244,63,94,0.1)",
+            }}>{errorCount}</span>
+          )}
+          <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.text.muted }}>
+            {docs.length} page{docs.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ paddingLeft: "32px" }}>
+          {docs.map(d => <DocumentRow key={d.id} doc={d} api={api} onRefresh={onRefresh} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentsPanel({ selectedSource, documents, docsLoading, api, fetchDocs, uploading, handleFileUpload, fileRef }) {
+  // Group documents by domain for URL/crawl sources
+  const isUrlSource = selectedSource?.kind === "url" || selectedSource?.kind === "website" || selectedSource?.kind === "crawl";
+
+  const groupedByDomain = useMemo(() => {
+    if (!isUrlSource || !documents.length) return null;
+    const groups = {};
+    documents.forEach(doc => {
+      let domain = "Other";
+      try {
+        const urlStr = doc.url || doc.name || "";
+        if (urlStr.startsWith("http")) {
+          domain = new URL(urlStr).hostname;
+        } else if (urlStr.includes("/")) {
+          // Try to extract domain-like pattern
+          const parts = urlStr.split("/");
+          if (parts[0].includes(".")) domain = parts[0];
+        }
+      } catch {}
+      if (!groups[domain]) groups[domain] = [];
+      groups[domain].push(doc);
+    });
+    // Sort domains alphabetically
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [documents, isUrlSource]);
+
+  if (!selectedSource) {
+    return (
+      <div style={T.card}>
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted, textAlign: "center", padding: "32px" }}>
+          Select a source to view its documents.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={T.card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+        <div>
+          <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
+            {selectedSource.name}
+          </p>
+          <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>
+            {selectedSource.kind || "file"} source • {documents.length} document{documents.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "6px" }}>
+          {(selectedSource.kind === "file" || !selectedSource.kind) && (
+            <label data-testid="upload-document-btn"
+              style={{ ...T.btnPrimary, cursor: "pointer", fontSize: "12px", padding: "8px 14px", opacity: uploading ? 0.6 : 1 }}>
+              {uploading ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Upload size={12} />}
+              {uploading ? "Uploading..." : "Upload"}
+              <input ref={fileRef} type="file" onChange={handleFileUpload} style={{ display: "none" }} disabled={uploading}
+                accept=".pdf,.txt,.md,.doc,.docx,.csv,.json,.html,.xml" />
+            </label>
+          )}
+        </div>
+      </div>
+
+      {docsLoading ? (
+        <div style={{ textAlign: "center", padding: "20px" }}>
+          <Loader2 size={16} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
+        </div>
+      ) : documents.length === 0 ? (
+        <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted, textAlign: "center", padding: "20px" }}>
+          No documents in this source. {selectedSource.kind === "file" ? "Upload files to add knowledge." : "Documents will appear after processing."}
+        </p>
+      ) : isUrlSource && groupedByDomain ? (
+        // Grouped view for URL sources
+        <div data-testid="grouped-documents">
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px",
+            padding: "6px 10px", borderRadius: radius.sm,
+            backgroundColor: "rgba(59,130,246,0.04)",
+          }}>
+            <FolderOpen size={11} color={colors.brand.light} />
+            <span style={{ fontFamily: fonts.mono, fontSize: "9px", color: colors.brand.light, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              {groupedByDomain.length} domain{groupedByDomain.length !== 1 ? "s" : ""} • {documents.length} pages
+            </span>
+          </div>
+          {groupedByDomain.map(([domain, docs]) => (
+            <DomainGroup key={domain} domain={domain} docs={docs} api={api} onRefresh={() => fetchDocs(selectedSource)} />
+          ))}
+        </div>
+      ) : (
+        // Flat list for file sources
+        <div style={{ display: "grid", gap: "2px" }}>
+          {documents.map(d => <DocumentRow key={d.id} doc={d} api={api} onRefresh={() => fetchDocs(selectedSource)} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -284,49 +445,17 @@ export default function KnowledgePage() {
           )}
         </div>
 
-        {/* Documents panel */}
-        <div style={T.card}>
-          {selectedSource ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-                <div>
-                  <p style={{ fontFamily: fonts.heading, fontSize: "14px", fontWeight: "600", color: colors.text.primary, margin: 0 }}>
-                    {selectedSource.name}
-                  </p>
-                  <p style={{ fontFamily: fonts.mono, fontSize: "10px", color: colors.text.muted, margin: "2px 0 0" }}>
-                    {selectedSource.kind || "file"} source • {documents.length} document{documents.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
-                {(selectedSource.kind === "file" || !selectedSource.kind) && (
-                  <label data-testid="upload-document-btn"
-                    style={{ ...T.btnPrimary, cursor: "pointer", fontSize: "12px", padding: "8px 14px", opacity: uploading ? 0.6 : 1 }}>
-                    {uploading ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Upload size={12} />}
-                    {uploading ? "Uploading..." : "Upload"}
-                    <input ref={fileRef} type="file" onChange={handleFileUpload} style={{ display: "none" }} disabled={uploading}
-                      accept=".pdf,.txt,.md,.doc,.docx,.csv,.json,.html,.xml" />
-                  </label>
-                )}
-              </div>
-              {docsLoading ? (
-                <div style={{ textAlign: "center", padding: "20px" }}>
-                  <Loader2 size={16} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
-                </div>
-              ) : documents.length === 0 ? (
-                <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted, textAlign: "center", padding: "20px" }}>
-                  No documents in this source. {selectedSource.kind === "file" ? "Upload files to add knowledge." : "Documents will appear after processing."}
-                </p>
-              ) : (
-                <div style={{ display: "grid", gap: "2px" }}>
-                  {documents.map(d => <DocumentRow key={d.id} doc={d} api={api} onRefresh={() => fetchDocs(selectedSource)} />)}
-                </div>
-              )}
-            </>
-          ) : (
-            <p style={{ fontFamily: fonts.body, fontSize: "13px", color: colors.text.muted, textAlign: "center", padding: "32px" }}>
-              Select a source to view its documents.
-            </p>
-          )}
-        </div>
+        {/* Documents panel — enhanced with grouped view */}
+        <DocumentsPanel
+          selectedSource={selectedSource}
+          documents={documents}
+          docsLoading={docsLoading}
+          api={api}
+          fetchDocs={fetchDocs}
+          uploading={uploading}
+          handleFileUpload={handleFileUpload}
+          fileRef={fileRef}
+        />
       </div>
     </div>
   );

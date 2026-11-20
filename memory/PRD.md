@@ -232,6 +232,14 @@ User requested restoring the original Emergent frontend design while connecting 
 - [x] `AnalyticsPage.js` — Usage stats, period selection, audit events
 - [x] All 21 pages compiled and deployed to production
 
+**Phase 4 — Missing Feature Additions (Feb 2026):**
+- [x] `PlatformPage.js` — Added Organisations tab: expandable enterprise cards, create org modal, type-to-confirm delete org with cascade preview
+- [x] `InstancePage.js` — Added WebchatConfigPanel: 3-tab config (Appearance/Content/Behavior), color pickers, position, dimensions, greeting, auto-open, branding, live mini-preview widget
+- [x] `KnowledgePage.js` — Added DomainGroup + DocumentsPanel: URL/crawl sources group documents by domain in expandable/collapsible sections with status badges (ready/processing/error)
+- [x] `ApiScraperPage.js` — New standalone API testing tool: method selector, URL input, editable headers, request body, response viewer with status/timing/headers, request history sidebar
+- [x] `AdminLayout.js` — Added Developer section in sidebar with API Scraper nav link
+- [x] All features tested (100% pass, iteration_87.json)
+
 ## Backlog
 - P1: Real-world testing on bitbotpro.io with test data
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation

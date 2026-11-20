@@ -23,6 +23,7 @@ import MembersPage from "@/pages/MembersPage";
 import PlatformPage from "@/pages/PlatformPage";
 import DiscordAppsPage from "@/pages/DiscordAppsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import ApiScraperPage from "@/pages/ApiScraperPage";
 import { NotFoundPage, InvitationsPage } from "@/pages/Placeholders";
 import { Loader2 } from "lucide-react";
 import { colors, fonts } from "@/theme";
@@ -104,6 +105,7 @@ function AppRoutes() {
         <Route path="credentials" element={<CredentialsPage />} />
         <Route path="members" element={<MembersPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="api-scraper" element={<ApiScraperPage />} />
         <Route path="platform" element={<PlatformPage />} />
         <Route path="platform/discord" element={<DiscordAppsPage />} />
         <Route path="platform/enterprises/:enterpriseId/discord" element={<DiscordAppsPage />} />
