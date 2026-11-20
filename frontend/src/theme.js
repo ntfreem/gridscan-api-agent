@@ -61,7 +61,6 @@ export const fonts = {
   mono: "JetBrains Mono, monospace",
 };
 
-// Reusable style tokens
 export const T = {
   page: {
     padding: "32px 40px",
@@ -231,7 +230,6 @@ export const T = {
   },
 };
 
-// Focus/blur handlers for inputs
 export const onFocus = (e) => {
   e.target.style.borderColor = colors.brand.light;
   e.target.style.boxShadow = colors.shadow.input;
@@ -241,7 +239,6 @@ export const onBlur = (e) => {
   e.target.style.boxShadow = "none";
 };
 
-// Row hover helpers
 export const rowEnter = (e) => {
   e.currentTarget.style.backgroundColor = colors.bg.hover;
 };

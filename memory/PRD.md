@@ -201,8 +201,48 @@ users                → +platform_role field
 - [x] Full Completion Report generated at /app/docs/SPEC_012_COMPLETION_REPORT.md
 - [x] Ready for production cutover — awaiting explicit user authorization
 
+### Stage 8: Frontend Design Restoration — Phase 1 (Foundation) — IN PROGRESS (Feb 2026)
+User requested restoring the original Emergent frontend design while connecting to the Spec 012 backend.
+
+**Phase 1 — Foundation (complete):**
+- [x] Restored `theme.js` — original neon-blue design system (colors, fonts, radius, shadows, style tokens)
+- [x] Restored `BridgeBotLogo.js` — animated logo component with pupil drift
+- [x] Built `SessionContext.js` — Spec 012 session-cookie auth (no localStorage), CSRF headers, Enterprise→Org→Bot hierarchy state
+- [x] Built `AdminLayout.js` — original Emergent sidebar with Enterprise/Organisation/Bot selectors, responsive mobile menu, environment banner
+- [x] Built `Login.js` — original design, session-cookie auth, error handling
+- [x] Built `ForgotPassword.js` — email input + "check your email" confirmation
+- [x] Built `ResetPassword.js` — URL fragment token extraction, password validation
+- [x] Built `Dashboard.js` — stat cards (bots, instances, orgs), bot list, quick actions
+- [x] Built `BotList.js` — bot listing + create modal for selected org
+- [x] Built `BotOverview.js` — single bot detail with navigation cards + instance list
+- [x] Built preview proxy (`server.py`) — forwards /api to api.bitbotpro.io with cookie/CSRF forwarding
+- [x] OAuth result page for Discord/Zendesk callbacks
+- [x] Placeholder pages for Phase 2/3 features (Knowledge, Credentials, Members, Analytics, Platform, etc.)
+- [x] Route structure: /login, /forgot-password, /reset-password, /admin/*, /oauth/:provider/result
+- [x] Auth redirect: unauthenticated /admin → /login
+- [x] Legacy route redirects: /app/* → /admin
+- [x] Verified proxy: session check (401), login with CSRF (401 "Invalid email or password"), cookie forwarding
+- [ ] Awaiting test account credentials from user to verify authenticated flows
+
+**Phase 2 — Core Management (upcoming):**
+- Enterprise & Organisation management
+- Bot configuration (AI settings, behaviour modes)
+- Credentials CRUD (AI provider keys, test connection)
+- Knowledge management (sources, file upload, URL/website crawling)
+- External API integrations, OpenAPI importing
+- Account management (change password, delete account)
+- Invitation acceptance flow
+
+**Phase 3 — Integrations & Monitoring (upcoming):**
+- Discord, Telegram, Webchat, Zendesk instance panels
+- Members, invitations, roles management
+- Usage/analytics, audit logs
+- Platform superadmin pages
+- Webchat configuration, preview and embeddable widget
+
 ## Backlog
-- P0: Production deployment of Spec 012 frontend (awaiting user authorization)
+- P0: Phase 2 & 3 of frontend restoration (pending user approval of Phase 1)
+- P0: Production deployment of restored frontend (awaiting user authorization)
 - P1: Demote admin@bridgebot.tech from superadmin after confirmation
 - P2: WhatsApp integration
 - P2: Stages 4-6 of Customer Workspace Architecture (Billing, Discord App Choices, Testing/Migration)

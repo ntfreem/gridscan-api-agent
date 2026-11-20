@@ -1,23 +1,14 @@
 # BitBot Pro Test Credentials
 
-## Platform Superadmin
-- Email: admin@bitbotpro.io
-- Password: Admin@123
-- Role: superadmin (platform_role)
-- Sidebar: Enterprise section (Workspaces, Team & Access, Discord App Setup)
+## IMPORTANT
+The old credentials (admin@bitbotpro.io / x7K$mP2vL9nQ) are NOT valid for the current production API at api.bitbotpro.io.
+Do not use or retain those credentials.
 
-## Workspace Owner (development)
-- Email: admin@bridgebot.tech
-- Password: Admin@123
-- Role: owner of "development" workspace
-- Sidebar: Admin section (Organisations, Discord App Setup, Team & Access, Analytics, API Key Usage)
+## Production API (api.bitbotpro.io)
+- Awaiting dedicated frontend-testing account from user (via Claude Code).
+- Login endpoint: POST /api/auth/login
+- Session: httpOnly cookie (no localStorage)
 
-## Regular User
-- Email: johndoe@example.com
-- Password: User@123
-- Role: member of "development" workspace, member of "Default Organisation"
-- Sidebar: Organisation selector + bot management only (no admin/enterprise sections)
-
-## Key IDs
-- Development Workspace ID: 5346b610-1c2c-4bfe-86a5-de820e315ddf
-- Default Org ID: cb91e73c-b74b-45a3-aecc-f7823ee07d2c
+## Preview Proxy
+- Backend at port 8001 is a reverse proxy to https://api.bitbotpro.io
+- All /api/* requests are forwarded with cookies and CSRF headers preserved

@@ -1,80 +1,120 @@
 /**
- * BitBotPro frontend (Spec 012 release candidate, Phase 6B).
+ * BitBotPro Frontend — Original Emergent design with Spec 012 backend.
  *
- * The admin application is `src/app12` at /app/* (spec §12). The legacy pages, the
- * localStorage session and the legacy tenant-header API layer were removed in Phase 6B
- * (spec §14, specs/012-clean-hierarchy/legacy-inventory.md). Old paths redirect to
- * their Spec 012 replacements so bookmarks and e-mailed links still land somewhere
- * sensible; the retired React chat widget (W2) shows a notice instead of a blank page.
+ * Session-cookie authentication, Enterprise → Organisation → Bot hierarchy.
+ * Routes:
+ *   /login, /forgot-password, /reset-password — public auth
+ *   /admin/* — protected admin area with sidebar layout
+ *   /oauth/:provider/result — OAuth callback landing
  */
-import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import Docs from "@/pages/Docs";
-import LandingPage from "@/pages/LandingPage";
-import App12, { OAuthResultPage } from "@/app12/App12";
-import "@/App.css";
+import { SessionProvider, useSession } from "@/context/SessionContext";
+import AdminLayout from "@/components/AdminLayout";
+import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
+import Dashboard from "@/pages/Dashboard";
+import BotList from "@/pages/BotList";
+import BotOverview from "@/pages/BotOverview";
+import {
+  KnowledgePage, CredentialsPage, MembersPage, AnalyticsPage,
+  PlatformPage, DiscordAppsPage, AccountPage,
+  BotSettingsPage, BotKnowledgePage, BotInstancesPage, BotIntegrationsPage,
+  InstancePage, NotFoundPage, InvitationsPage,
+} from "@/pages/Placeholders";
+import { Loader2 } from "lucide-react";
+import { colors, fonts } from "@/theme";
 
-/** Redirect that keeps the URL fragment (reset links carry `#token=…`, never sent to a server). */
-export function KeepHashRedirect({ to }) {
-  const { hash } = useLocation();
-  return <Navigate to={`${to}${hash || ""}`} replace />;
+function ProtectedRoute({ children }) {
+  const { user, loading, sessionChecked } = useSession();
+  if (loading || !sessionChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.base }}>
+        <Loader2 size={24} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
 }
 
-/** W2 (approved, P5-H): the API-hosted widget is the only chat widget. */
-export function RetiredChatNotice() {
+function PublicRoute({ children }) {
+  const { user, loading, sessionChecked } = useSession();
+  if (loading || !sessionChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.base }}>
+        <Loader2 size={24} color={colors.brand.light} style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+  if (user) return <Navigate to="/admin" replace />;
+  return children;
+}
+
+function OAuthResultPage() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("status") || "unknown";
+  const isOk = ["ok", "connected", "success"].includes(status);
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-                   background: "#030712", color: "#e2e8f0", fontFamily: "system-ui, sans-serif", padding: 16 }}>
-      <div role="status" style={{ maxWidth: 420, textAlign: "center" }}>
-        <h1 style={{ fontSize: 20, marginBottom: 8 }}>This chat window has moved</h1>
-        <p style={{ fontSize: 14, color: "#cbd5e1" }}>
-          The website owner needs to update their BitBotPro chat embed code. Please contact them, or try again later.
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: colors.bg.base, padding: "40px 20px" }}>
+      <div style={{ textAlign: "center", maxWidth: "400px" }}>
+        <div style={{
+          width: "56px", height: "56px", borderRadius: "14px",
+          backgroundColor: isOk ? "rgba(52,211,153,0.1)" : "rgba(244,63,94,0.1)",
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+        }}>
+          <span style={{ fontSize: "24px" }}>{isOk ? "✓" : "✗"}</span>
+        </div>
+        <h1 style={{ fontFamily: fonts.heading, fontSize: "22px", fontWeight: "700", color: colors.text.primary, margin: "0 0 8px" }}>
+          {isOk ? "Connected" : "Connection Failed"}
+        </h1>
+        <p style={{ fontFamily: fonts.body, fontSize: "14px", color: colors.text.secondary }}>
+          Status: {status}. You can close this page.
         </p>
       </div>
-    </main>
+    </div>
   );
 }
 
-export function NotFoundPage() {
-  return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-                   background: "#030712", color: "#e2e8f0", fontFamily: "system-ui, sans-serif", padding: 16 }}>
-      <div style={{ textAlign: "center" }}>
-        <h1 style={{ fontSize: 20, marginBottom: 8 }}>Page not found</h1>
-        <a href="/" style={{ color: "#67e8f9" }}>Go to the home page</a>
-      </div>
-    </main>
-  );
-}
-
-export function AppRoutes() {
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
-
+function AppRoutes() {
   return (
     <Routes>
-      {/* Spec 012 admin app (Phase 5) */}
-      <Route path="/app/*" element={<App12 />} />
+      {/* Public auth */}
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/invitations" element={<InvitationsPage />} />
+
+      {/* OAuth callback */}
       <Route path="/oauth/:provider/result" element={<OAuthResultPage />} />
 
-      {/* Public pages */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/docs" element={<Docs />} />
-      <Route path="/chat" element={<RetiredChatNotice />} />
-      <Route path="/widget" element={<RetiredChatNotice />} />
+      {/* Protected admin area */}
+      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<Dashboard />} />
+        <Route path="account" element={<AccountPage />} />
+        <Route path="bots" element={<BotList />} />
+        <Route path="bots/:botId" element={<BotOverview />} />
+        <Route path="bots/:botId/settings" element={<BotSettingsPage />} />
+        <Route path="bots/:botId/knowledge" element={<BotKnowledgePage />} />
+        <Route path="bots/:botId/instances" element={<BotInstancesPage />} />
+        <Route path="bots/:botId/integrations" element={<BotIntegrationsPage />} />
+        <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="credentials" element={<CredentialsPage />} />
+        <Route path="members" element={<MembersPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="platform" element={<PlatformPage />} />
+        <Route path="platform/discord" element={<DiscordAppsPage />} />
+        <Route path="instances/:instanceId" element={<InstancePage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
 
-      {/* Legacy paths → Spec 012 replacements */}
-      <Route path="/login" element={<Navigate to="/app/login" replace />} />
-      <Route path="/register" element={<Navigate to="/app/login" replace />} />
-      <Route path="/verify" element={<Navigate to="/app/login" replace />} />
-      <Route path="/forgot-password" element={<Navigate to="/app/forgot-password" replace />} />
-      <Route path="/reset-password" element={<KeepHashRedirect to="/app/reset-password" />} />
-      <Route path="/invite/:token" element={<Navigate to="/app/login" replace />} />
-      <Route path="/select-instance" element={<Navigate to="/app" replace />} />
-      <Route path="/discord/invited" element={<Navigate to="/app" replace />} />
-      <Route path="/admin/*" element={<Navigate to="/app" replace />} />
+      {/* Legacy redirects */}
+      <Route path="/app/login" element={<Navigate to="/login" replace />} />
+      <Route path="/app/*" element={<Navigate to="/admin" replace />} />
+
+      {/* Root */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
@@ -82,12 +122,12 @@ export function AppRoutes() {
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
+    <BrowserRouter>
+      <SessionProvider>
         <AppRoutes />
-      </BrowserRouter>
-      <Toaster />
-    </div>
+        <Toaster />
+      </SessionProvider>
+    </BrowserRouter>
   );
 }
 
