@@ -186,20 +186,64 @@ class GridscanAgent:
         """
         Process a user message and return the agent's response.
 
+        Commands:
+            /raw <query>  — returns complete unformatted JSON from API calls
+            /tools        — lists all available tool names
+
         Returns:
             {
                 "reply": str,
                 "tool_calls": list,
                 "session_id": str,
                 "tokens_used": dict,
+                "raw_json": list | None,   # populated when /raw is used
             }
         """
         if not self._initialized:
             await self.initialize()
 
-        self._context.add_user_message(session_id, user_message)
+        # --- Handle /tools command ---
+        stripped = user_message.strip()
+        if stripped.lower() == "/tools":
+            by_tag: dict[str, list] = {}
+            for t in self._tools:
+                tag = t.get("_tags", ["Other"])[0] if t.get("_tags") else "Other"
+                by_tag.setdefault(tag, []).append(t["name"])
+            lines = [f"**{len(self._tools)} available endpoints:**\n"]
+            for tag in sorted(by_tag):
+                lines.append(f"\n**{tag}** ({len(by_tag[tag])})")
+                for name in by_tag[tag]:
+                    lines.append(f"  `{name}`")
+            return {
+                "reply": "\n".join(lines),
+                "tool_calls": [],
+                "session_id": session_id,
+                "tokens_used": {"input": 0, "output": 0},
+                "raw_json": None,
+            }
+
+        # --- Handle /raw command ---
+        raw_mode = False
+        actual_message = stripped
+        if stripped.lower().startswith("/raw"):
+            raw_mode = True
+            actual_message = stripped[4:].strip()
+            if not actual_message:
+                return {
+                    "reply": "Usage: `/raw <your question>`\nExample: `/raw show me the latest block`",
+                    "tool_calls": [],
+                    "session_id": session_id,
+                    "tokens_used": {"input": 0, "output": 0},
+                    "raw_json": None,
+                }
+
+        self._context.add_user_message(session_id, actual_message)
         system_prompt = self._build_system_prompt(session_id)
+        if raw_mode:
+            system_prompt += "\n\nIMPORTANT: The user wants RAW JSON output. After calling the API, return the COMPLETE unformatted JSON response in a code block. Do NOT summarize, do NOT omit any fields, do NOT add commentary. Just the raw JSON."
+
         tool_calls_made = []
+        raw_json_responses = [] if raw_mode else None
         total_input_tokens = 0
         total_output_tokens = 0
 
@@ -256,6 +300,7 @@ class GridscanAgent:
                     "tool_calls": tool_calls_made,
                     "session_id": session_id,
                     "tokens_used": {"input": total_input_tokens, "output": total_output_tokens},
+                    "raw_json": raw_json_responses,
                 }
 
             # Token usage
@@ -301,6 +346,17 @@ class GridscanAgent:
                         "arguments": args,
                     })
 
+                    # Capture raw JSON for /raw mode
+                    if raw_mode:
+                        try:
+                            raw_json_responses.append({
+                                "tool": tool_name,
+                                "endpoint": self._api.call_log[-1].get("endpoint", "?") if self._api.call_log else tool_name,
+                                "data": json.loads(result_text) if isinstance(result_text, str) else result_text,
+                            })
+                        except json.JSONDecodeError:
+                            raw_json_responses.append({"tool": tool_name, "data": result_text})
+
                     # Add tool result
                     oai_messages.append({
                         "role": "tool",
@@ -314,12 +370,21 @@ class GridscanAgent:
             else:
                 # No tool calls — final response
                 reply_text = message.content or "(no response)"
+
+                # In raw mode, override the reply with the actual raw JSON
+                if raw_mode and raw_json_responses:
+                    json_blocks = []
+                    for rj in raw_json_responses:
+                        json_blocks.append(f"**{rj['endpoint']}**\n```json\n{json.dumps(rj['data'], indent=2, default=str)}\n```")
+                    reply_text = "\n\n".join(json_blocks)
+
                 self._context.add_assistant_message(session_id, reply_text)
                 return {
                     "reply": reply_text,
                     "tool_calls": tool_calls_made,
                     "session_id": session_id,
                     "tokens_used": {"input": total_input_tokens, "output": total_output_tokens},
+                    "raw_json": raw_json_responses,
                 }
 
         return {
@@ -327,6 +392,7 @@ class GridscanAgent:
             "tool_calls": tool_calls_made,
             "session_id": session_id,
             "tokens_used": {"input": total_input_tokens, "output": total_output_tokens},
+            "raw_json": raw_json_responses,
         }
 
     # --- Utility methods ---
@@ -342,6 +408,11 @@ class GridscanAgent:
     @property
     def api_call_log(self) -> list[dict]:
         return self._api.call_log
+
+    @property
+    def api_analytics(self) -> dict:
+        """Get aggregated analytics across all API calls."""
+        return self._api.get_analytics()
 
     @property
     def backend_type(self) -> str:

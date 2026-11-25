@@ -174,5 +174,57 @@ class GridscanAPIClient:
         """Return the full call log for auditing."""
         return self._call_log.copy()
 
+    def get_analytics(self) -> dict:
+        """Aggregate call log into analytics: usage by endpoint, error rates, latency stats."""
+        if not self._call_log:
+            return {"total_calls": 0, "endpoints": {}, "errors": 0, "avg_duration_ms": 0}
+
+        total = len(self._call_log)
+        errors = sum(1 for c in self._call_log if not c["success"])
+        total_duration = sum(c["duration_ms"] for c in self._call_log)
+
+        # Per-endpoint stats
+        ep_stats: dict[str, dict] = {}
+        for c in self._call_log:
+            ep = c["tool"]
+            if ep not in ep_stats:
+                ep_stats[ep] = {
+                    "calls": 0, "errors": 0, "total_ms": 0,
+                    "min_ms": float("inf"), "max_ms": 0,
+                    "last_status": 0, "endpoint_path": c.get("endpoint", ""),
+                }
+            s = ep_stats[ep]
+            s["calls"] += 1
+            s["total_ms"] += c["duration_ms"]
+            s["min_ms"] = min(s["min_ms"], c["duration_ms"])
+            s["max_ms"] = max(s["max_ms"], c["duration_ms"])
+            s["last_status"] = c["status"]
+            if not c["success"]:
+                s["errors"] += 1
+
+        # Compute averages and sort by call count
+        endpoints = {}
+        for ep, s in sorted(ep_stats.items(), key=lambda x: x[1]["calls"], reverse=True):
+            endpoints[ep] = {
+                "calls": s["calls"],
+                "errors": s["errors"],
+                "error_rate": round(s["errors"] / s["calls"] * 100, 1) if s["calls"] else 0,
+                "avg_ms": round(s["total_ms"] / s["calls"]) if s["calls"] else 0,
+                "min_ms": s["min_ms"] if s["min_ms"] != float("inf") else 0,
+                "max_ms": s["max_ms"],
+                "endpoint_path": s["endpoint_path"],
+            }
+
+        return {
+            "total_calls": total,
+            "total_errors": errors,
+            "error_rate": round(errors / total * 100, 1) if total else 0,
+            "avg_duration_ms": round(total_duration / total) if total else 0,
+            "unique_endpoints_used": len(ep_stats),
+            "total_endpoints_available": 89,
+            "coverage_pct": round(len(ep_stats) / 89 * 100, 1),
+            "endpoints": endpoints,
+        }
+
     async def close(self):
         await self._client.aclose()

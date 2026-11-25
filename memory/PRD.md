@@ -36,19 +36,20 @@ Multi-tenant AI bot SaaS platform (BitBotPro) with a React frontend connected to
 - ApiScraperPage: Standalone API testing tool
 - AdminLayout: Developer section with API Scraper nav
 
-### Phase 5 — Gridscan Agent Module (Complete, Dec 2026)
+### Phase 5 — Gridscan Agent Module (Complete, Feb 2026)
 - **Standalone Python module** (`/app/gridscan_agent/`) — pip-installable, GitHub-exportable
 - **89 Cardano API endpoints** auto-loaded from OpenAPI spec at `ada.api.gridscan.io`
 - **Anthropic tool-calling**: Claude picks which endpoint(s) to call per message
 - **Dual backend**: Emergent universal key (litellm proxy) OR raw Anthropic SDK
 - **Conversation memory**: Remembers addresses, tx hashes, pool IDs, epochs across turns
-- **Raw JSON passthrough**: Model returns actual API data, never makes up blockchain info
-- **Multi-call chaining**: Can call multiple endpoints in one turn (e.g., block → txs → tx details)
-- **Rate limiting**: Token-bucket rate limiter
-- **Audit log**: Every API call logged with endpoint, status, timing
-- **Test CLI**: Interactive terminal tester (`python -m gridscan_agent.test_cli`)
-- **Test Web UI**: FastAPI server with dark-themed chat interface on port 8099
-- **Tested**: 3-turn conversation verified live (block → transactions → network info)
+- **Raw JSON passthrough**: `/raw` command returns complete unformatted API JSON
+- **Multi-call chaining**: Can call multiple endpoints in one turn
+- **`/raw` command**: Forces complete unformatted JSON output — no summarization
+- **`/tools` command**: Lists all 89 endpoints grouped by category
+- **Endpoint Analytics dashboard**: Real-time stats at `/analytics` — calls, errors, latency min/max/avg, coverage percentage, per-endpoint health badges, auto-refresh
+- **Rate limiting + Audit log**: Every API call logged with endpoint, status, timing
+- **Test CLI + Test Web UI**: Interactive testing on port 8099 with dark-themed chat interface
+- **Tested**: Multi-turn conversations, /raw mode, analytics dashboard all verified with live Cardano data
 
 ---
 
