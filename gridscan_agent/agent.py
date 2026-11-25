@@ -151,11 +151,16 @@ class GridscanAgent:
 
         return params
 
-    async def _execute_tool(self, tool_name: str, arguments: dict | str) -> str:
-        """Execute a single tool call and return the result string."""
+    async def _execute_tool(self, tool_name: str, arguments: dict | str) -> tuple[str, Any]:
+        """Execute a single tool call.
+
+        Returns ``(result_text, payload)``: ``result_text`` is what the model sees (capped at
+        50,000 characters to protect its context); ``payload`` is the complete API response,
+        never truncated, for /raw output."""
         tool_def = self._tool_map.get(tool_name)
         if not tool_def:
-            return json.dumps({"error": True, "message": f"Unknown tool: {tool_name}"})
+            payload = {"error": True, "message": f"Unknown tool: {tool_name}"}
+            return json.dumps(payload), payload
 
         # Arguments might be a JSON string
         if isinstance(arguments, str):
@@ -168,19 +173,20 @@ class GridscanAgent:
         result = await self._api.call_tool(tool_def, arguments)
 
         if result["success"]:
-            result_text = json.dumps(result["data"], indent=2, default=str)
+            payload = result["data"]
         else:
-            result_text = json.dumps({
+            payload = {
                 "error": True,
                 "status_code": result["status_code"],
                 "message": result["data"],
-            }, indent=2)
+            }
+        result_text = json.dumps(payload, indent=2, default=str)
 
-        # Cap response size
+        # Cap what the model sees; the complete payload is still returned for /raw output.
         if len(result_text) > 50000:
             result_text = result_text[:50000] + "\n... (truncated)"
 
-        return result_text
+        return result_text, payload
 
     async def chat(self, session_id: str, user_message: str) -> dict[str, Any]:
         """
@@ -336,7 +342,7 @@ class GridscanAgent:
                     except json.JSONDecodeError:
                         args = {}
 
-                    result_text = await self._execute_tool(tool_name, args)
+                    result_text, payload = await self._execute_tool(tool_name, args)
                     tool_calls_made.append({
                         "tool": tool_name,
                         "endpoint": self._api.call_log[-1].get("endpoint", "?") if self._api.call_log else tool_name,
@@ -346,16 +352,14 @@ class GridscanAgent:
                         "arguments": args,
                     })
 
-                    # Capture raw JSON for /raw mode
+                    # Capture raw JSON for /raw mode: the complete API response, not the
+                    # copy capped for the model (which no longer parses once cut).
                     if raw_mode:
-                        try:
-                            raw_json_responses.append({
-                                "tool": tool_name,
-                                "endpoint": self._api.call_log[-1].get("endpoint", "?") if self._api.call_log else tool_name,
-                                "data": json.loads(result_text) if isinstance(result_text, str) else result_text,
-                            })
-                        except json.JSONDecodeError:
-                            raw_json_responses.append({"tool": tool_name, "data": result_text})
+                        raw_json_responses.append({
+                            "tool": tool_name,
+                            "endpoint": self._api.call_log[-1].get("endpoint", "?") if self._api.call_log else tool_name,
+                            "data": payload,
+                        })
 
                     # Add tool result
                     oai_messages.append({
