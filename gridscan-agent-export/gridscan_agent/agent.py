@@ -126,6 +126,27 @@ class GridscanAgent:
         ctx_summary = memory.get_context_summary()
         return f"{base}\n\n## Current Session Context\n{ctx_summary}"
 
+    def _partial_reference_note(self, session_id: str, message: str) -> str:
+        """Resolve "the tx ending 92b" / "43ab5bc9...7d6192b" to full identifiers the session
+        knows, so the model uses the real value instead of guessing one."""
+        refs = self._context.resolve_partial_references(session_id, message)
+        if not refs:
+            return ""
+        lines = ["", "", "## Partial identifiers in this message"]
+        for r in refs:
+            m = r["matches"]
+            if len(m) == 1:
+                lines.append(f'- "{r["written"]}" is {m[0]["kind"]} {m[0]["value"]} (from {m[0]["source"]}). Use this full value.')
+            elif m:
+                lines.append(f'- "{r["written"]}" matches {len(m)} remembered identifiers: '
+                             + ", ".join(x["value"] for x in m[:5]) + (" …" if len(m) > 5 else "")
+                             + ". Use them only if the user means all of them; otherwise ask which one.")
+            else:
+                lines.append(f'- "{r["written"]}" matches nothing remembered in this session. Do not guess the rest of it: '
+                             "call the endpoint that listed it again (for example the address's transactions) and find "
+                             "the full value there, or ask the user for it.")
+        return "\n".join(lines)
+
     def _build_litellm_params(self, messages: list, system_prompt: str) -> dict:
         """Build the litellm.completion() params for either Emergent or raw Anthropic."""
         # Prepend system message
@@ -245,6 +266,7 @@ class GridscanAgent:
 
         self._context.add_user_message(session_id, actual_message)
         system_prompt = self._build_system_prompt(session_id)
+        system_prompt += self._partial_reference_note(session_id, actual_message)
         if raw_mode:
             system_prompt += "\n\nIMPORTANT: The user wants RAW JSON output. After calling the API, return the COMPLETE unformatted JSON response in a code block. Do NOT summarize, do NOT omit any fields, do NOT add commentary. Just the raw JSON."
 
@@ -343,6 +365,9 @@ class GridscanAgent:
                         args = {}
 
                     result_text, payload = await self._execute_tool(tool_name, args)
+                    if self._api.call_log and self._api.call_log[-1].get("success"):
+                        # Keep the full identifiers: the result itself is gone after this turn.
+                        self._context.remember_api_result(session_id, tool_name, args if isinstance(args, dict) else {}, payload)
                     tool_calls_made.append({
                         "tool": tool_name,
                         "endpoint": self._api.call_log[-1].get("endpoint", "?") if self._api.call_log else tool_name,
