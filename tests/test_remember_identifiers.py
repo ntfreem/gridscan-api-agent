@@ -5,6 +5,7 @@ The agent's reply only showed the hash shortened (43ab5bc9...7d6192b), and tool 
 between messages, so the agent had no full hash and guessed one (404/400)."""
 import asyncio
 import os
+import re
 import sys
 from types import SimpleNamespace
 
@@ -80,7 +81,8 @@ def test_tx_ending_92b_resolves_to_the_full_hash_from_an_earlier_api_result(monk
         step = script.pop(0)
         if step is None:
             system = params["messages"][0]["content"]
-            assert f'"ending 92b" is hash {TX} (from tx_hash from address_transactions). Use this full value.' in system
+            # Known from the API result and, now that replies are expanded, from the conversation too.
+            assert re.search(rf'"ending 92b" is (tx_)?hash {TX} \(from [^)]+\)\. Use this full value\.', system)
             return _tool_turn("tx_utxos", {"hash": TX})
         return step
 

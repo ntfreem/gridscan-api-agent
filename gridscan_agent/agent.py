@@ -406,6 +406,10 @@ class GridscanAgent:
                     for rj in raw_json_responses:
                         json_blocks.append(f"**{rj['endpoint']}**\n```json\n{json.dumps(rj['data'], indent=2, default=str)}\n```")
                     reply_text = "\n\n".join(json_blocks)
+                else:
+                    # Users copy identifiers into their next question; write any the model
+                    # shortened in full when the session knows exactly which one it is.
+                    reply_text = self._context.expand_shortened(session_id, reply_text)
 
                 self._context.add_assistant_message(session_id, reply_text)
                 return {
