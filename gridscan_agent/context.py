@@ -67,6 +67,22 @@ def find_partial_references(text: str) -> list[tuple[str, str, str]]:
     return out
 
 
+# Memory list for each identifier type. (Deriving the name by adding "s" made "tx_hashs", so
+# transaction hashes were never remembered.)
+_LIST_FOR = {
+    "stake_address": "stake_addresses",
+    "payment_address": "payment_addresses",
+    "pool_id": "pool_ids",
+    "drep_id": "drep_ids",
+    "tx_hash": "tx_hashes",
+    "asset_unit": "asset_units",
+    "epoch": "epochs",
+    "block_number": "block_numbers",
+}
+
+_SHORTENED = re.compile(r'(?<![a-z0-9_])([a-z0-9_]{4,})(\.{2,}|\u2026)([a-z0-9]{3,})(?![a-z0-9])')
+
+
 @dataclass
 class SessionMemory:
     """Remembered identifiers for a single session."""
@@ -85,13 +101,12 @@ class SessionMemory:
     # this a later "the tx ending 92b" can't be resolved to the full hash.
     seen: list = field(default_factory=list)
 
-    def add(self, entity_type: str, value: str | int):
-        """Add an identifier to memory, keeping most recent first."""
-        target = getattr(self, f"{entity_type}s" if not entity_type.endswith("s") else entity_type, None)
-        if target is None:
-            # For types like "stake_address" -> "stake_addresses"
-            attr = entity_type + "es" if entity_type.endswith("s") else entity_type + "s"
-            target = getattr(self, attr, None)
+    def add(self, entity_type: str, value: str | int, set_last: bool = True):
+        """Add an identifier to memory, keeping most recent first.
+
+        ``set_last=False`` remembers it without making it the last referenced entity (used for
+        identifiers that only appear in the agent's own reply)."""
+        target = getattr(self, _LIST_FOR.get(entity_type, ""), None)
         if target is not None:
             if value in target:
                 target.remove(value)
@@ -99,8 +114,9 @@ class SessionMemory:
             # Keep last 10
             while len(target) > 10:
                 target.pop()
-        self.last_entity_type = entity_type
-        self.last_entity_value = str(value)
+        if set_last:
+            self.last_entity_type = entity_type
+            self.last_entity_value = str(value)
 
     def remember_seen(self, value: str, kind: str, label: str):
         """Remember a full identifier from an API result (most recent first, capped)."""
@@ -175,29 +191,33 @@ class ConversationContext:
                 "last_active": time.time(),
             }
 
-    def _extract_identifiers(self, text: str, session_id: str):
+    def _extract_identifiers(self, text: str, session_id: str, set_last: bool = True):
         """Scan text for Cardano identifiers and add them to session memory."""
         self._ensure_session(session_id)
         memory = self._sessions[session_id]["memory"]
+        add = memory.add
+        if not set_last:
+            def add(kind, value):
+                memory.add(kind, value, set_last=False)
 
         for match in PATTERNS["stake_address"].finditer(text):
-            memory.add("stake_address", match.group())
+            add("stake_address", match.group())
         for match in PATTERNS["payment_address"].finditer(text):
-            memory.add("payment_address", match.group())
+            add("payment_address", match.group())
         for match in PATTERNS["pool_id"].finditer(text):
-            memory.add("pool_id", match.group())
+            add("pool_id", match.group())
         for match in PATTERNS["drep_id"].finditer(text):
-            memory.add("drep_id", match.group())
+            add("drep_id", match.group())
         for match in PATTERNS["tx_hash"].finditer(text):
             val = match.group()
             # Distinguish tx hashes from asset policy IDs (both 64 hex)
             # Policy IDs are part of asset units (longer), tx hashes stand alone
             if len(val) == 64:
-                memory.add("tx_hash", val)
+                add("tx_hash", val)
         for match in PATTERNS["epoch"].finditer(text):
-            memory.add("epoch", int(match.group(1)))
+            add("epoch", int(match.group(1)))
         for match in PATTERNS["block_number"].finditer(text):
-            memory.add("block_number", int(match.group(1)))
+            add("block_number", int(match.group(1)))
 
     def remember_api_result(self, session_id: str, tool_name: str, arguments: dict, payload: Any):
         """Remember full identifiers from a tool call: the ones it was called with (these become
@@ -238,6 +258,18 @@ class ConversationContext:
             out.append({"written": written, "prefix": pre, "suffix": suf, "matches": matches})
         return out
 
+    def expand_shortened(self, session_id: str, text: str) -> str:
+        """Replace shortened identifiers ("43ab5bc9...7d6192b") with the full value when exactly one
+        identifier this session knows matches; anything else is left as written."""
+        known = [v for v, _k, _s in self.get_memory(session_id).known_values()]
+
+        def full(m):
+            pre, suf = m.group(1), m.group(3)
+            hits = {v for v in known if v.startswith(pre) and v.endswith(suf) and len(v) > len(pre) + len(suf)}
+            return hits.pop() if len(hits) == 1 else m.group(0)
+
+        return _SHORTENED.sub(full, text)
+
     def add_user_message(self, session_id: str, content: str):
         """Add a user message and extract identifiers."""
         self._ensure_session(session_id)
@@ -253,7 +285,9 @@ class ConversationContext:
         """Add an assistant message (text or tool_use blocks)."""
         self._ensure_session(session_id)
         if isinstance(content, str):
-            self._extract_identifiers(content, session_id)
+            # The reply mentions many identifiers in passing (the stake key, a source tx); the
+            # entity the user means by "that transaction" is the one last asked or looked up.
+            self._extract_identifiers(content, session_id, set_last=False)
         self._sessions[session_id]["messages"].append({
             "role": "assistant",
             "content": content,
