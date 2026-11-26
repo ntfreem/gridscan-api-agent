@@ -24,6 +24,49 @@ PATTERNS = {
 }
 
 
+SEEN_LIMIT = 500        # full identifiers remembered from API results, per session
+SEEN_IN_PROMPT = 25     # of those, listed in the system prompt
+
+# Whole-value identifiers in API results.
+_FULL_ID = {
+    "stake_address": re.compile(r'stake1[a-z0-9]{50,60}'),
+    "payment_address": re.compile(r'addr1[a-z0-9]{50,110}'),
+    "pool_id": re.compile(r'pool1[a-z0-9]{50,60}'),
+    "drep_id": re.compile(r'drep(?:_script)?1[a-z0-9]{50,60}'),
+    "hash": re.compile(r'[a-f0-9]{64}'),
+}
+
+# Partial references to an identifier in a user message.
+_FRAG = r'([a-z0-9_]{3,})'
+_PARTIAL = [
+    ("prefix_suffix", re.compile(r'(?<![a-z0-9_])([a-z0-9_]{4,})\s?(?:\.{2,}|\u2026)\s?([a-z0-9]{3,})(?![a-z0-9])')),
+    ("suffix", re.compile(r'\b(?:ending|ends|end)\s+(?:in\s+|with\s+)?(?:\.{2,}|\u2026)?' + _FRAG + r'\b')),
+    ("prefix", re.compile(r'\b(?:starting|starts|start|beginning|begins)\s+(?:with\s+)?' + _FRAG + r'(?:\.{2,}|\u2026)?')),
+]
+
+
+def find_partial_references(text: str) -> list[tuple[str, str, str]]:
+    """Partial identifiers in a message: (as written, prefix, suffix)."""
+    low = text.lower()
+    out = []
+    for kind, rx in _PARTIAL:
+        for m in rx.finditer(low):
+            if kind == "prefix_suffix":
+                pre, suf = m.group(1), m.group(2)
+            elif kind == "suffix":
+                pre, suf = "", m.group(1)
+            else:
+                pre, suf = m.group(1), ""
+            frag = pre + suf
+            # Only fragments that look like part of an identifier (hex, or bech32 with a digit).
+            if not (re.fullmatch(r'[a-f0-9]+', frag) or (re.search(r'\d', frag) and re.fullmatch(r'[a-z0-9_]+', frag))):
+                continue
+            if any(o[1] == pre and o[2] == suf for o in out):
+                continue
+            out.append((m.group(0).strip(), pre, suf))
+    return out
+
+
 @dataclass
 class SessionMemory:
     """Remembered identifiers for a single session."""
@@ -37,6 +80,10 @@ class SessionMemory:
     block_numbers: list[int] = field(default_factory=list)
     last_entity_type: str = ""
     last_entity_value: str = ""
+    # Full identifiers seen in API results: (value, kind, label), most recent first.
+    # The model only ever sees a tool result during the turn it was fetched, so without
+    # this a later "the tx ending 92b" can't be resolved to the full hash.
+    seen: list = field(default_factory=list)
 
     def add(self, entity_type: str, value: str | int):
         """Add an identifier to memory, keeping most recent first."""
@@ -55,23 +102,51 @@ class SessionMemory:
         self.last_entity_type = entity_type
         self.last_entity_value = str(value)
 
+    def remember_seen(self, value: str, kind: str, label: str):
+        """Remember a full identifier from an API result (most recent first, capped)."""
+        self.seen = [s for s in self.seen if s[0] != value]
+        self.seen.insert(0, (value, kind, label))
+        del self.seen[SEEN_LIMIT:]
+
+    def known_values(self) -> list[tuple[str, str, str]]:
+        """Every full identifier this session knows: (value, kind, where it came from)."""
+        out, have = [], set()
+        for kind, values in (("stake_address", self.stake_addresses), ("payment_address", self.payment_addresses),
+                             ("pool_id", self.pool_ids), ("drep_id", self.drep_ids), ("tx_hash", self.tx_hashes),
+                             ("asset_unit", self.asset_units)):
+            for v in values:
+                if v not in have:
+                    have.add(v); out.append((v, kind, "conversation"))
+        for v, kind, label in self.seen:
+            if v not in have:
+                have.add(v); out.append((v, kind, label))
+        return out
+
     def get_context_summary(self) -> str:
-        """Return a text summary of remembered identifiers for the system prompt."""
+        """Return a text summary of remembered identifiers for the system prompt.
+
+        Identifiers are always listed in full: a shortened one can't be used in an API call."""
         parts = []
         if self.stake_addresses:
-            parts.append(f"Remembered stake addresses: {', '.join(self.stake_addresses[:3])}")
+            parts.append(f"Remembered stake addresses: {', '.join(self.stake_addresses[:5])}")
         if self.payment_addresses:
-            parts.append(f"Remembered payment addresses: {', '.join(self.payment_addresses[:3])}")
+            parts.append(f"Remembered payment addresses: {', '.join(self.payment_addresses[:5])}")
         if self.pool_ids:
-            parts.append(f"Remembered pool IDs: {', '.join(self.pool_ids[:3])}")
+            parts.append(f"Remembered pool IDs: {', '.join(self.pool_ids[:5])}")
         if self.tx_hashes:
-            parts.append(f"Remembered tx hashes: {', '.join(self.tx_hashes[:3])}")
+            parts.append(f"Remembered tx hashes: {', '.join(self.tx_hashes[:10])}")
         if self.drep_ids:
-            parts.append(f"Remembered DRep IDs: {', '.join(self.drep_ids[:3])}")
+            parts.append(f"Remembered DRep IDs: {', '.join(self.drep_ids[:5])}")
         if self.asset_units:
-            parts.append(f"Remembered assets: {', '.join(self.asset_units[:3])}")
+            parts.append(f"Remembered assets: {', '.join(self.asset_units[:5])}")
         if self.last_entity_type:
             parts.append(f"Last referenced entity: {self.last_entity_type} = {self.last_entity_value}")
+        if self.seen:
+            recent = self.seen[:SEEN_IN_PROMPT]
+            more = len(self.seen) - len(recent)
+            parts.append("Identifiers from recent API results (full values, most recent first"
+                         + (f"; {more} more remembered" if more > 0 else "") + "):\n"
+                         + "\n".join(f"- {label}: {v}" for v, _kind, label in recent))
         return "\n".join(parts) if parts else "No identifiers remembered yet."
 
 
@@ -123,6 +198,45 @@ class ConversationContext:
             memory.add("epoch", int(match.group(1)))
         for match in PATTERNS["block_number"].finditer(text):
             memory.add("block_number", int(match.group(1)))
+
+    def remember_api_result(self, session_id: str, tool_name: str, arguments: dict, payload: Any):
+        """Remember full identifiers from a tool call: the ones it was called with (these become
+        the last referenced entity) and every one in its response, labelled by field name."""
+        self._ensure_session(session_id)
+        memory = self._sessions[session_id]["memory"]
+        found: list[tuple[str, str, str]] = []
+
+        def walk(node, key):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    walk(v, str(k))
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v, key)
+            elif isinstance(node, str):
+                for kind, rx in _FULL_ID.items():
+                    if rx.fullmatch(node):
+                        found.append((node, kind, f"{key} from {tool_name}" if key else tool_name))
+                        break
+
+        walk(payload, "")
+        # Insert in reverse so the first item of a list ends up most recent (lists are newest first).
+        for value, kind, label in reversed(found):
+            memory.remember_seen(value, kind, label)
+        for v in (arguments or {}).values():
+            if isinstance(v, str):
+                self._extract_identifiers(v, session_id)
+
+    def resolve_partial_references(self, session_id: str, text: str) -> list[dict]:
+        """Match partial identifiers in a message ("the tx ending 92b", "43ab5bc9...7d6192b")
+        against every full identifier the session knows."""
+        known = self.get_memory(session_id).known_values()
+        out = []
+        for written, pre, suf in find_partial_references(text):
+            matches = [{"value": v, "kind": kind, "source": src} for v, kind, src in known
+                       if v.startswith(pre) and v.endswith(suf) and len(v) > len(pre) + len(suf)]
+            out.append({"written": written, "prefix": pre, "suffix": suf, "matches": matches})
+        return out
 
     def add_user_message(self, session_id: str, content: str):
         """Add a user message and extract identifiers."""
